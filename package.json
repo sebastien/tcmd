@@ -1,0 +1,22 @@
+{
+	"name": "tcmd",
+	"version": "0.1.0",
+	"description": "TinyCommand: a midnight-commander-like CLI and desktop tool",
+	"type": "module",
+	"main": "./src/js/tcmd/index.js",
+	"bin": {
+		"tcmd": "./bin/tcmd"
+	},
+	"scripts": {
+		"postinstall": "bash scripts/link-deps.sh",
+		"test": "bun test tests",
+		"tcmd": "bun src/js/tcmd/tui/index.js"
+	},
+	"dependencies": {
+		"@opentui/core": "0.5.9",
+		"select": "file:./deps/select.js",
+		"select.tui": "file:./deps/select.tui"
+	},
+	"author": "Sébastien Pierre",
+	"license": "BSD"
+}
