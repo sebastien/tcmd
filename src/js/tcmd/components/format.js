@@ -3,8 +3,9 @@
 // License: BSD
 // Created: 2026-09-26
 
-// Module: tcmd/tui/format
-// Presentation-only formatting helpers (sizes, counts) shared by views.
+// Module: tcmd/components/format
+// Presentation-only formatting helpers (sizes, counts) shared by every
+// component for every renderer.
 
 // Function: formatSize
 // Human-readable byte size; directories pass through their own label.
@@ -34,16 +35,15 @@ function formatCounts(entries) {
 	let dirs = 0
 	let files = 0
 	let bytes = 0
-	for (let i = 0; i < entries.length; i++) {
-		if (entries[i].isDir) dirs++
+	const list = entries ?? []
+	for (let i = 0; i < list.length; i++) {
+		if (list[i].isDir) dirs++
 		else {
 			files++
-			bytes += entries[i].size ?? 0
+			bytes += list[i].size ?? 0
 		}
 	}
 	return `${dirs} dirs, ${files} files, ${formatSize(bytes)}`
 }
 
 export { formatCounts, formatDisk, formatSize }
-
-// EOF

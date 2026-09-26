@@ -9,6 +9,9 @@
         "select": "file:./deps/select.js",
         "select.tui": "file:./deps/select.tui",
       },
+      "devDependencies": {
+        "happy-dom": "^20.10.6",
+      },
     },
   },
   "packages": {

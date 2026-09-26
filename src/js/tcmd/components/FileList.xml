@@ -1,0 +1,5 @@
+<box flexDirection="column" flexGrow="1">
+	<scrollbox ref="list" flexGrow="1" height="100%" out:scrollTop="scrollTop">
+		<box out="rows" flexDirection="column"></box>
+	</scrollbox>
+</box>

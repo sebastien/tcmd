@@ -1,0 +1,5 @@
+<box flexDirection="row" height="1" out:backgroundColor="rowBg" on:click="paneId:paneId,index:index!list:select">
+	<text out="rowMarker" width="2" out:fg="rowMarkerFg"></text>
+	<text out="rowName" flexGrow="1" out:fg="rowNameFg"></text>
+	<text out="rowSize" width="9" out:fg="rowSizeFg"></text>
+</box>

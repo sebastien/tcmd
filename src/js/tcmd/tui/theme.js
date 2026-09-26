@@ -8,7 +8,6 @@
 
 const theme = {
 	cursorBg: "#3a5f8a",
-	cursorFg: "#ffffff",
 	dirFg: "#7aa2f7",
 	textFg: "#c0caf5",
 	dimFg: "#565f89",

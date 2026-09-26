@@ -1,0 +1,18 @@
+<div class="app" tabindex="0" on:keydown="keys">
+	<header out="toolbarView|Toolbar"></header>
+	<main class="panes">
+		<section class="pane pane-left" out:class="leftPaneClass">
+			<div out="leftCrumbsView|Breadcrumbs"></div>
+			<div out="leftListView|FileList"></div>
+			<div out="leftSummaryView|Summary"></div>
+		</section>
+		<div when="showPreview" out="previewView|FilePreview"></div>
+		<section class="pane pane-right" out:class="rightPaneClass">
+			<div out="rightCrumbsView|Breadcrumbs"></div>
+			<div out="rightListView|FileList"></div>
+			<div out="rightSummaryView|Summary"></div>
+		</section>
+	</main>
+	<footer class="status" out="status"></footer>
+	<div when="paletteOpen" out="paletteView|CommandPalette"></div>
+</div>

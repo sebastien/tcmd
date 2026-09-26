@@ -1,0 +1,6 @@
+<box when="show" out:title="previewTitle" out:titleFg="previewTitleColor" border flexDirection="column" flexGrow="1">
+	<scrollbox flexGrow="1" height="100%">
+		<text when="hasText" out="previewText" out:fg="textFg"></text>
+		<text when="hasCard" out="cardText" out:fg="dimFg"></text>
+	</scrollbox>
+</box>

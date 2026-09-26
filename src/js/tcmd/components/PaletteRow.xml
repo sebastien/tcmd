@@ -1,0 +1,3 @@
+<box flexDirection="row" height="1" on:click="item.id!palette:run">
+	<text out="paletteLabel" out:fg="rowFg"></text>
+</box>

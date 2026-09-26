@@ -28,6 +28,10 @@ Main components:
 Implementation:
 - Pure JavaScript & HTML
 - Select.js and select.tui for UI
+- Shared component logic in `src/js/tcmd/components` (`ComponentName.js`),
+  with `ComponentName.xml` (TUI) and `ComponentName.html` (web) presentations;
+  logic reads reactive cells via `read()` and registers events with `.sub(...)`
+  (select.js semantics, shared by both renderers)
 - UI.css for HTML styling
 - Bun as the runtime
 

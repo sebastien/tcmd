@@ -1,5 +1,13 @@
 # TinyCommand
 
+```
+ ██▓                                 ██▓
+ ███▄▄  ███▀▀█▓▄  ███▀▀███▀▀█▓▄  ▄██▀▀███
+ ███    ███ ▀▀▀▀  ███  ███  ███  ███  ███
+ ███    ███  ███  ███  ███  ███  ███  ███
+ ▀██▄▄  ███▄▄███  ███  ███  ███  ███▄▄███
+```
+
 TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
 
 - Browse files in two panes (left and right)
@@ -37,23 +45,50 @@ src/js/tcmd/
     session.js   two panes + active pane, preview, palette, dispatch
     keymap.js    key chords -> command ids
     commands.js  command registry; commands are `run(session, payload)`
+  components/  Shared, renderer-agnostic component logic
+    App.js            root controller: key + event -> dispatch
+    read.js           reactive cell -> plain value accessor
+    rows.js           keyed row-bag builders shared by both catalogues
+    FileList.js …     one `.js` per component (behaviors + pure helpers)
+    FileRow.js …      row behaviors shared by both engines
+    format.js         presentation helpers (sizes/counts)
   tui/      View (select.tui templates on OpenTUI)
-    app.js       root layout + key handling; maps events to commands
-    views/       FileList, FilePreview, Breadcrumbs, Summary, Toolbar, Palette
-    catalogue.js component registration
-    format.js, theme.js
-  web/      future browser view (same core)
+    app.js       binds App.js + App.xml + TUI environment
+    catalogue.js binds each `components/*.js` to its `.xml` and registers tags
+    index.js     TUI entry point
+    theme.js     TUI colors
+  web/      Browser view (select.js templates on the DOM, same core)
+    app.js       binds App.js + App.html + web environment
+    catalogue.js binds each `components/*.js` to its `.html`
+    index.js     web entry point
+    theme.js     web state classes
 ```
+
+Each component is a triple: `ComponentName.js` (shared logic),
+`ComponentName.xml` (TUI presentation) and `ComponentName.html` (web
+presentation). Components that share a presentation bind the same source (e.g.
+`Breadcrumbs` and `Toolbar` both use `RowList.xml`). The `.js` imports neither
+renderer and reads reactive cells with the shared `read()` accessor
+(`components/read.js`); each catalogue injects the renderer's runtime and theme
+through the `components/index.js` manifest. The TUI binds via
+`ui.component(name).does(behaviors).using(template)`; the web binds via
+`ui(html).does(behaviors)`. Published events are registered with `.sub(...)`
+(the select.js contract) in both. List rows use the same keyed
+`Component.map` primitive over resolved collections, sharing row behaviors over
+a `{ item, index, … }` bag built by `components/rows.js`.
 
 Decoupling rules:
 
 - `core/` state is reactive cells (`select/state/cells`) and commands mutate it
   through `session.dispatch(id, payload)`; views only subscribe and publish.
-- The filesystem is an injected adapter, so tests run on an in-memory fs and a
-  future web build swaps the backend without touching the model.
-- Views receive data via `in:` slots (cells keep their reactivity) and report
-  intent via `pub()` bubbles (`list:select`, `crumbs:go`, …) that the app maps
-  to commands.
+- The filesystem is an injected adapter, so tests run on an in-memory fs and the
+  web view swaps the backend without touching the model.
+- Views receive data as cells (`in:` slots keep single-segment sources
+  reactive) and read them with `read()`; they report intent via `pub()`ed
+  events (`list:select`, `crumbs:go`, …) that the app handles with `.sub(...)`
+  and maps to commands.
+- `components/` stays free of renderer imports; each `tui/` / `web/` catalogue
+  injects the renderer's runtime and theme, so the same controller serves both.
 
 ## Dependencies
 
@@ -68,11 +103,12 @@ postinstall) re-links `node_modules` so upstream edits propagate.
 ## Tests
 
 ```sh
-bun test            # core unit tests + TUI snapshot/interaction tests
+bun test            # core, components, TUI and web tests
 ```
 
 Core tests use an in-memory filesystem; TUI tests drive the real component
-tree with OpenTUI's test renderer (frame capture, mock keys and mouse).
+tree with OpenTUI's test renderer (frame capture, mock keys and mouse). Web
+tests run the shared logic through select.js on a happy-dom document.
 
 ## Roadmap
 
@@ -81,4 +117,4 @@ tree with OpenTUI's test renderer (frame capture, mock keys and mouse).
 - [ ] File operations (copy/move/delete/mkdir), completion, quick find, grep
 - [ ] Image/PDF/audio/video previews
 - [ ] Bookmarks, tabs
-- [ ] Web UI on the same core
+- [x] Web view on the same core (shared components rendered by select.js)
