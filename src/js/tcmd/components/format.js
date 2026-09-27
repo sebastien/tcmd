@@ -47,3 +47,5 @@ function formatCounts(entries) {
 }
 
 export { formatCounts, formatDisk, formatSize }
+
+// EOF

@@ -1,5 +1,5 @@
 <box flexDirection="column" width="100%" height="100%" on:keypress="keys">
-	<toolbar in:commands="commandRows" height="1"></toolbar>
+	<toolbar in:commands="toolbarCommands" height="1"></toolbar>
 	<box flexDirection="row" flexGrow="1">
 		<box flexDirection="column" width="40%" border out:borderColor="leftBorderFg">
 			<breadcrumbs in:segments="leftSegments" in:paneId="leftId" height="1"></breadcrumbs>

@@ -12,7 +12,7 @@
 import { cell, derived } from "select/state/cells"
 import { filterEntries, sortEntries } from "./entries.js"
 import { clampCursor, currentEntry, toggleMark } from "./selection.js"
-import { parent as parentPath, split, prefix } from "./path.js"
+import { SEP, parent as parentPath, split, prefix } from "./path.js"
 
 // Function: createPane
 // Creates a pane model bound to a filesystem adapter.
@@ -102,8 +102,6 @@ function createPane({ fs, path: initialPath }) {
 
 	return pane
 }
-
-const SEP = "/"
 
 export { createPane }
 

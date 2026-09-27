@@ -9,12 +9,13 @@
 // web presentations. Behaviors receive plain (unwrapped) data.
 //
 // Environment (injected by the renderer binding):
-// - `lineFg`: color/token for the summary text
-// - `width(self)`: pane width in cells (0 when unknown)
-// - `elide(text, width)`: truncate to the pane width
+// - `lineFg`: color/token for the summary text (bound by the TUI presentation)
+// - `width(self)`: pane width in cells (optional; defaults to 0)
+// - `elide(text, width)`: truncate to the pane width (optional; defaults to
+//   the full text)
 
+import { unwrap } from "select/state/cells"
 import { formatCounts, formatDisk } from "./format.js"
-import { read } from "./read.js"
 
 // Function: summaryText
 // The full, untruncated summary line for `entries` and `disk`.
@@ -30,11 +31,14 @@ function summaryText(entries, disk) {
 function createBehaviors(env) {
 	return {
 		line: (self, data) => {
-			const text = summaryText(read(data.entries), read(data.disk))
-			return env.elide(text, env.width(self))
+			const text = summaryText(unwrap(data.entries), unwrap(data.disk))
+			const width = env.width ? env.width(self) : 0
+			return env.elide ? env.elide(text, width) : text
 		},
 		lineFg: () => env.lineFg,
 	}
 }
 
 export { createBehaviors, summaryText }
+
+// EOF

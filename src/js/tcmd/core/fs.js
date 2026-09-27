@@ -9,7 +9,7 @@
 //
 // An adapter provides:
 // - `readDir(path)`: Promise<FileEntry-like[]> - directory listing with stat info
-// - `stat(path)`: Promise<{ isDir, isSymlink, size, mtimeMs, mode } | null>
+// - `stat(path)`: Promise<{ isDir, isSymlink, size, mtimeMs } | null>
 // - `readTextHead(path, maxBytes)`: Promise<string> - leading bytes as text
 // - `disk(path)`: Promise<{ free, total } | null> - filesystem capacity
 // - `home()`, `cwd()`: string - well-known directories
@@ -64,7 +64,7 @@ function createNodeFs() {
 		},
 		async isDir(path) {
 			const stats = await statSafe(path)
-			return Boolean(stats?.isDirectory?.())
+			return Boolean(stats?.isDir)
 		},
 		async readTextHead(path, maxBytes = 65536) {
 			const file = nodeFs.openSync(path, "r")
@@ -96,7 +96,12 @@ function createNodeFs() {
 async function statSafe(path) {
 	try {
 		const stats = await fs.stat(path)
-		return { isDirectory: stats.isDirectory(), size: stats.size, mtimeMs: stats.mtimeMs }
+		return {
+			isDir: stats.isDirectory(),
+			isSymlink: stats.isSymbolicLink(),
+			size: stats.size,
+			mtimeMs: stats.mtimeMs,
+		}
 	} catch (error) {
 		return null
 	}

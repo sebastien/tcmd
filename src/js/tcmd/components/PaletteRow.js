@@ -5,9 +5,12 @@
 
 // Module: tcmd/components/PaletteRow
 // Command-palette row behaviors. Read `{ item: command, index, selected }`, the
-// same bag shape in both engines.
+// same bag shape in both engines. `selected` is a reactive cell, read with
+// `unwrap` at the point of use.
 //
 // Environment: `accentFg`, `textFg`, `selectedClass`.
+
+import { unwrap } from "select/state/cells"
 
 // Function: paletteLabel
 function paletteLabel(command) {
@@ -21,10 +24,12 @@ function createBehaviors(env) {
 	return {
 		paletteLabel: (_self, data) => paletteLabel(data.item),
 		rowClass: (_self, data) =>
-			data.index === data.selected ? env.selectedClass : null,
+			data.index === unwrap(data.selected) ? env.selectedClass : null,
 		rowFg: (_self, data) =>
-			data.index === data.selected ? env.accentFg : env.textFg,
+			data.index === unwrap(data.selected) ? env.accentFg : env.textFg,
 	}
 }
 
 export { createBehaviors, paletteLabel }
+
+// EOF

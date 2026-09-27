@@ -17,4 +17,6 @@ function main(session, selector = "#app") {
 	return App.new().mount(selector)
 }
 
-export { createWebApp, main }
+export { main }
+
+// EOF

@@ -6,7 +6,7 @@
 // Module: tcmd/tui/theme
 // Central place for TUI colors so the look can be retuned in one spot.
 
-const theme = {
+const tuiTheme = {
 	cursorBg: "#3a5f8a",
 	dirFg: "#7aa2f7",
 	textFg: "#c0caf5",
@@ -19,6 +19,6 @@ const theme = {
 	markFg: "#e0af68",
 }
 
-export { theme }
+export { tuiTheme }
 
 // EOF

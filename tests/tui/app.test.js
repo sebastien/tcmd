@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { createPane, createSession, load } from "../../src/js/tcmd/core/index.js"
 import { createAppComponent } from "../../src/js/tcmd/tui/app.js"
-import { registerComponents } from "../../src/js/tcmd/tui/catalogue.js"
 import { createMockFs } from "../helpers/mock-fs.js"
 
 const TREE = {
@@ -19,7 +18,6 @@ const TREE = {
 }
 
 async function makeSetup(width = 100, height = 20) {
-	registerComponents()
 	const fs = createMockFs(TREE)
 	const left = createPane({ fs, path: "/home" })
 	const right = createPane({ fs, path: "/" })

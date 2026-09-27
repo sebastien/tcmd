@@ -47,7 +47,7 @@ src/js/tcmd/
     commands.js  command registry; commands are `run(session, payload)`
   components/  Shared, renderer-agnostic component logic
     App.js            root controller: key + event -> dispatch
-    read.js           reactive cell -> plain value accessor
+    bind.js           `ui.component(name).does(behaviors).using(source)` binding
     rows.js           keyed row-bag builders shared by both catalogues
     FileList.js …     one `.js` per component (behaviors + pure helpers)
     FileRow.js …      row behaviors shared by both engines
@@ -67,15 +67,17 @@ src/js/tcmd/
 Each component is a triple: `ComponentName.js` (shared logic),
 `ComponentName.xml` (TUI presentation) and `ComponentName.html` (web
 presentation). Components that share a presentation bind the same source (e.g.
-`Breadcrumbs` and `Toolbar` both use `RowList.xml`). The `.js` imports neither
-renderer and reads reactive cells with the shared `read()` accessor
-(`components/read.js`); each catalogue injects the renderer's runtime and theme
-through the `components/index.js` manifest. The TUI binds via
-`ui.component(name).does(behaviors).using(template)`; the web binds via
-`ui(html).does(behaviors)`. Published events are registered with `.sub(...)`
-(the select.js contract) in both. List rows use the same keyed
-`Component.map` primitive over resolved collections, sharing row behaviors over
-a `{ item, index, … }` bag built by `components/rows.js`.
+`Breadcrumbs` and `Toolbar` both use `RowList.xml` for the TUI and
+`RowList.html` for the web). The `.js` imports neither renderer and reads
+reactive cells with `unwrap` from `select/state/cells`; each catalogue injects
+the renderer's runtime and theme through the `components/index.js` manifest,
+binding via the shared `components/bind.js` helper
+(`ui.component(name).does(behaviors).using(source)`, the contract both engines
+implement). Published events are registered with `.sub(...)` (the select.js
+contract) in both. List rows use the same keyed `Component.map` primitive over
+reactive collections, sharing row behaviors over a `{ item, index, … }` bag
+built by `components/rows.js`; cells stay in the bag and are read at the point
+of use.
 
 Decoupling rules:
 
@@ -83,8 +85,8 @@ Decoupling rules:
   through `session.dispatch(id, payload)`; views only subscribe and publish.
 - The filesystem is an injected adapter, so tests run on an in-memory fs and the
   web view swaps the backend without touching the model.
-- Views receive data as cells (`in:` slots keep single-segment sources
-  reactive) and read them with `read()`; they report intent via `pub()`ed
+- Views receive data as cells (`in:` slots and mapped row bags keep cells
+  reactive) and read them with `unwrap`; they report intent via `pub()`ed
   events (`list:select`, `crumbs:go`, …) that the app handles with `.sub(...)`
   and maps to commands.
 - `components/` stays free of renderer imports; each `tui/` / `web/` catalogue

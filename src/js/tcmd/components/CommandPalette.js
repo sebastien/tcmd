@@ -7,18 +7,19 @@
 // CommandPalette: popup listing commands filtered by the typed query. The row
 // logic lives in `PaletteRow.js`; this parent maps its `items` to rows.
 //
-// Environment: `paletteBg`, `titleFg`, `rows(data)` returning the keyed rows.
+// Environment: `paletteBg`, `titleFg` (exposed as the `titleColor` behavior),
+// `rows(data)` returning the keyed rows.
 
-import { read } from "./read.js"
+import { unwrap } from "select/state/cells"
 
 // Function: createBehaviors
 // Builds the CommandPalette behavior map for the given renderer environment.
 function createBehaviors(env) {
 	const behaviors = {
 		bg: () => env.paletteBg,
-		confirm: (self, data) => self.pub("palette:confirm", read(data.query) ?? ""),
-		focused: (_self, data) => Boolean(read(data.open)),
-		titleFg: () => env.titleFg,
+		confirm: (self, data) => self.pub("palette:confirm", unwrap(data.query) ?? ""),
+		focused: (_self, data) => Boolean(unwrap(data.open)),
+		titleColor: () => env.titleFg,
 	}
 	if (env?.rows) {
 		behaviors.rows = (_self, data) => env.rows(data)
@@ -27,3 +28,5 @@ function createBehaviors(env) {
 }
 
 export { createBehaviors }
+
+// EOF

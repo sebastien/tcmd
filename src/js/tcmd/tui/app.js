@@ -8,12 +8,11 @@
 // (`components/App.xml`) and to the select.tui `ui` runtime.
 
 import { ui } from "select.tui"
+import { unwrap } from "select/state/cells"
 import appXml from "../components/App.xml" with { type: "text" }
-import { createBehaviors, createEvents, createInit } from "../components/App.js"
+import { appBehaviors, appEvents, appInit } from "../components/index.js"
 import { registerComponents } from "./catalogue.js"
-import { theme } from "./theme.js"
-
-registerComponents()
+import { tuiTheme } from "./theme.js"
 
 // Function: createAppComponent
 // Builds the root component bound to a `session` (see tcmd/core/session).
@@ -24,26 +23,32 @@ registerComponents()
 // await render(App, { useMouse: true })
 // ```
 function createAppComponent(session) {
-	const env = {
-		accentFg: theme.accentFg,
-		borderFg: theme.borderFg,
-		errorFg: theme.errorFg,
-		normalizeKey: (key) => key,
-		quit: (self) => {
-			// Destroying the renderer from within a keypress deadlocks the
-			// native render loop; defer past the current frame.
-			setTimeout(() => {
-				self.quit()
-				process.exit(0)
-			}, 100)
-		},
-	}
+	registerComponents()
 	return ui
 		.component("App")
-		.init(createInit(session))
-		.does(createBehaviors(env))
-		.sub(createEvents())
+		.init(appInit(session))
+		.does({
+			...appBehaviors({
+				quit: (self) => {
+					// Destroying the renderer from within a keypress deadlocks the
+					// native render loop; defer past the current frame.
+					setTimeout(() => {
+						self.quit()
+						process.exit(0)
+					}, 100)
+				},
+			}),
+			// TUI-only presentation of the shared App state.
+			leftBorderFg: (_self, data) =>
+				unwrap(data.active) === "left" ? tuiTheme.accentFg : tuiTheme.borderFg,
+			rightBorderFg: (_self, data) =>
+				unwrap(data.active) === "right" ? tuiTheme.accentFg : tuiTheme.borderFg,
+			statusFg: () => tuiTheme.errorFg,
+		})
+		.sub(appEvents())
 		.using(appXml)
 }
 
 export { createAppComponent }
+
+// EOF

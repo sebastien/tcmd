@@ -10,12 +10,10 @@
 import { render } from "select.tui"
 import { createPane, createSession, createNodeFs, load } from "../core/index.js"
 import { createAppComponent } from "./app.js"
-import { registerComponents } from "./catalogue.js"
 
 // Function: main
 // Runs the TUI. `paths` are optional initial directories [left, right].
 async function main(paths = []) {
-	registerComponents()
 	const fs = createNodeFs()
 	const left = createPane({ fs, path: paths[0] || fs.cwd() })
 	const right = createPane({ fs, path: paths[1] || fs.home() })

@@ -1,6 +1,6 @@
 // Web App integration: mounts the shared App controller on select.js against a
-// real session, exercising `read()` over reactive cells, `Component.map` with
-// resolved collections, and the `.sub(...)` event path (row click -> dispatch).
+// real session, exercising `unwrap` over reactive cells, `Component.map` with
+// reactive collections, and the `.sub(...)` event path (row click -> dispatch).
 //
 // `web/catalogue.test.js` covers leaf components with plain data; this test
 // drives the reactive session cells the shared behaviors actually receive.
@@ -81,6 +81,24 @@ describe("web app", () => {
 			rows[1].dispatchEvent(new MouseEvent("click", { bubbles: true }))
 			await Promise.resolve()
 			expect(session.panes.left.cursor.value).toBe(1)
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("session cells drive row updates through the mapped bags", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			const rows = () => host.querySelectorAll(".pane-left .file-row")
+			expect(rows()[0].classList.contains("is-current")).toBe(true)
+			session.panes.left.cursor.set(1)
+			await new Promise((resolve) => setTimeout(resolve, 0))
+			expect(rows()[0].classList.contains("is-current")).toBe(false)
+			expect(rows()[1].classList.contains("is-current")).toBe(true)
+			// Marks are cells too: the row marker follows the session Set.
+			session.panes.left.toggleMark()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+			expect(rows()[1].querySelector(".marker").textContent).toBe("* ")
 		} finally {
 			instance?.unmount?.()
 		}

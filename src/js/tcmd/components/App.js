@@ -10,11 +10,12 @@
 // translated into `session.dispatch(commandId, payload)` calls; it never
 // mutates model state directly.
 //
-// Environment: `accentFg`, `borderFg`, `errorFg`, `normalizeKey(event)`,
-// `quit(self)`.
+// Environment: `normalizeKey(event)` (optional; identity when omitted) and
+// `quit(self)`. Renderer-specific bindings (pane borders, status color) live in
+// the per-renderer app binding.
 
+import { unwrap } from "select/state/cells"
 import { DEFAULT_KEYMAP, matchKeymap } from "../core/keymap.js"
-import { read } from "./read.js"
 
 // Function: createInit
 // State initializer binding the root component to a `session`.
@@ -23,7 +24,7 @@ function createInit(session) {
 	const right = session.panes.right
 	return () => ({
 		active: session.active,
-		commandRows: session.commandsCell,
+		toolbarCommands: session.toolbarCommands,
 		dispatch: session.dispatch,
 		leftCursor: left.cursor,
 		leftDisk: left.disk,
@@ -53,17 +54,16 @@ function createInit(session) {
 // Published events are registered separately via `createEvents()` (`.sub`).
 function createBehaviors(env) {
 	return {
-		leftBorderFg: (_self, data) => (read(data.active) === "left" ? env.accentFg : env.borderFg),
 		// Global key handling: palette mode first, then the keymap.
 		keys: (self, data, event) => {
-			const key = env.normalizeKey(event)
-			if (read(data.paletteOpen)) {
+			const key = env.normalizeKey ? env.normalizeKey(event) : event
+			if (unwrap(data.paletteOpen)) {
 				if (key?.name === "escape") {
 					data.dispatch("palette.toggle")
 					return
 				}
 				if (key?.name === "return" || key?.name === "enter") {
-					self.pub("palette:confirm", `${read(data.paletteQuery) ?? ""}`)
+					self.pub("palette:confirm", `${unwrap(data.paletteQuery) ?? ""}`)
 					return
 				}
 				// Let the focused input handle typing.
@@ -75,14 +75,12 @@ function createBehaviors(env) {
 				env.quit(self)
 				return
 			}
-			data.dispatch(id, { paneId: read(data.active) })
+			data.dispatch(id, { paneId: unwrap(data.active) })
 		},
-		rightBorderFg: (_self, data) => (read(data.active) === "right" ? env.accentFg : env.borderFg),
 		status: (_self, data) => {
-			const error = read(data.leftError) ?? read(data.rightError)
+			const error = unwrap(data.leftError) ?? unwrap(data.rightError)
 			return error ? `error: ${error}` : ""
 		},
-		statusFg: () => env.errorFg,
 	}
 }
 
@@ -91,14 +89,13 @@ function createBehaviors(env) {
 // `(self, data, event)` with the published payload in `event.data`.
 function createEvents() {
 	return {
-		"crumbs:go": (self, _data, event) => self.data.dispatch("pane.setPath", event.data),
-		"list:select": (self, _data, event) => self.data.dispatch("list.cursor", event.data),
-		"palette:confirm": (self, _data, event) => {
-			const data = self.data
+		"crumbs:go": (_self, data, event) => data.dispatch("pane.setPath", event.data),
+		"list:select": (_self, data, event) => data.dispatch("list.cursor", event.data),
+		"palette:confirm": (_self, data, event) => {
 			// The global key handler and the input's on:enter can both fire;
 			// only the first one (while the palette is open) acts.
-			if (!read(data.paletteOpen)) return
-			const items = read(data.paletteItems) ?? []
+			if (!unwrap(data.paletteOpen)) return
+			const items = unwrap(data.paletteItems) ?? []
 			const query = `${event.data ?? ""}`
 			const match =
 				items.find((item) => item.title.toLowerCase().includes(query.toLowerCase())) ??
@@ -106,12 +103,14 @@ function createEvents() {
 			if (match) data.dispatch(match.id)
 			data.dispatch("palette.toggle")
 		},
-		"palette:run": (self, _data, event) => {
-			self.data.dispatch(event.data)
-			self.data.dispatch("palette.toggle")
+		"palette:run": (_self, data, event) => {
+			data.dispatch(event.data)
+			data.dispatch("palette.toggle")
 		},
-		"toolbar:run": (self, _data, event) => self.data.dispatch(event.data),
+		"toolbar:run": (_self, data, event) => data.dispatch(event.data),
 	}
 }
 
 export { createBehaviors, createEvents, createInit }
+
+// EOF

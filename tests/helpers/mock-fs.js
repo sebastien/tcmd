@@ -38,7 +38,7 @@ function createMockFs(tree) {
 		readDir,
 		async stat(path) {
 			const dir = dirs.get(path.replace(/\/+$/, "") || "/")
-			return dir ? { isDirectory: true, size: 0, mtimeMs: 0 } : null
+			return dir ? { isDir: true, isSymlink: false, size: 0, mtimeMs: 0 } : null
 		},
 		async isDir(path) {
 			return dirs.has(path.replace(/\/+$/, "") || "/")

@@ -18,8 +18,8 @@ beforeAll(async () => {
 	globalThis.location = window.location
 	globalThis.navigator = window.navigator
 	const catalogue = await import("../../src/js/tcmd/web/catalogue.js")
-	Summary = catalogue.Summary
-	FileList = catalogue.FileList
+	Summary = catalogue.components.Summary
+	FileList = catalogue.components.FileList
 })
 
 describe("web components", () => {

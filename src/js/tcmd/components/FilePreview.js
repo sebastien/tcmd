@@ -10,11 +10,10 @@
 //
 // Environment: `textFg`, `dimFg`, `titleFg`.
 
+import { unwrap } from "select/state/cells"
 import { formatSize } from "./format.js"
-import { read } from "./read.js"
 
 const KIND_LABELS = {
-	dir: "directory",
 	image: "image",
 	media: "audio/video",
 	text: "text",
@@ -43,16 +42,18 @@ function hasText(preview) {
 // Builds the FilePreview behavior map for the given renderer environment.
 function createBehaviors(env) {
 	return {
-		cardText: (_self, data) => cardText(read(data.preview)),
+		cardText: (_self, data) => cardText(unwrap(data.preview)),
 		dimFg: () => env.dimFg,
-		hasCard: (_self, data) => hasCard(read(data.preview)),
-		hasText: (_self, data) => hasText(read(data.preview)),
-		previewText: (_self, data) => read(data.preview)?.text ?? "",
-		previewTitle: (_self, data) => read(data.preview)?.title ?? "preview",
+		hasCard: (_self, data) => hasCard(unwrap(data.preview)),
+		hasText: (_self, data) => hasText(unwrap(data.preview)),
+		previewText: (_self, data) => unwrap(data.preview)?.text ?? "",
+		previewTitle: (_self, data) => unwrap(data.preview)?.title ?? "preview",
 		previewTitleColor: () => env.titleFg,
-		show: (_self, data) => Boolean(read(data.show)),
+		show: (_self, data) => Boolean(unwrap(data.show)),
 		textFg: () => env.textFg,
 	}
 }
 
 export { cardText, createBehaviors, hasCard, hasText }
+
+// EOF

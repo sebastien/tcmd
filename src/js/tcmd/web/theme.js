@@ -4,28 +4,19 @@
 // Created: 2026-09-26
 
 // Module: tcmd/web/theme
-// Web presentation tokens. Colors are expressed as CSS classes; the shared
-// behaviors still receive the color keys they use for the TUI (ignored here).
+// Web presentation tokens. Colors are expressed as CSS classes, so the web
+// theme only carries the state classes the shared behaviors bind through
+// `out:class`; the TUI colors live in `tui/theme.js`.
 
 const webTheme = {
-	// CSS state classes consumed by the .html templates.
+	activeClass: "is-active",
 	childClass: "is-child",
 	currentClass: "is-current",
 	dirClass: "is-dir",
 	rootClass: "is-root",
 	selectedClass: "is-selected",
-	// TUI-only color keys; the web templates use CSS instead.
-	accentFg: null,
-	borderFg: null,
-	cursorBg: null,
-	dimFg: null,
-	dirFg: null,
-	errorFg: null,
-	lineFg: null,
-	markFg: null,
-	paletteBg: null,
-	textFg: null,
-	titleFg: null,
 }
 
 export { webTheme }
+
+// EOF

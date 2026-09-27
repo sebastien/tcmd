@@ -5,11 +5,13 @@
 
 // Module: tcmd/components/FileRow
 // File listing row behaviors. Read `{ item: entry, index, cursor, marked,
-// paneId }`, the same bag shape in both engines.
+// paneId }`, the same bag shape in both engines. `cursor` and `marked` are
+// reactive cells, read with `unwrap` at the point of use.
 //
 // Environment: `cursorBg`, `currentClass`, `markFg`, `accentFg`, `dirFg`,
 // `textFg`, `dimFg`, `dirClass`.
 
+import { unwrap } from "select/state/cells"
 import { formatSize } from "./format.js"
 
 // Function: rowName
@@ -44,11 +46,14 @@ function rowMarker(entry, index, cursor, marked) {
 // Builds the FileRow behavior map for the given renderer environment.
 function createBehaviors(env) {
 	return {
-		rowBg: (_self, data) => (isCurrent(data.index, data.cursor) ? env.cursorBg : undefined),
-		rowClass: (_self, data) => (isCurrent(data.index, data.cursor) ? env.currentClass : null),
-		rowMarker: (_self, data) => rowMarker(data.item, data.index, data.cursor, data.marked),
+		rowBg: (_self, data) =>
+			isCurrent(data.index, unwrap(data.cursor)) ? env.cursorBg : undefined,
+		rowClass: (_self, data) =>
+			isCurrent(data.index, unwrap(data.cursor)) ? env.currentClass : null,
+		rowMarker: (_self, data) =>
+			rowMarker(data.item, data.index, unwrap(data.cursor), unwrap(data.marked)),
 		rowMarkerFg: (_self, data) =>
-			isMarked(data.item, data.marked) ? env.markFg : env.accentFg,
+			isMarked(data.item, unwrap(data.marked)) ? env.markFg : env.accentFg,
 		rowName: (_self, data) => rowName(data.item),
 		rowNameClass: (_self, data) => (data.item?.isDir ? env.dirClass : null),
 		rowNameFg: (_self, data) => (data.item?.isDir ? env.dirFg : env.textFg),
@@ -57,4 +62,6 @@ function createBehaviors(env) {
 	}
 }
 
-export { createBehaviors, isCurrent, isMarked, rowMarker, rowName, rowSize }
+export { createBehaviors, isMarked, rowMarker, rowName, rowSize }
+
+// EOF

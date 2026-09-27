@@ -68,21 +68,16 @@ function createSession({ fs, left, right }) {
 			text: head === null || hasBinaryByte(head) ? null : head,
 		})
 	})
-	session._previewToken = 0
 
-	// Toolbar/palette rows: only commands flagged for the toolbar.
-	session.commandsCell = cell(
-		getCommands()
-			.filter((command) => command.toolbar)
-			.map((command) => ({ id: command.id, title: command.title, keys: command.keys })),
+	// Toolbar rows: only commands flagged for the toolbar.
+	session.toolbarCommands = cell(getCommands().filter((command) => command.toolbar).map(commandRow))
+
+	// Command palette rows: every command visible to the user (internal
+	// `hidden` commands are excluded), filtered by the current query.
+	session.paletteCommands = cell(getCommands().filter((command) => !command.hidden).map(commandRow))
+	session.paletteItems = derived([session.paletteQuery, session.paletteCommands], ([query, all]) =>
+		filterCommandRows(all, query),
 	)
-
-	// Command palette rows filtered by the current query.
-	session.paletteItems = derived([session.paletteQuery, session.commandsCell], ([query, all]) => {
-		const q = `${query ?? ""}`.trim().toLowerCase()
-		if (!q) return all
-		return all.filter((command) => command.title.toLowerCase().includes(q))
-	})
 
 	session.dispatch = createDispatch(session)
 	session.load = () => load(session)
@@ -100,8 +95,23 @@ function entrySummary(entry) {
 	return { name: entry.name, path: entry.path, isDir: entry.isDir, size: entry.size, ext: entry.ext }
 }
 
+// Function: commandRow
+// Projects a command to the small row object views render.
+function commandRow(command) {
+	return { id: command.id, title: command.title, keys: command.keys }
+}
+
+// Function: filterCommandRows
+// Case-insensitive title filter; an empty query keeps every row.
+function filterCommandRows(rows, query) {
+	const q = `${query ?? ""}`.trim().toLowerCase()
+	if (!q) return rows
+	return rows.filter((row) => row.title.toLowerCase().includes(q))
+}
+
+// Function: previewKind
+// Preview classification for file entries; directories are not previewed.
 function previewKind(entry) {
-	if (entry.isDir) return "dir"
 	const image = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"]
 	const media = ["mp3", "wav", "ogg", "flac", "mp4", "webm", "mkv", "mov", "pdf"]
 	if (entry.ext && image.includes(entry.ext)) return "image"
@@ -112,7 +122,7 @@ function previewKind(entry) {
 function hasBinaryByte(text) {
 	for (let i = 0; i < 2048 && i < text.length; i++) {
 		const code = text.charCodeAt(i)
-		if (code === 0 || (code < 9 && code !== 0) || (code > 13 && code < 32)) return true
+		if (code < 9 || (code > 13 && code < 32)) return true
 	}
 	return false
 }

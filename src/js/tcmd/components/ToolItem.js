@@ -26,3 +26,5 @@ function createBehaviors(env) {
 }
 
 export { createBehaviors, toolLabel }
+
+// EOF

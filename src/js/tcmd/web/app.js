@@ -9,8 +9,9 @@
 // `tcmd/tui/app.js` for the DOM backend.
 
 import { ui } from "select/ui"
+import { unwrap } from "select/state/cells"
 import appHtml from "../components/App.html" with { type: "text" }
-import { appBehaviors, appEvents, appInit, read } from "../components/index.js"
+import { appBehaviors, appEvents, appInit } from "../components/index.js"
 import { registerWebComponents } from "./catalogue.js"
 import { webTheme } from "./theme.js"
 
@@ -35,50 +36,54 @@ function normalizeKey(event) {
 }
 
 // Web-only view wiring for App: forwards root data into child components.
+// Child data keeps the session cells (as `in:` slots do in the TUI), so the
+// child instances subscribe and update granularly; behaviors read cells with
+// `unwrap` at the point of use.
 function webViewBehaviors() {
 	return {
 		leftCrumbsView: (_self, data) => ({
-			segments: read(data.leftSegments),
+			segments: data.leftSegments,
 			paneId: data.leftId,
 		}),
 		leftListView: (_self, data) => ({
-			entries: read(data.leftEntries),
-			cursor: read(data.leftCursor),
-			marked: read(data.leftMarked),
+			entries: data.leftEntries,
+			cursor: data.leftCursor,
+			marked: data.leftMarked,
 			paneId: data.leftId,
 		}),
-		leftPaneClass: (_self, data) => (read(data.active) === "left" ? "is-active" : null),
+		leftPaneClass: (_self, data) => (unwrap(data.active) === "left" ? webTheme.activeClass : null),
 		leftSummaryView: (_self, data) => ({
-			entries: read(data.leftEntries),
-			disk: read(data.leftDisk),
+			entries: data.leftEntries,
+			disk: data.leftDisk,
 		}),
 		paletteView: (_self, data) => ({
-			// `query` stays a cell: the input's `inout` two-way binding writes it.
-			items: read(data.paletteItems),
-			open: read(data.paletteOpen),
+			// Cells pass through (as `in:` slots do in the TUI); `query` is written
+			// back by the input's `inout` two-way binding.
+			items: data.paletteItems,
+			open: data.paletteOpen,
 			query: data.paletteQuery,
-			selected: read(data.paletteIndex),
+			selected: data.paletteIndex,
 		}),
 		previewView: (_self, data) => ({
-			preview: read(data.preview),
-			show: read(data.showPreview),
+			preview: data.preview,
+			show: data.showPreview,
 		}),
 		rightCrumbsView: (_self, data) => ({
-			segments: read(data.rightSegments),
+			segments: data.rightSegments,
 			paneId: data.rightId,
 		}),
 		rightListView: (_self, data) => ({
-			entries: read(data.rightEntries),
-			cursor: read(data.rightCursor),
-			marked: read(data.rightMarked),
+			entries: data.rightEntries,
+			cursor: data.rightCursor,
+			marked: data.rightMarked,
 			paneId: data.rightId,
 		}),
-		rightPaneClass: (_self, data) => (read(data.active) === "right" ? "is-active" : null),
+		rightPaneClass: (_self, data) => (unwrap(data.active) === "right" ? webTheme.activeClass : null),
 		rightSummaryView: (_self, data) => ({
-			entries: read(data.rightEntries),
-			disk: read(data.rightDisk),
+			entries: data.rightEntries,
+			disk: data.rightDisk,
 		}),
-		toolbarView: (_self, data) => ({ commands: read(data.commandRows) }),
+		toolbarView: (_self, data) => ({ commands: data.toolbarCommands }),
 	}
 }
 
@@ -90,7 +95,6 @@ function createWebApp(session) {
 		.init(appInit(session))
 		.does({
 			...appBehaviors({
-				...webTheme,
 				normalizeKey,
 				quit: (self) => self.unmount?.(),
 			}),
@@ -100,3 +104,5 @@ function createWebApp(session) {
 }
 
 export { createWebApp }
+
+// EOF

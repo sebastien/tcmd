@@ -9,7 +9,7 @@
 // they call `session.dispatch(id, payload)`, keeping the model the single
 // source of truth for every presentation layer.
 
-import { clampCursor } from "./selection.js"
+import { clampCursor, moveCursor } from "./selection.js"
 
 const PAGE = 10
 
@@ -161,14 +161,20 @@ function getCommand(id) {
 
 // Function: createDispatch
 // Returns `dispatch(id, payload)` bound to the session. Unknown and `app.*`
-// (presentation-only) commands are ignored here.
+// (presentation-only) commands are ignored here. Failures (sync throws and
+// rejections) land on the active pane's error cell.
 function createDispatch(session) {
 	return (id, payload) => {
 		const command = getCommand(id)
 		if (!command) return null
-		return Promise.resolve(command.run(session, payload)).catch((error) => {
-			session.left.error.set(`${error?.message ?? error}`)
-		})
+		try {
+			return Promise.resolve(command.run(session, payload)).catch((error) => {
+				pane(session).error.set(`${error?.message ?? error}`)
+			})
+		} catch (error) {
+			pane(session).error.set(`${error?.message ?? error}`)
+			return null
+		}
 	}
 }
 
@@ -178,9 +184,9 @@ function pane(session) {
 
 function bump(session, delta) {
 	const p = pane(session)
-	p.cursor.set(clampCursor(p.cursor.value + delta, p.entries.value.length))
+	p.cursor.set(moveCursor(p.cursor.value, delta, p.entries.value.length))
 }
 
-export { createDispatch, getCommand, getCommands, commands }
+export { createDispatch, getCommand, getCommands }
 
 // EOF
