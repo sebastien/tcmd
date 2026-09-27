@@ -11,6 +11,7 @@
 // Constant: behaviorEnv
 const behaviorEnv = {
 	accentFg: "accent",
+	activeClass: "is-active",
 	borderFg: "border",
 	childClass: "is-child",
 	cursorBg: "cursor",
@@ -18,6 +19,7 @@ const behaviorEnv = {
 	dimFg: "dim",
 	dirClass: "is-dir",
 	dirFg: "dir",
+	errorClass: "is-error",
 	lineFg: "dim",
 	markFg: "mark",
 	paletteBg: "palette",

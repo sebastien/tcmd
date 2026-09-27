@@ -23,6 +23,7 @@ const TREE = {
 }
 
 let createWebApp
+let normalizeKey
 
 beforeAll(async () => {
 	const { Window } = await import("happy-dom")
@@ -37,7 +38,7 @@ beforeAll(async () => {
 	globalThis.navigator = window.navigator
 	globalThis.Event = window.Event
 	globalThis.MouseEvent = window.MouseEvent
-	;({ createWebApp } = await import("../../src/js/tcmd/web/app.js"))
+	;({ createWebApp, normalizeKey } = await import("../../src/js/tcmd/web/app.js"))
 })
 
 async function mountApp() {
@@ -56,17 +57,21 @@ describe("web app", () => {
 	test("mounts the shared App over a reactive session", async () => {
 		const { host, instance } = await mountApp()
 		try {
-			// Toolbar/FileList/Breadcrumbs all come from reactive session cells.
+			// CommandBar/FileList/Breadcrumbs all come from reactive session cells.
 			expect(host.textContent).toContain("Switch[Tab]")
 			expect(host.textContent).toContain("notes.txt")
 			expect(host.textContent).toContain("tester/")
 			expect(host.querySelectorAll(".file-row.is-current").length).toBeGreaterThan(0)
 			expect(host.querySelectorAll(".name.is-dir").length).toBeGreaterThan(0)
 			expect(host.querySelector(".crumb.is-root")).not.toBeNull()
+			// One labelled tab per pane plus the add affordance.
+			expect(host.querySelectorAll(".pane-left .tab").length).toBe(1)
+			expect(host.querySelector(".pane-left .tab.is-active")).not.toBeNull()
+			expect(host.querySelector(".pane-left .tab-add")).not.toBeNull()
 			// App.html wrappers are neutral containers: no duplicated child roots.
 			expect(host.querySelector(".file-list .file-list")).toBeNull()
 			expect(host.querySelector("ul > ul")).toBeNull()
-			expect(host.querySelector(".toolbar .toolbar")).toBeNull()
+			expect(host.querySelector(".command-bar .command-bar")).toBeNull()
 		} finally {
 			instance?.unmount?.()
 		}
@@ -86,6 +91,40 @@ describe("web app", () => {
 		}
 	})
 
+	test("clicking a row in the other pane activates that pane", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			expect(session.active.value).toBe("left")
+			const rows = host.querySelectorAll(".pane-right .file-row")
+			rows[0].dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await Promise.resolve()
+			expect(session.active.value).toBe("right")
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("key normalization keeps shift for named keys and drops it for punctuation", () => {
+		expect(normalizeKey({ key: "Tab", shiftKey: true })).toEqual({
+			name: "tab",
+			ctrl: false,
+			meta: false,
+			shift: true,
+		})
+		expect(normalizeKey({ key: ":", shiftKey: true })).toEqual({
+			name: ":",
+			ctrl: false,
+			meta: false,
+			shift: false,
+		})
+		expect(normalizeKey({ key: "O", shiftKey: true })).toEqual({
+			name: "o",
+			ctrl: false,
+			meta: false,
+			shift: true,
+		})
+	})
+
 	test("session cells drive row updates through the mapped bags", async () => {
 		const { host, instance, session } = await mountApp()
 		try {
@@ -99,6 +138,45 @@ describe("web app", () => {
 			session.panes.left.toggleMark()
 			await new Promise((resolve) => setTimeout(resolve, 0))
 			expect(rows()[1].querySelector(".marker").textContent).toBe("* ")
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("scripting mode renders the prompt and operation rows", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			session.paletteMode.set("script")
+			session.paletteOpen.set(true)
+			await new Promise((resolve) => setTimeout(resolve, 0))
+			expect(host.querySelector(".palette-sign").textContent).toBe(":")
+			const labels = [...host.querySelectorAll(".palette-item")].map((item) => item.textContent)
+			expect(labels.some((label) => label.includes("copy  copy FROM TO"))).toBe(true)
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("the pane filter bar appears and narrows the list", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			expect(host.querySelector(".pane-left .filter-bar")).toBeNull()
+
+			session.panes.left.filter.set("notes")
+			await new Promise((resolve) => setTimeout(resolve, 0))
+			expect(host.querySelector(".pane-left .filter-bar")).not.toBeNull()
+			expect(host.querySelector(".pane-left .filter-label").textContent).toBe("notes")
+			expect(host.querySelector(".pane-left .filter-alert").textContent).toBe("")
+			expect(host.querySelectorAll(".pane-left .file-row").length).toBe(1)
+
+			session.panes.left.filter.set("zzz")
+			await new Promise((resolve) => setTimeout(resolve, 0))
+			expect(host.querySelector(".pane-left .filter-alert").textContent).toBe("no match")
+			expect(host.querySelectorAll(".pane-left .file-row").length).toBe(0)
+
+			session.filtering.set("left")
+			await new Promise((resolve) => setTimeout(resolve, 0))
+			expect(host.querySelector(".pane-left .filter-input")).not.toBeNull()
 		} finally {
 			instance?.unmount?.()
 		}

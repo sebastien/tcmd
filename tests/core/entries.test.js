@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { filterEntries, sortEntries } from "../../src/js/tcmd/core/entries.js"
+import {
+	filterEntries,
+	rankEntries,
+	sortEntries,
+	viewEntries,
+} from "../../src/js/tcmd/core/entries.js"
 
 const entry = (name, isDir = false, size = 0, mtimeMs = 0) => ({
 	name,
@@ -32,7 +37,38 @@ describe("entries", () => {
 		expect(res.map((e) => e.name)).toEqual(["beta.txt"])
 	})
 
+	test("fuzzily matches scattered characters", () => {
+		const res = filterEntries(FIXTURE, "zt")
+		expect(res.map((e) => e.name)).toEqual(["zeta.txt"])
+	})
+
 	test("empty query keeps everything", () => {
 		expect(filterEntries(FIXTURE, "  ")).toHaveLength(4)
+	})
+
+	test("ranks matches by score, directories first", () => {
+		const entries = [entry("shed"), entry("seed")]
+		expect(rankEntries(entries, "se", { key: "name", dir: 1 }).map((e) => e.name)).toEqual([
+			"seed",
+			"shed",
+		])
+		// A directory wins over a better-scoring file.
+		const mixed = [entry("seed"), entry("shed", true)]
+		expect(rankEntries(mixed, "se", { key: "name", dir: 1 }).map((e) => e.name)).toEqual([
+			"shed",
+			"seed",
+		])
+	})
+
+	test("viewEntries sorts when unfiltered and ranks when filtered", () => {
+		expect(viewEntries(FIXTURE, "", { key: "name", dir: 1 }).map((e) => e.name)).toEqual([
+			"alpha",
+			"mid",
+			"beta.txt",
+			"zeta.txt",
+		])
+		expect(viewEntries(FIXTURE, "bet", { key: "name", dir: 1 }).map((e) => e.name)).toEqual([
+			"beta.txt",
+		])
 	})
 })

@@ -73,6 +73,22 @@ describe("commands", () => {
 		expect(session.panes.left.marked.value.size).toBe(1)
 	})
 
+	test("list.cursor activates the clicked pane", async () => {
+		const session = makeSession()
+		await load(session)
+		session.dispatch("list.cursor", { paneId: "right", index: 0 })
+		expect(session.active.value).toBe("right")
+		expect(session.panes.right.cursor.value).toBe(0)
+	})
+
+	test("pane.activate switches the active pane and ignores unknown ids", () => {
+		const session = makeSession()
+		session.dispatch("pane.activate", { paneId: "right" })
+		expect(session.active.value).toBe("right")
+		session.dispatch("pane.activate", { paneId: "middle" })
+		expect(session.active.value).toBe("right")
+	})
+
 	test("view.togglePreview flips showPreview", async () => {
 		const session = makeSession()
 		session.dispatch("view.togglePreview")

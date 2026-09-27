@@ -9,6 +9,11 @@ describe("keymap", () => {
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "f1" })).toBeNull()
 	})
 
+	test("tab and shift-tab both switch panes", () => {
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "tab" })).toBe("pane.toggle")
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "tab", shift: true })).toBe("pane.toggle")
+	})
+
 	test("requires the modifiers to match exactly", () => {
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "down", ctrl: true })).toBeNull()
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "r", ctrl: true, shift: true })).toBeNull()

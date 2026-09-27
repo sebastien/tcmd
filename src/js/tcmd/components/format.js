@@ -4,8 +4,35 @@
 // Created: 2026-09-26
 
 // Module: tcmd/components/format
-// Presentation-only formatting helpers (sizes, counts) shared by every
-// component for every renderer.
+// Presentation-only formatting helpers (sizes, counts, header title) shared by
+// every component for every renderer.
+
+// Function: formatTitle
+// Header line `TinyCmd - HOST DIR/BASE` for the given directory. When it
+// exceeds `width` columns the path's middle segments collapse to their first
+// letter, left to right, keeping the basename (`/home/seb/app` -> `/h/s/app`).
+// `host` is optional; `width <= 0` means "unknown width" and disables
+// compression.
+function formatTitle(host, path, width) {
+	const lead = host ? `TinyCmd - ${host} ` : "TinyCmd - "
+	const parts = `${path ?? ""}`.split("/").filter(Boolean)
+	let text = `${lead}/${parts.join("/")}`
+	if (width <= 0 || text.length <= width) return text
+	// Collapse middle segments (every segment but the basename), one at a time.
+	for (let i = 0; i < parts.length - 1; i++) {
+		parts[i] = parts[i][0]
+		text = `${lead}/${parts.join("/")}`
+		if (text.length <= width) return text
+	}
+	// Still too wide: drop leading segments, then hard-truncate.
+	let rest = parts
+	while (rest.length > 1) {
+		rest = rest.slice(1)
+		text = `${lead}…/${rest.join("/")}`
+		if (text.length <= width) return text
+	}
+	return `${text.slice(0, Math.max(0, width - 1))}…`
+}
 
 // Function: formatSize
 // Human-readable byte size; directories pass through their own label.
@@ -46,6 +73,6 @@ function formatCounts(entries) {
 	return `${dirs} dirs, ${files} files, ${formatSize(bytes)}`
 }
 
-export { formatCounts, formatDisk, formatSize }
+export { formatCounts, formatDisk, formatSize, formatTitle }
 
 // EOF

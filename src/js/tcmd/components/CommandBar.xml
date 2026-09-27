@@ -1,0 +1,4 @@
+<box flexDirection="column" height="1">
+	<box when="showKeys" out="rows" flexDirection="row" height="1"></box>
+	<text when="showStatus" out="status" out:fg="statusFg"></text>
+</box>

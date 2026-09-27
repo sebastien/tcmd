@@ -27,11 +27,17 @@ const KEY_NAMES = {
 
 function normalizeKey(event) {
 	const raw = `${event?.key ?? ""}`.toLowerCase()
+	const name = KEY_NAMES[raw] ?? raw
+	// Terminals deliver shifted punctuation (`:`, `!`) as the character
+	// itself, so the keymap matches those without the shift modifier; named
+	// keys (Tab, arrows) and letters keep their shift state.
+	const isPunctuation = name.length === 1 && !/[a-z0-9]/.test(name)
+	const shift = Boolean(event?.shiftKey) && !isPunctuation
 	return {
-		name: KEY_NAMES[raw] ?? raw,
+		name,
 		ctrl: Boolean(event?.ctrlKey),
 		meta: Boolean(event?.metaKey),
-		shift: Boolean(event?.shiftKey),
+		shift,
 	}
 }
 
@@ -41,9 +47,23 @@ function normalizeKey(event) {
 // `unwrap` at the point of use.
 function webViewBehaviors() {
 	return {
+		headerView: (_self, data) => ({ host: data.appHost, path: data.appPath }),
+		commandBarView: (_self, data) => ({
+			items: data.commandBarItems,
+			leftError: data.leftError,
+			notice: data.notice,
+			rightError: data.rightError,
+		}),
+		confirmView: (_self, data) => ({ confirm: data.confirm }),
 		leftCrumbsView: (_self, data) => ({
 			segments: data.leftSegments,
 			paneId: data.leftId,
+		}),
+		leftFilterView: (_self, data) => ({
+			query: data.leftFilter,
+			paneId: data.leftId,
+			filtering: data.filtering,
+			entries: data.leftEntries,
 		}),
 		leftListView: (_self, data) => ({
 			entries: data.leftEntries,
@@ -56,10 +76,16 @@ function webViewBehaviors() {
 			entries: data.leftEntries,
 			disk: data.leftDisk,
 		}),
+		leftTabsView: (_self, data) => ({
+			tabs: data.leftTabs,
+			active: data.leftActiveIndex,
+			paneId: data.leftId,
+		}),
 		paletteView: (_self, data) => ({
 			// Cells pass through (as `in:` slots do in the TUI); `query` is written
 			// back by the input's `inout` two-way binding.
 			items: data.paletteItems,
+			mode: data.paletteMode,
 			open: data.paletteOpen,
 			query: data.paletteQuery,
 			selected: data.paletteIndex,
@@ -72,6 +98,12 @@ function webViewBehaviors() {
 			segments: data.rightSegments,
 			paneId: data.rightId,
 		}),
+		rightFilterView: (_self, data) => ({
+			query: data.rightFilter,
+			paneId: data.rightId,
+			filtering: data.filtering,
+			entries: data.rightEntries,
+		}),
 		rightListView: (_self, data) => ({
 			entries: data.rightEntries,
 			cursor: data.rightCursor,
@@ -83,7 +115,11 @@ function webViewBehaviors() {
 			entries: data.rightEntries,
 			disk: data.rightDisk,
 		}),
-		toolbarView: (_self, data) => ({ commands: data.toolbarCommands }),
+		rightTabsView: (_self, data) => ({
+			tabs: data.rightTabs,
+			active: data.rightActiveIndex,
+			paneId: data.rightId,
+		}),
 	}
 }
 
@@ -103,6 +139,6 @@ function createWebApp(session) {
 		.sub(appEvents())
 }
 
-export { createWebApp }
+export { createWebApp, normalizeKey }
 
 // EOF

@@ -13,6 +13,7 @@ const webTheme = {
 	childClass: "is-child",
 	currentClass: "is-current",
 	dirClass: "is-dir",
+	errorClass: "is-error",
 	rootClass: "is-root",
 	selectedClass: "is-selected",
 }

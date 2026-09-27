@@ -11,17 +11,25 @@ Each panel:
 - Breadcrumbs
 - Contents
 - Summary
+- Filter bar (only while a filter is active)
 
 Command bar:
 - By default shows available keys
-- Ctr-P shows command palette, opens from the bottom
+- Ctrl-P shows command palette, opens from the bottom
 - : starts the command palette in scripting mode
 
 Command palette:
 - Type to complete, arrows to navigate, tab to complete, enter to complete and run
 - By default shows UI level actions
 - When in scripting mode, shows the available operations, and shows the filesets
-  marked ($A, $B, ..., $FILE for preview) based on the available elections across panes and tabs.
+  marked ($A, $B, ..., $FILE for preview) based on the available selections across panes and tabs.
+
+Pane filter:
+- `/` focuses a fuzzy filter input at the bottom of the active pane
+- Typing narrows the listing with fzy scoring: directories first, then by score
+- Enter keeps the filter and returns focus to the list; Esc clears it
+- The filter row shows `/ <query>` whenever a filter is applied (key hints stay
+  in the command bar); a `no match` alert appears when the query matches nothing
 
 Operations:
 - copy FROM TO (supports directories automatically)

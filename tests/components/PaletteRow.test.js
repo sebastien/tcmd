@@ -4,9 +4,19 @@ import { createBehaviors, paletteLabel } from "../../src/js/tcmd/components/Pale
 import { behaviorEnv } from "../helpers/behavior-env.js"
 
 describe("PaletteRow", () => {
-	test("labels commands with their keys", () => {
+	test("labels commands with their keys and script rows without", () => {
 		expect(paletteLabel({ title: "Switch", keys: "Tab" })).toBe("Switch [Tab]")
+		expect(paletteLabel({ title: "copy" })).toBe("copy")
 		expect(paletteLabel(null)).toBe("")
+	})
+
+	test("carries detail rows for script operations and filesets", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		expect(paletteLabel({ title: "copy", detail: "copy FROM TO" })).toBe("copy  copy FROM TO")
+		expect(paletteLabel({ title: "$A", detail: "2 files" })).toBe("$A  2 files")
+		expect(behaviors.paletteLabel(null, { item: { title: "$A", detail: "2 files" } })).toBe(
+			"$A  2 files",
+		)
 	})
 
 	test("behaviors read plain and reactive selection", () => {

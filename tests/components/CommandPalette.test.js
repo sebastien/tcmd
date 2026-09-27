@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createBehaviors } from "../../src/js/tcmd/components/CommandPalette.js"
+import { createBehaviors, paletteSign, paletteTitle } from "../../src/js/tcmd/components/CommandPalette.js"
 import { behaviorEnv } from "../helpers/behavior-env.js"
 
 describe("CommandPalette", () => {
@@ -23,5 +23,16 @@ describe("CommandPalette", () => {
 		const rows = (data) => data.items
 		expect(createBehaviors({ ...behaviorEnv, rows }).rows(null, { items: [1] })).toEqual([1])
 		expect(createBehaviors(behaviorEnv).rows).toBeUndefined()
+	})
+
+	test("switches its prompt and title in scripting mode", () => {
+		expect(paletteSign("ui")).toBe("›")
+		expect(paletteSign("script")).toBe(":")
+		expect(paletteTitle("ui")).toBe("palette")
+		expect(paletteTitle("script")).toBe("script")
+		const behaviors = createBehaviors(behaviorEnv)
+		expect(behaviors.sign(null, { mode: "script" })).toBe(":")
+		expect(behaviors.title(null, { mode: "script" })).toBe("script")
+		expect(behaviors.title(null, { mode: "ui" })).toBe("palette")
 	})
 })

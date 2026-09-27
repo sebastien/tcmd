@@ -1,18 +1,23 @@
 <box flexDirection="column" width="100%" height="100%" on:keypress="keys">
-	<toolbar in:commands="toolbarCommands" height="1"></toolbar>
+	<header in:host="appHost" in:path="appPath" height="1"></header>
 	<box flexDirection="row" flexGrow="1">
-		<box flexDirection="column" width="40%" border out:borderColor="leftBorderFg">
+		<box flexDirection="column" flexGrow="1" border out:borderColor="leftBorderFg" on:click="leftId!pane:activate">
+			<tabbar in:tabs="leftTabs" in:active="leftActiveIndex" in:paneId="leftId" height="1"></tabbar>
 			<breadcrumbs in:segments="leftSegments" in:paneId="leftId" height="1"></breadcrumbs>
 			<filelist in:entries="leftEntries" in:cursor="leftCursor" in:marked="leftMarked" in:paneId="leftId"></filelist>
 			<summary in:entries="leftEntries" in:disk="leftDisk" height="1"></summary>
+			<filterbar in:query="leftFilter" in:paneId="leftId" in:filtering="filtering" in:entries="leftEntries"></filterbar>
 		</box>
-		<filepreview in:preview="preview" in:show="showPreview" width="30%" when="showPreview"></filepreview>
-		<box flexDirection="column" width="30%" border out:borderColor="rightBorderFg">
+		<box flexDirection="column" flexGrow="1" border out:borderColor="rightBorderFg" on:click="rightId!pane:activate">
+			<tabbar in:tabs="rightTabs" in:active="rightActiveIndex" in:paneId="rightId" height="1"></tabbar>
 			<breadcrumbs in:segments="rightSegments" in:paneId="rightId" height="1"></breadcrumbs>
 			<filelist in:entries="rightEntries" in:cursor="rightCursor" in:marked="rightMarked" in:paneId="rightId"></filelist>
 			<summary in:entries="rightEntries" in:disk="rightDisk" height="1"></summary>
+			<filterbar in:query="rightFilter" in:paneId="rightId" in:filtering="filtering" in:entries="rightEntries"></filterbar>
 		</box>
+		<filepreview in:preview="preview" in:show="showPreview" flexGrow="1" when="showPreview"></filepreview>
 	</box>
-	<box height="1"><text out="status" out:fg="statusFg"></text></box>
-	<commandpalette in:open="paletteOpen" in:query="paletteQuery" in:items="paletteItems" in:selected="paletteIndex"></commandpalette>
+	<commandbar in:items="commandBarItems" in:notice="notice" in:leftError="leftError" in:rightError="rightError" height="1"></commandbar>
+	<commandpalette in:open="paletteOpen" in:mode="paletteMode" in:query="paletteQuery" in:items="paletteItems" in:selected="paletteIndex"></commandpalette>
+	<confirm in:confirm="confirm"></confirm>
 </box>

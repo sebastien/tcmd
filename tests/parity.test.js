@@ -61,7 +61,7 @@ describe("cross-engine parity", () => {
 		setup.renderer.destroy()
 
 		try {
-			for (const name of ["tester", "notes.txt", "home", "etc"]) {
+			for (const name of ["tester", "notes.txt", "home", "etc", "TinyCmd", "Open[Enter]"]) {
 				expect(webText).toContain(name)
 				expect(frame).toContain(name)
 			}

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { cell } from "select/state/cells"
-import { crumbRows, fileRows, paletteRows, toolItemRows } from "../../src/js/tcmd/components/rows.js"
+import { commandItemRows, crumbRows, fileRows, paletteRows, tabItemRows } from "../../src/js/tcmd/components/rows.js"
 
 // Captures what each builder passes to `Component.map` and returns a sentinel.
 function fakeRow() {
@@ -59,15 +59,26 @@ describe("rows", () => {
 		expect(call.key(command)).toBe("pane.toggle")
 	})
 
-	test("toolItemRows keys by command id and defaults missing collections", () => {
+	test("tabItemRows keeps the active cell and keys by tab id", () => {
+		const Row = fakeRow()
+		const active = cell(0)
+		const tab = { id: "tab-1", label: "A" }
+		expect(tabItemRows(Row)({ tabs: [tab], active, paneId: "left" })).toBe("MAPPED")
+		const [call] = Row.calls
+		expect(call.processor(tab, 0)).toEqual({ item: tab, index: 0, active, paneId: "left" })
+		expect(call.key(tab)).toBe("tab-1")
+	})
+
+	test("commandItemRows keys by command id and defaults missing collections", () => {
 		const Row = fakeRow()
 		const command = { id: "pane.enter" }
-		expect(toolItemRows(Row)({ commands: [command] })).toBe("MAPPED")
+		expect(commandItemRows(Row)({ items: [command] })).toBe("MAPPED")
 		expect(Row.calls[0].processor(command, 0)).toEqual({ item: command, index: 0 })
 		expect(Row.calls[0].key(command)).toBe("pane.enter")
+		expect(Row.calls[0].key({ id: null, title: "Navigate", keys: "↑/↓" })).toBe("Navigate:↑/↓")
 
 		const Empty = fakeRow()
-		toolItemRows(Empty)({})
+		commandItemRows(Empty)({})
 		expect(Empty.calls[0].data).toEqual([])
 	})
 })

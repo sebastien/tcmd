@@ -43,7 +43,6 @@ function createAppComponent(session) {
 				unwrap(data.active) === "left" ? tuiTheme.accentFg : tuiTheme.borderFg,
 			rightBorderFg: (_self, data) =>
 				unwrap(data.active) === "right" ? tuiTheme.accentFg : tuiTheme.borderFg,
-			statusFg: () => tuiTheme.errorFg,
 		})
 		.sub(appEvents())
 		.using(appXml)

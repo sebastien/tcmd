@@ -22,7 +22,7 @@ Main components:
 - FilePreview: preview of file (text, image, PDF, audio, video, generic file)
 - PathBreadcrumbs: clickable list of path elements
 - PathSummary: number of files, dirs, weight, disk available on a compact line
-- Toolbar: labeled operations with keyboard shortcuts
+- CommandBar: labeled operations and available keys with keyboard shortcuts
 - CommandPalette: palette with commands that popup
 
 Implementation:
@@ -31,7 +31,7 @@ Implementation:
 - Shared component logic in `src/js/tcmd/components` (`ComponentName.js`),
   with `ComponentName.xml` (TUI) and `ComponentName.html` (web) presentations
   (components sharing a presentation bind the same source, e.g. Breadcrumbs
-  and Toolbar use `RowList.xml`/`RowList.html`); logic reads reactive cells via
+  uses `RowList.xml`/`RowList.html`); logic reads reactive cells via
   `unwrap` and registers events with `.sub(...)` (select.js semantics, shared
   by both renderers)
 - CSS classes on the `.html` templates for HTML styling

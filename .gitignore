@@ -1,2 +1,4 @@
+deps
 node_modules/
 .memo/memory
+public/main.js

@@ -1,0 +1,317 @@
+// Project: TinyCommand
+// Author:  Sebastien Pierre
+// License: BSD
+// Created: 2026-09-27
+
+// Module: tcmd/core/operations
+// The scripting operations: the file-management verbs the command palette's
+// scripting mode completes and runs. An operation receives the session and
+// its raw argument tokens; path arguments resolve filesets ($A … $FILE), `~`
+// and paths relative to the active tab. Operations own their side effects and
+// return a one-line message (shown in the command bar) or undefined.
+//
+// Registry entries carry the presentation metadata the palette renders:
+// `signature`, `description`, `aliases` and an optional `confirmText`.
+
+import { basename, extname, join, normalize } from "./path.js"
+
+const operations = [
+	{
+		name: "copy",
+		signature: "copy FROM TO",
+		description: "Copy files and directories",
+		arity: { min: 2, max: 2 },
+		async run(session, args) {
+			const sources = expandAll(session, [args[0]])
+			const targets = expandAll(session, [args[1]])
+			if (targets.length !== 1) throw new Error("copy: TO must be a single path")
+			const [target] = targets
+			if (sources.length > 1 && !(await isDir(session, target))) {
+				throw new Error("copy: TO must be an existing directory for multiple FROM")
+			}
+			const into = await isDir(session, target)
+			for (const source of sources) {
+				if (!(await session.fs.stat(source))) throw new Error(`not found: ${source}`)
+				await session.fs.copy(source, into ? join(target, basename(source)) : target)
+			}
+			await refreshPanes(session)
+			return `copied ${sources.length} path${sources.length === 1 ? "" : "s"} to ${target}`
+		},
+	},
+	{
+		name: "move",
+		signature: "move FROM TO",
+		description: "Move files and directories",
+		arity: { min: 2, max: 2 },
+		async run(session, args) {
+			const sources = expandAll(session, [args[0]])
+			const targets = expandAll(session, [args[1]])
+			if (targets.length !== 1) throw new Error("move: TO must be a single path")
+			const [target] = targets
+			if (sources.length > 1 && !(await isDir(session, target))) {
+				throw new Error("move: TO must be an existing directory for multiple FROM")
+			}
+			const into = await isDir(session, target)
+			for (const source of sources) {
+				if (!(await session.fs.stat(source))) throw new Error(`not found: ${source}`)
+				await session.fs.move(source, into ? join(target, basename(source)) : target)
+			}
+			await refreshPanes(session)
+			return `moved ${sources.length} path${sources.length === 1 ? "" : "s"} to ${target}`
+		},
+	},
+	{
+		name: "delete",
+		signature: "delete PATH...",
+		description: "Delete paths, moving them to the trash",
+		arity: { min: 1 },
+		async run(session, args) {
+			const paths = expandAll(session, args)
+			for (const path of paths) {
+				if (!(await session.fs.stat(path))) throw new Error(`not found: ${path}`)
+			}
+			await session.fs.trash(paths)
+			await refreshPanes(session)
+			return `trashed ${paths.length} path${paths.length === 1 ? "" : "s"}`
+		},
+	},
+	{
+		name: "erase",
+		signature: "erase PATH...",
+		description: "Delete paths without moving them to the trash",
+		arity: { min: 1 },
+		confirmText: (args) => `erase ${args.join(" ")} without trash?`,
+		async run(session, args) {
+			const paths = expandAll(session, args)
+			await session.fs.erase(paths)
+			await refreshPanes(session)
+			return `erased ${paths.length} path${paths.length === 1 ? "" : "s"}`
+		},
+	},
+	{
+		name: "stat",
+		signature: "stat PATH...",
+		description: "Show file information, including disk usage",
+		arity: { min: 1 },
+		async run(session, args) {
+			const paths = expandAll(session, args)
+			const details = []
+			for (const path of paths) {
+				const stats = await session.fs.stat(path)
+				if (!stats) throw new Error(`not found: ${path}`)
+				const size = stats.isDir ? await session.fs.du(path) : stats.size
+				details.push(path)
+				details.push(
+					`  ${stats.isDir ? "directory" : "file"} · ${humanSize(size)} · ${new Date(stats.mtimeMs || 0).toISOString()}`,
+				)
+			}
+			session.showPreview.set(true)
+			session.previewTarget.set(await previewTarget(session, paths[0], details))
+			return `stat ${paths.join(" ")}`
+		},
+	},
+	{
+		name: "touch",
+		signature: "touch PATH...",
+		description: "Create files or bump their modification time",
+		arity: { min: 1 },
+		async run(session, args) {
+			const paths = expandAll(session, args)
+			for (const path of paths) await session.fs.touch(path)
+			await refreshPanes(session)
+			return `touched ${paths.length} path${paths.length === 1 ? "" : "s"}`
+		},
+	},
+	{
+		name: "sel",
+		signature: "sel [+|-][BUF] PATH...",
+		description: "Add or remove paths from a selection buffer",
+		arity: { min: 1 },
+		async run(session, args) {
+			const { sign, buffer, tokens } = parseSelection(args)
+			if (!tokens.length) throw new Error("sel needs at least one path")
+			const paths = expandAll(session, tokens)
+			const tab = findBuffer(session, buffer)
+			const marks = new Set(tab.marked.value)
+			for (const path of paths) {
+				if (sign === "-") marks.delete(path)
+				else marks.add(path)
+			}
+			tab.marked.set(marks)
+			const verb = sign === "-" ? "removed" : "added"
+			const to = sign === "-" ? "from" : "to"
+			return `${verb} ${paths.length} path${paths.length === 1 ? "" : "s"} ${to} $${tab.label}`
+		},
+	},
+	{
+		name: "edit",
+		signature: "edit PATH",
+		description: "Edit a file with $EDITOR",
+		arity: { min: 1, max: 1 },
+		async run(session, args) {
+			const paths = expandAll(session, args)
+			if (paths.length !== 1) throw new Error("edit expects a single path")
+			const [path] = paths
+			await session.os.edit(path)
+			await refreshPanes(session)
+			return `edited ${path}`
+		},
+	},
+	{
+		name: "view",
+		signature: "view PATH",
+		description: "Preview a path",
+		arity: { min: 1, max: 1 },
+		async run(session, args) {
+			const paths = expandAll(session, args)
+			if (paths.length !== 1) throw new Error("view expects a single path")
+			const [path] = paths
+			session.showPreview.set(true)
+			session.previewTarget.set(await previewTarget(session, path))
+			return `viewing ${path}`
+		},
+	},
+	{
+		name: "open",
+		signature: "open PATH...",
+		description: "Open paths with the desktop opener",
+		arity: { min: 1 },
+		async run(session, args) {
+			const paths = expandAll(session, args)
+			for (const path of paths) await session.os.open(path)
+			return `opened ${paths.length} path${paths.length === 1 ? "" : "s"}`
+		},
+	},
+	{
+		name: "run",
+		signature: "run CMD",
+		aliases: ["!"],
+		description: "Run a shell command in the active tab",
+		raw: true,
+		arity: { min: 1 },
+		async run(session, args) {
+			const command = `${args[0] ?? ""}`.trim()
+			if (!command) throw new Error("run needs a command")
+			const cwd = session.panes[session.active.value]?.current()?.path.value
+			await session.os.run(command, { cwd })
+			await refreshPanes(session)
+			return `ran ${command}`
+		},
+	},
+]
+
+// Function: getOperations
+// The full operation registry.
+function getOperations() {
+	return operations
+}
+
+// Function: getOperation
+// Looks up an operation by name or alias (case-insensitive).
+function getOperation(name) {
+	const needle = `${name ?? ""}`.toLowerCase()
+	for (const operation of operations) {
+		if (operation.name === needle) return operation
+		if ((operation.aliases ?? []).some((alias) => alias.toLowerCase() === needle)) return operation
+	}
+	return null
+}
+
+// Function: expandArg
+// Expands one argument token to paths: filesets ($A, $FILE), `~` and paths
+// relative to the active tab.
+function expandArg(session, token) {
+	const text = `${token ?? ""}`
+	if (text.startsWith("$")) {
+		const set = (session.filesets?.value ?? []).find(
+			(candidate) => candidate.id.toLowerCase() === text.toLowerCase(),
+		)
+		if (!set) throw new Error(`unknown fileset: ${text}`)
+		return set.paths.slice()
+	}
+	if (text.startsWith("~")) {
+		const rest = text.replace(/^~\/?/, "")
+		return [rest ? join(session.fs.home(), rest) : session.fs.home()]
+	}
+	if (text.startsWith("/")) return [normalize(text)]
+	const base = session.panes[session.active.value]?.current()?.path.value ?? session.fs.cwd()
+	return [join(base, text)]
+}
+
+// Function: expandAll
+// Expands every token to paths, flattened in order.
+function expandAll(session, tokens) {
+	const paths = []
+	for (const token of tokens) paths.push(...expandArg(session, token))
+	return paths
+}
+
+async function isDir(session, path) {
+	const stats = await session.fs.stat(path)
+	return Boolean(stats?.isDir)
+}
+
+async function refreshPanes(session) {
+	await Promise.all([session.panes.left.refresh(), session.panes.right.refresh()])
+}
+
+async function previewTarget(session, path, details) {
+	const stats = await session.fs.stat(path)
+	if (!stats) throw new Error(`not found: ${path}`)
+	const target = {
+		path,
+		name: basename(path),
+		isDir: stats.isDir,
+		size: stats.size,
+		mtimeMs: stats.mtimeMs,
+		ext: extname(path),
+	}
+	if (details) target.details = details
+	return target
+}
+
+// Function: parseSelection
+// Splits `sel` arguments into a sign, an optional buffer label and the path
+// tokens: `+A paths` adds to buffer A, `-1 paths` removes from buffer 1;
+// a bare path list defaults to `+` on the active tab.
+function parseSelection(args) {
+	const match = /^([+-])(\w*)$/.exec(args[0] ?? "")
+	if (match) {
+		return { sign: match[1], buffer: match[2] || null, tokens: args.slice(1) }
+	}
+	return { sign: "+", buffer: null, tokens: args }
+}
+
+// Function: findBuffer
+// Resolves a selection buffer to its tab: the active tab by default, or the
+// tab whose label matches `name`.
+function findBuffer(session, name) {
+	const active = session.panes[session.active.value] ?? session.panes.left
+	if (!name) return active.current()
+	for (const paneId of Object.keys(session.panes)) {
+		for (const tab of session.panes[paneId].tabs.value) {
+			if (tab.label.toLowerCase() === `${name}`.toLowerCase()) return tab
+		}
+	}
+	throw new Error(`unknown selection buffer: ${name}`)
+}
+
+// Function: humanSize
+// Compact byte size for stat output (core-local: components own presentation
+// formatting).
+function humanSize(bytes) {
+	const value = Number(bytes ?? 0)
+	if (value < 1024) return `${value}B`
+	const units = ["K", "M", "G", "T"]
+	let size = value / 1024
+	let unit = 0
+	while (size >= 1024 && unit < units.length - 1) {
+		size /= 1024
+		unit++
+	}
+	return `${size >= 100 ? Math.round(size) : size.toFixed(1)}${units[unit]}`
+}
+
+export { expandAll, expandArg, getOperation, getOperations, humanSize }
+
+// EOF

@@ -3,4 +3,5 @@
 		<text when="hasText" out="previewText" out:fg="textFg"></text>
 		<text when="hasCard" out="cardText" out:fg="dimFg"></text>
 	</scrollbox>
+	<box height="1"><text out="actions" out:fg="actionsFg"></text></box>
 </box>

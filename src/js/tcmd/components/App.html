@@ -1,18 +1,23 @@
 <div class="app" tabindex="0" on:keydown="keys">
-	<header out="toolbarView|Toolbar"></header>
+	<header out="headerView|Header"></header>
 	<main class="panes">
-		<section class="pane pane-left" out:class="leftPaneClass">
+		<section class="pane pane-left" out:class="leftPaneClass" on:click="leftId!pane:activate">
+			<div out="leftTabsView|TabBar"></div>
 			<div out="leftCrumbsView|Breadcrumbs"></div>
 			<div out="leftListView|FileList"></div>
 			<div out="leftSummaryView|Summary"></div>
+			<div out="leftFilterView|FilterBar"></div>
 		</section>
-		<div when="showPreview" out="previewView|FilePreview"></div>
-		<section class="pane pane-right" out:class="rightPaneClass">
+		<section class="pane pane-right" out:class="rightPaneClass" on:click="rightId!pane:activate">
+			<div out="rightTabsView|TabBar"></div>
 			<div out="rightCrumbsView|Breadcrumbs"></div>
 			<div out="rightListView|FileList"></div>
 			<div out="rightSummaryView|Summary"></div>
+			<div out="rightFilterView|FilterBar"></div>
 		</section>
+		<div when="showPreview" out="previewView|FilePreview"></div>
 	</main>
-	<footer class="status" out="status"></footer>
+	<footer out="commandBarView|CommandBar"></footer>
 	<div when="paletteOpen" out="paletteView|CommandPalette"></div>
+	<div out="confirmView|Confirm"></div>
 </div>

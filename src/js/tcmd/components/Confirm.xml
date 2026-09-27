@@ -1,0 +1,4 @@
+<box when="visible" position="absolute" bottom="1" left="0" width="100%" height="3"
+     border title="confirm" out:backgroundColor="bg" out:titleColor="keysFg" flexDirection="column">
+	<text out="text" out:fg="keysFg"></text>
+</box>

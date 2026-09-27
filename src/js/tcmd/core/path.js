@@ -35,6 +35,15 @@ function split(p) {
 	return normalize(p).split(SEP).filter((part) => part.length > 0)
 }
 
+// Function: extname
+// Lowercased extension of the last segment, without the dot; null when the
+// name has no extension (or is a dotfile).
+function extname(p) {
+	const name = basename(p)
+	const at = name.lastIndexOf(".")
+	return at > 0 ? name.slice(at + 1).toLowerCase() : null
+}
+
 // Function: prefix
 // Returns the path of the first `count` non-root segments of `p`, so
 // `prefix("/a/b/c", 2)` is `"/a/b"`; count 0 is the root itself.
@@ -43,6 +52,6 @@ function prefix(p, count) {
 	return SEP + parts.slice(0, Math.max(0, count)).join(SEP)
 }
 
-export { SEP, basename, join, normalize, parent, prefix, split }
+export { SEP, basename, extname, join, normalize, parent, prefix, split }
 
 // EOF

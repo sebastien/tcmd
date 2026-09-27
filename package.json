@@ -10,7 +10,10 @@
 	"scripts": {
 		"postinstall": "bash scripts/link-deps.sh",
 		"test": "bun test tests",
-		"tcmd": "bun src/js/tcmd/tui/index.js"
+		"tcmd": "bun src/js/tcmd/tui/index.js",
+		"web": "bun run web:build && bun run web:serve",
+		"web:build": "bun build src/js/tcmd/web/main.js --outdir public --target browser",
+		"web:serve": "bun scripts/serve-web.js"
 	},
 	"dependencies": {
 		"@opentui/core": "0.5.9",

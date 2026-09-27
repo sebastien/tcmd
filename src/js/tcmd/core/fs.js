@@ -10,15 +10,20 @@
 // An adapter provides:
 // - `readDir(path)`: Promise<FileEntry-like[]> - directory listing with stat info
 // - `stat(path)`: Promise<{ isDir, isSymlink, size, mtimeMs } | null>
-// - `readTextHead(path, maxBytes)`: Promise<string> - leading bytes as text
-// - `disk(path)`: Promise<{ free, total } | null> - filesystem capacity
-// - `home()`, `cwd()`: string - well-known directories
 // - `isDir(path)`: Promise<boolean>
+// - `readTextHead(path, maxBytes)`: Promise<string> - leading bytes as text
+// - `du(path)`: Promise<number> - recursive size in bytes
+// - `disk(path)`: Promise<{ free, total } | null> - filesystem capacity
+// - `copy(from, to)`, `move(from, to)`: Promise<void> - files or directories
+// - `trash(paths)`, `erase(paths)`: Promise<void> - delete, with/without trash
+// - `touch(path)`: Promise<void> - create or bump mtime
+// - `home()`, `cwd()`: string - well-known directories
 
 import fs from "node:fs/promises"
 import nodeFs from "node:fs"
 import nodeOs from "node:os"
-import { join as pathJoin } from "./path.js"
+import nodePath from "node:path"
+import { extname, join as pathJoin } from "./path.js"
 
 function toEntry(name, dirPath, isDir, stats) {
 	const stat = stats || {}
@@ -29,19 +34,14 @@ function toEntry(name, dirPath, isDir, stats) {
 		isSymlink: Boolean(stat.isSymlink),
 		size: isDir ? 0 : stat.size ?? 0,
 		mtimeMs: stat.mtimeMs ?? 0,
-		ext: isDir ? null : extensionOf(name),
+		ext: isDir ? null : extname(name),
 	}
-}
-
-function extensionOf(name) {
-	const at = name.lastIndexOf(".")
-	return at > 0 ? name.slice(at + 1).toLowerCase() : null
 }
 
 // Function: createNodeFs
 // Node/Bun-backed implementation of the filesystem adapter.
 function createNodeFs() {
-	return {
+	const adapter = {
 		async readDir(path) {
 			const dirents = await fs.readdir(path, { withFileTypes: true })
 			const entries = new Array(dirents.length)
@@ -76,6 +76,9 @@ function createNodeFs() {
 				nodeFs.closeSync(file)
 			}
 		},
+		async du(path) {
+			return duSafe(path)
+		},
 		async disk(path) {
 			try {
 				const stats = await fs.statfs(path)
@@ -84,12 +87,78 @@ function createNodeFs() {
 				return null
 			}
 		},
+		async copy(from, to) {
+			await fs.cp(from, to, { recursive: true })
+		},
+		async move(from, to) {
+			try {
+				await fs.rename(from, to)
+			} catch (error) {
+				if (error?.code !== "EXDEV") throw error
+				await fs.cp(from, to, { recursive: true })
+				await fs.rm(from, { recursive: true })
+			}
+		},
+		async trash(paths) {
+			const filesDir = trashDir("files")
+			const infoDir = trashDir("info")
+			await fs.mkdir(filesDir, { recursive: true })
+			await fs.mkdir(infoDir, { recursive: true })
+			for (const source of paths) {
+				const absolute = nodePath.resolve(source)
+				const name = await freeTrashName(filesDir, nodePath.basename(absolute))
+				const target = nodePath.join(filesDir, name)
+				try {
+					await fs.rename(absolute, target)
+				} catch (error) {
+					if (error?.code !== "EXDEV") throw error
+					await fs.cp(absolute, target, { recursive: true })
+					await fs.rm(absolute, { recursive: true })
+				}
+				const info = `[Trash Info]\nPath=${absolute}\nDeletionDate=${new Date().toISOString()}\n`
+				await fs.writeFile(nodePath.join(infoDir, `${name}.trashinfo`), info)
+			}
+		},
+		async erase(paths) {
+			for (const path of paths) await fs.rm(path, { recursive: true })
+		},
+		async touch(path) {
+			const now = new Date()
+			try {
+				await fs.utimes(path, now, now)
+			} catch (error) {
+				const handle = await fs.open(path, "a")
+				await handle.close()
+			}
+		},
 		home() {
 			return nodeOs.homedir()
 		},
 		cwd() {
 			return process.cwd()
 		},
+	}
+	return adapter
+}
+
+// Function: trashDir
+// Freedesktop trash directory under $XDG_DATA_HOME (default
+// ~/.local/share/Trash).
+function trashDir(kind) {
+	const dataHome = process.env.XDG_DATA_HOME || nodePath.join(nodeOs.homedir(), ".local", "share")
+	return nodePath.join(dataHome, "Trash", kind)
+}
+
+// Function: freeTrashName
+// First free `<name>`, `<name>.1`, … in the trash files directory.
+async function freeTrashName(filesDir, base) {
+	for (let i = 0; ; i++) {
+		const name = i === 0 ? base : `${base}.${i}`
+		try {
+			await fs.access(nodePath.join(filesDir, name))
+		} catch (error) {
+			return name
+		}
 	}
 }
 
@@ -105,6 +174,30 @@ async function statSafe(path) {
 	} catch (error) {
 		return null
 	}
+}
+
+// Function: duSafe
+// Recursive disk usage; unreadable entries contribute 0 and never throw.
+async function duSafe(path) {
+	const stats = await statSafe(path)
+	if (!stats) return 0
+	if (!stats.isDir) return stats.size
+	let total = 0
+	let dirents
+	try {
+		dirents = await fs.readdir(path, { withFileTypes: true })
+	} catch (error) {
+		return 0
+	}
+	for (const d of dirents) {
+		const full = pathJoin(path, d.name)
+		if (d.isDirectory()) total += await duSafe(full)
+		else if (!d.isSymbolicLink()) {
+			const child = await statSafe(full)
+			total += child?.size ?? 0
+		}
+	}
+	return total
 }
 
 export { createNodeFs }

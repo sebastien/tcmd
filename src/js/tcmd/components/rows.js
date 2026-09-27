@@ -52,17 +52,28 @@ function paletteRows(PaletteRow) {
 		)
 }
 
-// Function: toolItemRows
-// `{ item: command, index }` bags for `ToolItem` rows.
-function toolItemRows(ToolItem) {
+// Function: commandItemRows
+// `{ item: command, index }` bags for `CommandItem` rows.
+function commandItemRows(CommandItem) {
 	return (data) =>
-		ToolItem.map(
-			data.commands ?? [],
+		CommandItem.map(
+			data.items ?? [],
 			(item, index) => ({ item, index }),
-			(command) => command.id,
+			(command) => command.id ?? `${command.title}:${command.keys}`,
 		)
 }
 
-export { crumbRows, fileRows, paletteRows, toolItemRows }
+// Function: tabItemRows
+// `{ item: tab, index, active, paneId }` bags for `TabItem` rows.
+function tabItemRows(TabItem) {
+	return (data) =>
+		TabItem.map(
+			data.tabs ?? [],
+			(item, index) => ({ item, index, active: data.active, paneId: data.paneId }),
+			(tab) => tab.id,
+		)
+}
+
+export { commandItemRows, crumbRows, fileRows, paletteRows, tabItemRows }
 
 // EOF

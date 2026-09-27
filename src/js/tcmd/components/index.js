@@ -15,18 +15,23 @@ export { bind } from "./bind.js"
 // Behaviors
 export { createBehaviors as appBehaviors, createEvents as appEvents, createInit as appInit } from "./App.js"
 export { createBehaviors as breadcrumbsBehaviors } from "./Breadcrumbs.js"
+export { createBehaviors as commandBarBehaviors } from "./CommandBar.js"
+export { createBehaviors as commandItemBehaviors } from "./CommandItem.js"
 export { createBehaviors as commandPaletteBehaviors } from "./CommandPalette.js"
+export { createBehaviors as confirmBehaviors } from "./Confirm.js"
 export { createBehaviors as crumbBehaviors } from "./Crumb.js"
 export { createBehaviors as fileListBehaviors } from "./FileList.js"
 export { createBehaviors as filePreviewBehaviors } from "./FilePreview.js"
 export { createBehaviors as fileRowBehaviors } from "./FileRow.js"
+export { createBehaviors as filterBarBehaviors } from "./FilterBar.js"
+export { createBehaviors as headerBehaviors } from "./Header.js"
 export { createBehaviors as paletteRowBehaviors } from "./PaletteRow.js"
 export { createBehaviors as summaryBehaviors } from "./Summary.js"
-export { createBehaviors as toolItemBehaviors } from "./ToolItem.js"
-export { createBehaviors as toolbarBehaviors } from "./Toolbar.js"
+export { createBehaviors as tabBarBehaviors } from "./TabBar.js"
+export { createBehaviors as tabItemBehaviors } from "./TabItem.js"
 
 // Helpers
 export { formatCounts, formatDisk, formatSize } from "./format.js"
-export { crumbRows, fileRows, paletteRows, toolItemRows } from "./rows.js"
+export { commandItemRows, crumbRows, fileRows, paletteRows, tabItemRows } from "./rows.js"
 
 // EOF
