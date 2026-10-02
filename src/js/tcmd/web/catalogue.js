@@ -22,7 +22,7 @@ import fileListHtml from "../components/FileList.html" with { type: "text" }
 import filePreviewHtml from "../components/FilePreview.html" with { type: "text" }
 import fileRowHtml from "../components/FileRow.html" with { type: "text" }
 import filterBarHtml from "../components/FilterBar.html" with { type: "text" }
-import headerHtml from "../components/Header.html" with { type: "text" }
+import headerHtml from "./header.html" with { type: "text" }
 import paletteRowHtml from "../components/PaletteRow.html" with { type: "text" }
 import rowListHtml from "../components/RowList.html" with { type: "text" }
 import summaryHtml from "../components/Summary.html" with { type: "text" }
@@ -44,7 +44,6 @@ import {
 	fileRowBehaviors,
 	fileRows,
 	filterBarBehaviors,
-	headerBehaviors,
 	paletteRowBehaviors,
 	paletteRows,
 	summaryBehaviors,
@@ -52,6 +51,7 @@ import {
 	tabItemBehaviors,
 	tabItemRows,
 } from "../components/index.js"
+import { createBehaviors as headerBehaviors } from "./header.js"
 import { webTheme } from "./theme.js"
 
 let registered = false

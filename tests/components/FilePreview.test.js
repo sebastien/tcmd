@@ -39,4 +39,25 @@ describe("FilePreview", () => {
 		)
 		expect(previewTitle(null)).toBe("preview")
 	})
+
+	test("inspector shows a metadata card, an empty state and a header", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		const dir = { name: "docs", path: "/docs", isDir: true, size: 0 }
+		// Directory under the cursor, no preview payload: the entry card shows.
+		expect(behaviors.hasEntryCard(null, { preview: null, entry: dir })).toBe(true)
+		expect(behaviors.hasCard(null, { preview: null, entry: dir })).toBe(false)
+		expect(behaviors.entryText(null, { preview: null, entry: dir })).toContain("directory: docs/")
+		expect(behaviors.headerTitle(null, { preview: null, entry: dir })).toBe("docs/  <DIR>")
+		// A non-previewable file also gets a card, not a blank inspector.
+		const bin = { name: "app.bin", path: "/app.bin", isDir: false, size: 4096, ext: "bin" }
+		expect(behaviors.hasEntryCard(null, { preview: null, entry: bin })).toBe(true)
+		expect(behaviors.entryText(null, { preview: null, entry: bin })).toContain("file: app.bin")
+		// Nothing at all: the designed empty state.
+		expect(behaviors.isEmpty(null, { preview: null, entry: null })).toBe(true)
+		expect(behaviors.headerTitle(null, { preview: null, entry: null })).toBe("inspector")
+		// A real preview wins over the entry.
+		const preview = { kind: "text", title: "a.txt", size: 10, text: "hi", ext: "txt" }
+		expect(behaviors.headerTitle(null, { preview, entry: dir })).toBe("a.txt  <TXT>")
+		expect(behaviors.hasEntryCard(null, { preview, entry: dir })).toBe(false)
+	})
 })

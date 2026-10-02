@@ -10,8 +10,14 @@
 // its place. The row logic lives in `CommandItem.js`; this parent maps its
 // `items` to rows.
 //
+// The web presentation swaps the key list for a single status line
+// (`showKeys`/`showStatus`/`status`/`statusClass`); the TUI presentation keeps
+// the key list and appends the status and the active pane's marked count as
+// right-aligned zones (`statusPad`, `marksPad`, `marksFg`).
+//
 // Environment: `rows(data)` returning the keyed row list, `listClass` (web
-// root class), `statusFg` (TUI) and `errorClass` (web).
+// root class), `errorClass` (web), and the TUI colors `accentFg`, `errorFg`,
+// `markFg`.
 
 import { unwrap } from "select/state/cells"
 
@@ -28,6 +34,15 @@ function commandBarStatus(data) {
 	return error ? `error: ${error}` : ""
 }
 
+// Function: commandBarMarks
+// Count of marked entries in the active pane, for the status bar's right zone.
+function commandBarMarks(data) {
+	const active = unwrap(data?.active)
+	const marked = active === "left" ? unwrap(data?.leftMarked) : unwrap(data?.rightMarked)
+	const count = marked?.size ?? 0
+	return count > 0 ? `${count} marked` : ""
+}
+
 // Function: isInfo
 // True when the bar status comes from a non-error notice.
 function isInfo(data) {
@@ -40,11 +55,22 @@ function isInfo(data) {
 function createBehaviors(env) {
 	const behaviors = {
 		listClass: () => env?.listClass,
+		marksFg: () => env?.markFg ?? env?.accentFg,
+		// TUI: the active pane's marked count, or empty.
+		marksPad: (_self, data) => {
+			const text = commandBarMarks(data)
+			return text ? ` ${text} ` : ""
+		},
 		showKeys: (_self, data) => !commandBarStatus(data),
 		showStatus: (_self, data) => Boolean(commandBarStatus(data)),
 		status: (_self, data) => commandBarStatus(data),
 		statusClass: (_self, data) => (commandBarStatus(data) && !isInfo(data) ? env?.errorClass : null),
 		statusFg: (_self, data) => (isInfo(data) ? env?.accentFg : env?.errorFg),
+		// TUI: a padded status for the right zone, empty when all is well.
+		statusPad: (_self, data) => {
+			const text = commandBarStatus(data)
+			return text ? ` ${text} ` : ""
+		},
 	}
 	if (env?.rows) {
 		behaviors.rows = (_self, data) => env.rows(data)
@@ -52,6 +78,6 @@ function createBehaviors(env) {
 	return behaviors
 }
 
-export { commandBarStatus, createBehaviors }
+export { commandBarMarks, commandBarStatus, createBehaviors }
 
 // EOF

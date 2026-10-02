@@ -35,6 +35,13 @@ describe("FileRow", () => {
 		expect(behaviors.rowMarker(null, { item: FILE, index: 0, cursor: 0, marked: new Set() })).toBe("> ")
 	})
 
+	test("spaces kind badges are non-blank and dirs pair a slash with a size label", () => {
+		// The redesign relies on a marker + slash so rows are not colour-only.
+		expect(rowName(DIR)).toBe("sub/")
+		expect(rowSize(DIR)).toBe("<dir>")
+		expect(rowSize(FILE)).toBe("10B")
+	})
+
 	test("behaviors read reactive cursor and marks at use", () => {
 		const behaviors = createBehaviors(behaviorEnv)
 		const cursor = cell(0)

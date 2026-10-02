@@ -1,5 +1,7 @@
-<box flexDirection="column" flexGrow="1">
-	<scrollbox ref="list" flexGrow="1" height="100%" out:scrollTop="scrollTop">
+<box flexDirection="column" flexGrow="1" overflow="hidden">
+	<scrollbox ref="list" flexGrow="1" out:scrollTop="scrollTop">
 		<box out="rows" flexDirection="column"></box>
+		<text when="showLoading" out="loadingText" out:fg="loadingFg"></text>
+		<text when="showEmpty" out="emptyText" out:fg="emptyFg"></text>
 	</scrollbox>
 </box>

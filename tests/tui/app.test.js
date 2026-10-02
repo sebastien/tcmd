@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createPane, createSession, load } from "../../src/js/tcmd/core/index.js"
-import { createAppComponent } from "../../src/js/tcmd/tui/app.js"
-import { createMockFs } from "../helpers/mock-fs.js"
+import { makeSetup as makeSetupTui, settle } from "../helpers/tui-setup.js"
 
 const TREE = {
 	"/": [
@@ -17,18 +15,7 @@ const TREE = {
 	"/etc": [{ name: "hosts", text: "127.0.0.1 localhost\n", size: 19 }],
 }
 
-async function makeSetup(width = 100, height = 20) {
-	const fs = createMockFs(TREE)
-	const left = createPane({ fs, path: "/home" })
-	const right = createPane({ fs, path: "/" })
-	const session = createSession({ fs, left, right })
-	await load(session)
-	const App = createAppComponent(session)
-	const { testRender } = await import("select.tui")
-	const setup = await testRender(App, { width, height })
-	await setup.renderOnce()
-	return { setup, session }
-}
+const makeSetup = (width, height) => makeSetupTui(TREE, width, height)
 
 describe("tui app", () => {
 	test("renders the header, both panes and the command bar", async () => {
@@ -52,12 +39,26 @@ describe("tui app", () => {
 		}
 	})
 
-	test("header shows host and the active path, compressed to fit", async () => {
-		const { setup, session } = await makeSetup(19, 12)
+	test("frame title shows the active path, compressed to fit", async () => {
+		// Above the minimum gate, but too narrow for the full path.
+		const { setup, session } = await makeSetup(70, 16)
 		try {
 			await session.panes.left.navigate("/home/tester")
 			await setup.renderOnce()
-			expect(setup.captureCharFrame().split("\n")[0]).toContain("TinyCmd - /h/tester")
+			// Identity now lives in the frame's top border, not a header row.
+			expect(setup.captureCharFrame().split("\n")[0]).toContain("TinyCmd")
+			expect(setup.captureCharFrame().split("\n")[0]).toContain("/home/tester")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("shows a minimum-size hint below the workspace breakpoint", async () => {
+		const { setup } = await makeSetup(50, 12)
+		try {
+			const frame = setup.captureCharFrame()
+			expect(frame).toContain("Terminal too small")
+			expect(frame).toContain("need 64x16")
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -68,12 +69,10 @@ describe("tui app", () => {
 		try {
 			expect(session.panes.left.cursor.value).toBe(0)
 			setup.mockInput.pressArrow("down")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.panes.left.cursor.value).toBe(1)
 			setup.mockInput.pressArrow("up")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.panes.left.cursor.value).toBe(0)
 		} finally {
 			setup.renderer.destroy()
@@ -84,8 +83,7 @@ describe("tui app", () => {
 		const { setup, session } = await makeSetup()
 		try {
 			setup.mockInput.pressKey("\t")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.active.value).toBe("right")
 		} finally {
 			setup.renderer.destroy()
@@ -126,20 +124,17 @@ describe("tui app", () => {
 		const { setup, session } = await makeSetup()
 		try {
 			setup.mockInput.pressKey("p", { ctrl: true })
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.paletteOpen.value).toBe(true)
 			expect(setup.captureCharFrame()).toContain("palette")
 
 			setup.mockInput.typeText("switch")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			const items = session.paletteItems.value.map((item) => item.id)
 			expect(items).toEqual(["pane.toggle"])
 
 			setup.mockInput.pressKey("\r")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.paletteOpen.value).toBe(false)
 			expect(session.active.value).toBe("right")
 		} finally {
@@ -151,27 +146,22 @@ describe("tui app", () => {
 		const { setup, session } = await makeSetup()
 		try {
 			setup.mockInput.pressKey("p", { ctrl: true })
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.paletteOpen.value).toBe(true)
 
 			setup.mockInput.pressArrow("down")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.paletteIndex.value).toBe(1)
 			setup.mockInput.pressArrow("up")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.paletteIndex.value).toBe(0)
 
 			setup.mockInput.pressKey("\t")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.paletteQuery.value).toBe(session.paletteItems.value[0].title)
 
 			setup.mockInput.pressKey("\r")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.paletteOpen.value).toBe(false)
 		} finally {
 			setup.renderer.destroy()
@@ -181,10 +171,10 @@ describe("tui app", () => {
 	test("tab bar shows the pane tabs and t/[ ]/^W manage them", async () => {
 		const { setup, session } = await makeSetup()
 		try {
-			// The tab bar sits on the second frame line, above breadcrumbs.
-			const lines = setup.captureCharFrame().split("\n")
-			expect(lines[2]).toContain("A")
-			expect(lines[2]).toContain("+")
+			// The pane header (tabs + path) sits on the first row inside the frame.
+			const first = setup.captureCharFrame().split("\n")[1]
+			expect(first).toContain("A")
+			expect(first).toContain("+")
 
 			setup.mockInput.pressKey("t")
 			await Promise.resolve()
@@ -192,20 +182,17 @@ describe("tui app", () => {
 			await setup.renderOnce()
 			expect(session.panes.left.tabs.value.map((tab) => tab.label)).toEqual(["A", "C"])
 			expect(session.panes.left.activeIndex.value).toBe(1)
-			expect(setup.captureCharFrame().split("\n")[2]).toContain("C")
+			expect(setup.captureCharFrame().split("\n")[1]).toContain("C")
 
 			setup.mockInput.pressKey("[")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.panes.left.activeIndex.value).toBe(0)
 			setup.mockInput.pressKey("]")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.panes.left.activeIndex.value).toBe(1)
 
 			setup.mockInput.pressKey("w", { ctrl: true })
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.panes.left.tabs.value.length).toBe(1)
 			expect(session.panes.left.activeIndex.value).toBe(0)
 		} finally {
@@ -220,12 +207,10 @@ describe("tui app", () => {
 			setup.mockInput.pressArrow("down")
 			setup.mockInput.pressArrow("down")
 			setup.mockInput.pressKey(" ")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 
 			setup.mockInput.pressKey(":")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.paletteOpen.value).toBe(true)
 			expect(session.paletteMode.value).toBe("script")
 			const frame = setup.captureCharFrame()
@@ -234,8 +219,7 @@ describe("tui app", () => {
 			expect(frame).toContain("copy")
 
 			setup.mockInput.typeText("touch fresh.txt")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			setup.mockInput.pressKey("\r")
 			await new Promise((resolve) => setTimeout(resolve, 0))
 			await setup.renderOnce()
@@ -250,19 +234,15 @@ describe("tui app", () => {
 		const { setup, session } = await makeSetup()
 		try {
 			setup.mockInput.pressKey(":")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			setup.mockInput.typeText("copy notes")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			const titles = session.paletteItems.value.map((item) => item.title)
 			expect(titles).toEqual(["copy", "notes.txt"])
 			setup.mockInput.pressArrow("down")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			setup.mockInput.pressKey("\t")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.paletteQuery.value).toBe("copy notes.txt")
 		} finally {
 			setup.renderer.destroy()
@@ -293,12 +273,10 @@ describe("tui app", () => {
 			expect(session.active.value).toBe("left")
 			// Shift-Tab arrives as CSI Z on the wire.
 			setup.mockInput.pressKey("\x1B[Z")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.active.value).toBe("right")
 			setup.mockInput.pressKey("\x1B[Z")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.active.value).toBe("left")
 		} finally {
 			setup.renderer.destroy()
@@ -309,10 +287,9 @@ describe("tui app", () => {
 		const { setup, session } = await makeSetup(90, 18)
 		try {
 			expect(session.active.value).toBe("left")
-			// First row of the right pane (header, border, tabs, crumbs, row).
-			await setup.mockMouse.click(45, 4)
-			await Promise.resolve()
-			await setup.renderOnce()
+			// First entry row of the right pane (frame border, merged header).
+			await setup.mockMouse.click(60, 2)
+			await settle(setup)
 			expect(session.active.value).toBe("right")
 			expect(session.panes.right.cursor.value).toBe(0)
 		} finally {
@@ -326,8 +303,7 @@ describe("tui app", () => {
 			expect(session.active.value).toBe("left")
 			// Blank area inside the right pane (past its last entry).
 			await setup.mockMouse.click(55, 12)
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.active.value).toBe("right")
 		} finally {
 			setup.renderer.destroy()
@@ -338,8 +314,7 @@ describe("tui app", () => {
 		const { setup, session } = await makeSetup()
 		try {
 			setup.mockInput.pressKey("v")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.showPreview.value).toBe(false)
 		} finally {
 			setup.renderer.destroy()
@@ -350,13 +325,11 @@ describe("tui app", () => {
 		const { setup, session } = await makeSetup()
 		try {
 			setup.mockInput.pressKey("/")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.filtering.value).toBe("left")
 
 			await setup.mockInput.typeText("tiny")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.panes.left.filter.value).toBe("tiny")
 			expect(session.panes.left.entries.value.map((e) => e.name)).toEqual(["tiny.txt"])
 			expect(session.panes.left.cursor.value).toBe(0)
@@ -366,8 +339,7 @@ describe("tui app", () => {
 			expect(filtered).not.toContain("notes.txt")
 
 			setup.mockInput.pressEnter()
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.filtering.value).toBeNull()
 			expect(session.panes.left.filter.value).toBe("tiny")
 
@@ -385,11 +357,9 @@ describe("tui app", () => {
 		const { setup, session } = await makeSetup()
 		try {
 			setup.mockInput.pressKey("/")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			await setup.mockInput.typeText("zzz")
-			await Promise.resolve()
-			await setup.renderOnce()
+			await settle(setup)
 			expect(session.panes.left.entries.value.length).toBe(0)
 			expect(setup.captureCharFrame()).toContain("no match")
 		} finally {

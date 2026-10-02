@@ -1,6 +1,6 @@
-<box when="visible" flexDirection="row" height="1">
+<box when="visible" flexDirection="row" height="1" flexShrink="0" paddingLeft="1">
 	<text out="prompt" out:fg="promptFg"></text>
-	<input when="editing" ref="query" inout="query" out:focused="focused" flexGrow="1" height="1"></input>
-	<text when="applied" out="label" out:fg="labelFg" flexGrow="1"></text>
-	<text out="alert" out:fg="alertFg"></text>
+	<input when="editing" ref="query" inout="query" out:focused="focused" width="14" height="1"></input>
+	<text when="applied" out="labelText" out:fg="labelFg" wrapMode="none" truncate="true"></text>
+	<text out="alert" out:fg="alertFg" wrapMode="none"></text>
 </box>

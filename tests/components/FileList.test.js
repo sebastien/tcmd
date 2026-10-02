@@ -16,4 +16,18 @@ describe("FileList", () => {
 		expect(behaviors.rows).toBeUndefined()
 		expect(behaviors.scrollTop).toBeUndefined()
 	})
+
+	test("exposes empty and loading states", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		// Empty listing, not loading: the empty state shows.
+		expect(behaviors.showEmpty(null, { entries: [], loading: false })).toBe(true)
+		expect(behaviors.showLoading(null, { entries: [], loading: false })).toBe(false)
+		// Loading takes over while the read is in flight.
+		expect(behaviors.showLoading(null, { entries: [], loading: true })).toBe(true)
+		expect(behaviors.showEmpty(null, { entries: [], loading: true })).toBe(false)
+		// A non-empty listing shows neither.
+		expect(behaviors.showEmpty(null, { entries: ["a"], loading: false })).toBe(false)
+		expect(behaviors.emptyFg()).toBe("dim")
+		expect(behaviors.loadingText()).toContain("loading")
+	})
 })

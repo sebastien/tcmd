@@ -4,12 +4,13 @@
 // Created: 2026-09-30
 
 // Module: tcmd/components/FilterBar
-// FilterBar: the fuzzy filter row at the bottom of a pane. While the pane owns
-// the filter input (`filtering === paneId`) it shows a focused text input bound
-// to the pane's `query`; once accepted it degrades to the same `/ <query>`
-// indication, so the pane is navigable again and the filter can still be
-// cleared with Esc. When the query matches no entry it shows a `no match`
-// alert. The key hints live in the command bar, not here.
+// FilterBar: the fuzzy filter indicator, folded into the pane header so it
+// never shifts the listing. While the pane owns the filter input
+// (`filtering === paneId`) it shows a compact focused input bound to the pane's
+// `query`; once accepted it degrades to the same `/ query` indication, so the
+// pane is navigable again and the filter can still be cleared with Esc. When
+// the query matches no entry it shows a `no match` alert. The key hints live in
+// the command bar, not here.
 //
 // Environment: `accentFg` (the applied label), `dimFg` (the `/` prompt),
 // `errorFg` (the no-match alert).
@@ -25,20 +26,22 @@ function createBehaviors(env) {
 	const activeQuery = (self, data) => queryText(self, data).trim()
 	const matchCount = (_self, data) => (unwrap(data.entries) ?? []).length
 	return {
-		// One row hosts either the input (while editing) or the static label
-		// (once applied); the row itself only exists when there is something
-		// to show.
-		editing,
-		applied: (self, data) => !editing(self, data) && activeQuery(self, data).length > 0,
-		visible: (self, data) => editing(self, data) || activeQuery(self, data).length > 0,
-		focused: editing,
+		// The row exists while editing or once a non-empty filter is applied.
 		alert: (self, data) =>
 			activeQuery(self, data).length > 0 && matchCount(self, data) === 0 ? "no match" : "",
 		alertFg: () => env.errorFg,
+		applied: (self, data) => !editing(self, data) && activeQuery(self, data).length > 0,
+		editing,
+		focused: editing,
+		// The bare query (shared with the web presentation).
 		label: (self, data) => queryText(self, data),
 		labelFg: () => env.accentFg,
+		// TUI: the static label renders the full `/ query`, so the editing
+		// input and the accepted state read the same.
+		labelText: (self, data) => `/ ${queryText(self, data)}`,
 		prompt: () => "/ ",
 		promptFg: () => env.dimFg,
+		visible: (self, data) => editing(self, data) || activeQuery(self, data).length > 0,
 	}
 }
 

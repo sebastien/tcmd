@@ -8,7 +8,8 @@
 // paneId }`, the same bag shape in both engines. `active` is a reactive cell,
 // read with `unwrap` at the point of use.
 //
-// Environment: `accentFg`, `dimFg`, `activeClass` (web).
+// Environment: `accentFg`, `dimFg`, `borderFg` (TUI marker color),
+// `activeClass` (web).
 
 import { unwrap } from "select/state/cells"
 
@@ -31,6 +32,9 @@ function createBehaviors(env) {
 		tabClass: (_self, data) => (isActive(data.index, data.active) ? env?.activeClass : null),
 		tabFg: (_self, data) => (isActive(data.index, data.active) ? env?.accentFg : env?.dimFg),
 		tabLabel: (_self, data) => tabLabel(data.item),
+		// TUI: a leading marker so the active tab is not color-only.
+		tabMarker: (_self, data) => (isActive(data.index, data.active) ? "▸" : " "),
+		tabMarkerFg: (_self, data) => (isActive(data.index, data.active) ? env?.accentFg : env?.borderFg),
 	}
 }
 

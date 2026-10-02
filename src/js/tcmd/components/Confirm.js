@@ -9,7 +9,8 @@
 // pending question; App routes y/enter to `confirm.yes` and n/esc to
 // `confirm.no`.
 //
-// Environment: `dimFg` (key hints).
+// Environment: `paletteBg` (surface), `errorFg` (border), `titleFg` (text),
+// `dimFg` (key hints).
 
 import { unwrap } from "select/state/cells"
 
@@ -18,12 +19,14 @@ import { unwrap } from "select/state/cells"
 function createBehaviors(env) {
 	return {
 		bg: () => env.paletteBg,
+		borderFg: () => env.errorFg,
 		keysFg: () => env.dimFg,
 		text: (_self, data) => {
 			const pending = unwrap(data.confirm)
 			if (!pending) return ""
 			return `${pending.text ?? ""}  [y]es [n]o`
 		},
+		textFg: () => env.titleFg,
 		visible: (_self, data) => Boolean(unwrap(data.confirm)),
 	}
 }

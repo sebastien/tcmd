@@ -30,10 +30,19 @@ bun run tcmd /tmp ~  # open specific directories
 ```
 
 Keys: `↑/↓` move, `Enter/→` open, `←/Bksp` parent, `Tab`/`⇧Tab` switch panes
-(`⇧Tab` goes back), `Space` mark, `v` preview, `t` new tab, `^W` close tab,
+(`⇧Tab` goes back), `Space` mark, `v` preview (fullscreen viewer when the
+terminal is narrow), `t` new tab, `^W` close tab,
 `[`/`]` tabs, `O`/`E` open/edit the previewed file, `/` fuzzy-filter the active
 pane (`Enter` keeps it, `Esc` clears), `^P` command palette, `:` scripting mode,
-`!` run a shell command, `^R` reload, `q` quit.
+`!` run a shell command, `^R` reload, `?` key reference, `q` quit.
+
+The workspace is a single rounded frame. The frame title carries the active
+path; each pane has one header row (tabs + breadcrumbs + the inline filter) and
+one summary row, so the two panes stay aligned. A context-aware inspector sits
+on the right when the terminal is at least 100 columns wide, and becomes a
+fullscreen viewer below that. The status bar keeps the key hints on the left and
+notices/errors on the right, so an error never hides the hints. Below 64×16 the
+app shows a resize hint instead of the workspace.
 
 ### Web version
 
@@ -95,10 +104,12 @@ src/js/tcmd/
     FileRow.js …      row behaviors shared by both engines
     format.js         presentation helpers (sizes/counts)
   tui/      View (select.tui templates on OpenTUI)
-    app.js       binds App.js + App.xml + TUI environment
+    app.js       binds App.js + App.xml + TUI environment; size/help cells
     catalogue.js binds each `components/*.js` to its `.xml` and registers tags
-    index.js     TUI entry point
-    theme.js     TUI colors
+    frame.js     TUI-only chrome: frame title, breakpoints
+    help.js      TUI-only `?` key-reference overlay behaviors
+    index.js     TUI entry point; feeds `size` from renderer resize events
+    theme.js     TUI palette resolver (dark/light/mono, NO_COLOR)
   web/      Browser view (select.js templates on the DOM, same core)
     app.js       binds App.js + App.html + web environment
     catalogue.js binds each `components/*.js` to its `.html`
@@ -108,6 +119,7 @@ src/js/tcmd/
     http.js      filesystem adapter over the `/api` JSON endpoints
     server.js    dev server: `public/` + `/api/*` (used by `bun run web:serve`)
     seed.js      demo tree written to OPFS on first load
+    header.js    web-only title bar behaviors (+ `header.html`)
     theme.js     web state classes
   vendor/   Vendored third-party code kept close to upstream
     fzy.js       fzy fuzzy scoring algorithm (MIT)
@@ -127,6 +139,12 @@ contract) in both. List rows use the same keyed `Component.map` primitive over
 reactive collections, sharing row behaviors over a `{ item, index, … }` bag
 built by `components/rows.js`; cells stay in the bag and are read at the point
 of use.
+
+TUI-only components live under `tui/` (`frame.js`, `help.js`) and their `.xml`
+templates under `components/`; they are registered only by `tui/catalogue.js`.
+Web-only components live under `web/` (`header.js` + `header.html`). Shared
+behaviors only ever grow additively (a new key for a new presentation),
+so the other engine's presentation and the parity tests keep working unchanged.
 
 Decoupling rules:
 

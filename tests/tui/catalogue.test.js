@@ -12,10 +12,12 @@ describe("tui components", () => {
 					{ isDir: false, name: "b.txt", size: 2048 },
 				],
 			},
-			width: 60,
+			width: 200,
 			height: 3,
 		})
 		try {
+			// The pane/summary width is resolved on the second frame.
+			await setup.renderOnce()
 			await setup.renderOnce()
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain("1 dirs, 1 files, 2.0K")

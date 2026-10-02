@@ -12,6 +12,8 @@
 // each row component (`.xml`) is bound here and referenced by its parent's
 // `rows` environment. Components sharing a presentation bind the same source
 // (`Breadcrumbs` uses `RowList.xml`).
+//
+// TUI-only components (`Help`) live in `tui/` and are registered here only.
 
 import { extend, ui } from "select.tui"
 import { unwrap } from "select/state/cells"
@@ -24,7 +26,7 @@ import fileListXml from "../components/FileList.xml" with { type: "text" }
 import filePreviewXml from "../components/FilePreview.xml" with { type: "text" }
 import fileRowXml from "../components/FileRow.xml" with { type: "text" }
 import filterBarXml from "../components/FilterBar.xml" with { type: "text" }
-import headerXml from "../components/Header.xml" with { type: "text" }
+import helpXml from "../components/Help.xml" with { type: "text" }
 import paletteRowXml from "../components/PaletteRow.xml" with { type: "text" }
 import rowListXml from "../components/RowList.xml" with { type: "text" }
 import summaryXml from "../components/Summary.xml" with { type: "text" }
@@ -46,7 +48,6 @@ import {
 	fileRowBehaviors,
 	fileRows,
 	filterBarBehaviors,
-	headerBehaviors,
 	paletteRowBehaviors,
 	paletteRows,
 	summaryBehaviors,
@@ -54,6 +55,8 @@ import {
 	tabItemBehaviors,
 	tabItemRows,
 } from "../components/index.js"
+import { createBehaviors as helpBehaviors } from "./help.js"
+import { INSPECTOR_INLINE_WIDTH } from "./frame.js"
 import { tuiTheme } from "./theme.js"
 
 let registered = false
@@ -68,12 +71,21 @@ function tuiEnv() {
 		dimFg: tuiTheme.dimFg,
 		dirFg: tuiTheme.dirFg,
 		errorFg: tuiTheme.errorFg,
+		frameBorderFg: tuiTheme.frameBorderFg,
 		lineFg: tuiTheme.dimFg,
 		markFg: tuiTheme.markFg,
 		paletteBg: tuiTheme.paletteBg,
+		panelBg: tuiTheme.panelBg,
+		selectedBg: tuiTheme.selectedBg,
 		textFg: tuiTheme.textFg,
 		titleFg: tuiTheme.titleFg,
 	}
+}
+
+// Function: measure
+// Display width of a string, counting wide CJK/emoji cells as two.
+function measure(text) {
+	return globalThis.Bun?.stringWidth ? globalThis.Bun.stringWidth(text) : `${text}`.length
 }
 
 // Edge fractions of the viewport kept as a scroll margin: the view nudges one
@@ -116,6 +128,34 @@ function paletteScrollTop(self, data) {
 	return keepVisible(self.ref.list, unwrap(data.selected) ?? 0, unwrap(data.items)?.length ?? 0)
 }
 
+// Constant: BAR_COMPACT
+// The command-bar hints kept on narrow viewports. The rest stay reachable from
+// the command palette and the `?` reference.
+const BAR_COMPACT = new Set([
+	"pane.enter",
+	"pane.up",
+	"pane.toggle",
+	"list.mark",
+	"view.togglePreview",
+	"palette.toggle",
+	"filter.start",
+])
+
+// Function: commandBarRows
+// Trims the command bar to its essential hints when the viewport is narrow.
+function commandBarRows(commandItem) {
+	const base = commandItemRows(commandItem)
+	return (data) => {
+		const items = unwrap(data.items) ?? []
+		const compact = Boolean(unwrap(data.compact))
+		// Context hint sets (palette/filter) carry no command id; never trim
+		// those, only the command set.
+		const isHintSet = items.some((item) => item?.id === null || item?.id === undefined)
+		const kept = compact && !isHintSet ? items.filter((item) => BAR_COMPACT.has(item.id)) : items
+		return base({ ...data, items: kept })
+	}
+}
+
 // Function: createComponents
 // Binds every shared component to its `.xml` presentation.
 function createComponents() {
@@ -138,7 +178,7 @@ function createComponents() {
 		})),
 		CommandBar: bind(ui, "CommandBar", commandBarXml, commandBarBehaviors({
 			...env,
-			rows: commandItemRows(commandItem),
+			rows: commandBarRows(commandItem),
 		})),
 		CommandPalette: bind(ui, "CommandPalette", commandPaletteXml, commandPaletteBehaviors({
 			...env,
@@ -153,19 +193,25 @@ function createComponents() {
 		})),
 		FilePreview: bind(ui, "FilePreview", filePreviewXml, filePreviewBehaviors(env)),
 		FilterBar: filterBar,
-		Header: bind(ui, "Header", headerXml, headerBehaviors({
-			...env,
-			// The header spans the full terminal: `ctx.width` is the renderer's
-			// width (the box's own width is still 0 when the behavior runs).
-			// ponytail: recomputes on the next data change; a pure resize waits
-			// for one.
-			width: (self) => Math.floor(self.ctx?.width ?? 0),
-		})),
+		Help: bind(ui, "Help", helpXml, helpBehaviors({ theme: tuiTheme })),
 		Summary: bind(ui, "Summary", summaryXml, summaryBehaviors({
 			...env,
-			width: (self) => Math.floor(self.ref.box?.width ?? 0),
-			elide: (text, width) =>
-				width >= 12 && text.length > width ? `${text.slice(0, width - 1)}…` : text,
+			// The box width is unresolved when the behavior first runs, so fall
+			// back to an estimate from the viewport (panes share it, minus the
+			// inspector when inline). The next render uses the real width.
+			width: (self) => {
+				const own = Math.floor(self.ref.box?.width ?? 0)
+				if (own > 0) return own
+				const total = Math.floor(self.ctx?.width ?? 0)
+				if (total <= 0) return 0
+				const columns = total >= INSPECTOR_INLINE_WIDTH ? 3 : 2
+				return Math.max(12, Math.floor(total / columns) - 6)
+			},
+			measure,
+			elide: (text, width) => {
+				if (width < 12 || measure(text) <= width) return text
+				return `${text.slice(0, Math.max(0, width - 1))}…`
+			},
 		})),
 		TabBar: bind(ui, "TabBar", tabBarXml, tabBarBehaviors({
 			...env,
@@ -189,7 +235,7 @@ function registerComponents() {
 		filelist: components.FileList,
 		filepreview: components.FilePreview,
 		filterbar: components.FilterBar,
-		header: components.Header,
+		help: components.Help,
 		summary: components.Summary,
 		tabbar: components.TabBar,
 	})

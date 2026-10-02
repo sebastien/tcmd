@@ -1,3 +1,3 @@
-<box ref="box" flexDirection="row" height="1">
-	<text out="line" out:fg="lineFg"></text>
+<box ref="box" flexDirection="row" height="1" overflow="hidden">
+	<text out="priorityLine" out:fg="lineFg" wrapMode="none" truncate="true"></text>
 </box>

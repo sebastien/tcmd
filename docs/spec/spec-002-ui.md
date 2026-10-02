@@ -1,37 +1,69 @@
 # TinyCMD UI
 
+## Layout
 
-Main UI:
-- Header
-- Two panels, Optional Preview
-- Command bar
+The TUI is a single rounded frame. The frame title carries the active path
+(`TinyCmd - HOST DIR/BASE`, compressed to fit). Inside:
 
-Each panel:
-- Tab bar
-- Breadcrumbs
-- Contents
-- Summary
-- Filter bar (only while a filter is active)
+- Top bar (inside the frame): the active path, advertised by the frame title.
+- Two panes, split by a single vertical divider, plus an optional inspector.
+- Status bar: context key hints on the left, notices/errors and marks on the
+  right.
+- Below the breakpoint the workspace is replaced by a resize hint.
 
-Command bar:
-- By default shows available keys
-- Ctrl-P shows command palette, opens from the bottom
-- : starts the command palette in scripting mode
+Each pane:
 
-Command palette:
-- Type to complete, arrows to navigate, tab to complete, enter to complete and run
-- By default shows UI level actions
-- When in scripting mode, shows the available operations, and shows the filesets
-  marked ($A, $B, ..., $FILE for preview) based on the available selections across panes and tabs.
+- one header row: tab chips, breadcrumbs, and the inline filter (`/ query`),
+  so a filter never shifts the listing or the other pane;
+- contents (scrollable, cursorable);
+- one summary row (counts + disk), always at the same row in both panes.
 
-Pane filter:
-- `/` focuses a fuzzy filter input at the bottom of the active pane
-- Typing narrows the listing with fzy scoring: directories first, then by score
-- Enter keeps the filter and returns focus to the list; Esc clears it
-- The filter row shows `/ <query>` whenever a filter is applied (key hints stay
-  in the command bar); a `no match` alert appears when the query matches nothing
+The inspector is context-aware: text files show their leading content, other
+kinds show a metadata card, and a directory shows a directory card rather than
+an empty box. It sits beside the panes at ≥100 columns and becomes a fullscreen
+viewer (`v`) below that.
 
-Operations:
+```text
+╭─ TinyCmd · devbox ───────────────────────────────────────────────────────────────╮
+│ A  B  +   / home / tester         │ C  +   / etc           │ notes.txt    <TXT>   │
+│                                    │                        ├──────────────────────┤
+│ > documents/              <dir>    │ > hosts          19B   │ hello                │
+│   notes.txt                26B     │                        │ world                │
+│   archive.tar.gz          10.0M    │                        │ third line           │
+│   tiny.txt                  4B     │                        │                      │
+│ 2 dirs · 3 files · 10.0M           │ 1 file · 19B           │ 26B · text           │
+╰─ ↵open  ←parent  ⇥pane  ␣mark  ^P palette  / filter        ▸A · 0 marked  ? help ─╯
+```
+
+## Responsive behavior
+
+Breakpoints are driven by the renderer viewport (`size` cell fed from resize
+events, with the renderer dimensions as a fallback):
+
+- `< 64×16`: minimum-size hint replaces the workspace.
+- `< 100 cols`: the inline inspector collapses; `v` opens the fullscreen viewer.
+- `< 110 cols`: the status bar keeps only its essential hints; the rest stay in
+  the palette and the `?` reference.
+
+## Pane filter
+
+- `/` focuses a fuzzy filter input in the active pane's header row.
+- Typing narrows the listing with fzy scoring: directories first, then by score.
+- `Enter` keeps the filter and returns focus to the list; `Esc` clears it.
+- A `no match` alert appears when the query matches nothing.
+- While a filter is active the breadcrumbs yield the header row to it.
+
+## Overlays
+
+- Command palette (`^P`): centered, sectioned, with a selected-row marker and
+  its own hint footer. `:` opens it in scripting mode.
+- Confirm (destructive operations): centered modal with the question and
+  `[y]es [n]o`.
+- Keys (`?`): a grouped reference built from the live keymap and command
+  registry, so it cannot drift from the actual bindings.
+
+## Operations
+
 - copy FROM TO (supports directories automatically)
 - move FROM TO
 - delete PATH (moves to trash)
@@ -44,22 +76,17 @@ Operations:
 - open PATH, uses open/gnome-open
 - run CMD, runs the command (alias to !)
 
-```
-.-------------------------------------------------------------.
-| TinyCMD                                                     |
-+-------------------++-------------------++-------------------+
-| A               + || B               + || Filename    <PDF> |
-+-------------------++-------------------++-------------------+
-| path / to / file  || path / to / file  ||                   |
-+-------------------++-------------------+|                   |
-| * Dir       <dir> || * Dir       <dir> || <PREVIEW>         |
-| * Dir       <dir> || * Dir       <dir> ||                   |
-| - File        14B || - File        14B ||                   |
-+-------------------++-------------------++-------------------+
-| 10 dirs, 7 files… || 10 dirs, 7 files… || [O]pen [E]dit     |
-+-------------------++-------------------++-------------------+
-| Open[Enter] Parent[<] Switch[Tab] Mark[Spc] Preview[v] ..   |
-+-------------------------------------------------------------+
-```
+## Theme
 
+`tui/theme.js` resolves a semantic token set at load:
 
+- `TCMD_THEME=dark|light|mono` forces a variant;
+- `NO_COLOR` or `TERM=dumb` falls back to mono;
+- otherwise dark.
+
+Mono uses terminal defaults throughout and relies on markers (`>`, `*`, `▸`,
+`[`/`]`) and layout, never colour alone. The same applies at every level: the
+active pane, active tab, selected row and current file all have a non-colour
+carrier.
+
+Only the TUI consumes this theme; the web view keeps its CSS state classes.

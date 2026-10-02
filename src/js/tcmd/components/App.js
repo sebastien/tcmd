@@ -24,6 +24,9 @@ function createInit(session) {
 	const right = session.panes.right
 	return () => ({
 		active: session.active,
+		// The preview target entry, so the inspector can show a directory card
+		// even when there is no text/card preview.
+		appEntry: session.previewEntry,
 		appHost: session.host,
 		appPath: session.activePath,
 		commandBarItems: session.commandBarItems,
@@ -37,6 +40,7 @@ function createInit(session) {
 		leftError: left.error,
 		leftFilter: left.filter,
 		leftId: "left",
+		leftLoading: left.loading,
 		leftMarked: left.marked,
 		leftSegments: left.segments,
 		leftTabs: left.tabs,
@@ -54,6 +58,7 @@ function createInit(session) {
 		rightError: right.error,
 		rightFilter: right.filter,
 		rightId: "right",
+		rightLoading: right.loading,
 		rightMarked: right.marked,
 		rightSegments: right.segments,
 		rightTabs: right.tabs,

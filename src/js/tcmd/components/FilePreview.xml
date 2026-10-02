@@ -1,7 +1,10 @@
-<box when="show" out:title="previewTitle" out:titleColor="previewTitleColor" border flexDirection="column" flexGrow="1">
-	<scrollbox flexGrow="1" height="100%">
+<box when="show" out:title="headerTitle" out:titleColor="previewTitleColor" border borderStyle="rounded"
+     flexDirection="column" flexGrow="1" overflow="hidden">
+	<scrollbox flexGrow="1">
 		<text when="hasText" out="previewText" out:fg="textFg"></text>
 		<text when="hasCard" out="cardText" out:fg="dimFg"></text>
+		<text when="hasEntryCard" out="entryText" out:fg="dimFg"></text>
+		<text when="isEmpty" out="emptyText" out:fg="dimFg"></text>
 	</scrollbox>
 	<box height="1"><text out="actions" out:fg="actionsFg"></text></box>
 </box>

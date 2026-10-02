@@ -1,23 +1,69 @@
+<!-- Root wrapper: the framed workspace, plus overlays positioned against the
+     whole viewport (not the frame's content box, which is pushed down by the
+     flex workspace). -->
 <box flexDirection="column" width="100%" height="100%" on:keypress="keys">
-	<header in:host="appHost" in:path="appPath" height="1"></header>
-	<box flexDirection="row" flexGrow="1">
-		<box flexDirection="column" flexGrow="1" border out:borderColor="leftBorderFg" on:click="leftId!pane:activate">
-			<tabbar in:tabs="leftTabs" in:active="leftActiveIndex" in:paneId="leftId" height="1"></tabbar>
-			<breadcrumbs in:segments="leftSegments" in:paneId="leftId" height="1"></breadcrumbs>
-			<filelist in:entries="leftEntries" in:cursor="leftCursor" in:marked="leftMarked" in:paneId="leftId"></filelist>
-			<summary in:entries="leftEntries" in:disk="leftDisk" height="1"></summary>
-			<filterbar in:query="leftFilter" in:paneId="leftId" in:filtering="filtering" in:entries="leftEntries"></filterbar>
+
+	<box flexGrow="1" border borderStyle="rounded"
+	     out:title="frameTitle" out:titleColor="frameTitleFg" out:borderColor="frameBorderFg"
+	     titleAlignment="left" flexDirection="column" overflow="hidden">
+
+		<!-- Minimum-size gate: below the breakpoint the workspace is unusable. -->
+		<box when="tooSmall" flexGrow="1" alignItems="center" justifyContent="center" flexDirection="column" rowGap="1">
+			<text out="minSizeTitle" out:fg="titleFg"></text>
+			<text out="minSizeHint" out:fg="dimFg"></text>
 		</box>
-		<box flexDirection="column" flexGrow="1" border out:borderColor="rightBorderFg" on:click="rightId!pane:activate">
-			<tabbar in:tabs="rightTabs" in:active="rightActiveIndex" in:paneId="rightId" height="1"></tabbar>
-			<breadcrumbs in:segments="rightSegments" in:paneId="rightId" height="1"></breadcrumbs>
-			<filelist in:entries="rightEntries" in:cursor="rightCursor" in:marked="rightMarked" in:paneId="rightId"></filelist>
-			<summary in:entries="rightEntries" in:disk="rightDisk" height="1"></summary>
-			<filterbar in:query="rightFilter" in:paneId="rightId" in:filtering="filtering" in:entries="rightEntries"></filterbar>
+
+		<!-- Workspace: two panes split by a divider, plus the inline inspector. -->
+		<box when="!tooSmall" flexDirection="column" flexGrow="1" overflow="hidden">
+			<box flexDirection="row" flexGrow="1" overflow="hidden">
+				<box flexDirection="column" flexGrow="1" out:border="leftDivider" out:borderColor="leftBorderFg"
+				     on:click="leftId!pane:activate">
+					<box flexDirection="row" height="1" overflow="hidden">
+						<tabbar in:tabs="leftTabs" in:active="leftActiveIndex" in:paneId="leftId" height="1"></tabbar>
+						<box when="!leftFilterOn" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
+							<breadcrumbs in:segments="leftSegments" in:paneId="leftId" height="1"></breadcrumbs>
+						</box>
+						<filterbar in:query="leftFilter" in:paneId="leftId" in:filtering="filtering" in:entries="leftEntries"></filterbar>
+					</box>
+					<filelist in:entries="leftEntries" in:cursor="leftCursor" in:marked="leftMarked"
+					          in:paneId="leftId" in:loading="leftLoading"></filelist>
+					<summary in:entries="leftEntries" in:disk="leftDisk" height="1"></summary>
+				</box>
+				<box flexDirection="column" flexGrow="1" out:border="rightDivider" out:borderColor="rightBorderFg"
+				     on:click="rightId!pane:activate">
+					<box flexDirection="row" height="1" overflow="hidden">
+						<tabbar in:tabs="rightTabs" in:active="rightActiveIndex" in:paneId="rightId" height="1"></tabbar>
+						<box when="!rightFilterOn" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
+							<breadcrumbs in:segments="rightSegments" in:paneId="rightId" height="1"></breadcrumbs>
+						</box>
+						<filterbar in:query="rightFilter" in:paneId="rightId" in:filtering="filtering" in:entries="rightEntries"></filterbar>
+					</box>
+					<filelist in:entries="rightEntries" in:cursor="rightCursor" in:marked="rightMarked"
+					          in:paneId="rightId" in:loading="rightLoading"></filelist>
+					<summary in:entries="rightEntries" in:disk="rightDisk" height="1"></summary>
+				</box>
+				<filepreview when="showInspectorInline" in:preview="preview" in:show="showInspectorInline"
+				             in:entry="appEntry" flexGrow="1"></filepreview>
+			</box>
+			<commandbar in:items="commandBarItems" in:notice="notice" in:leftError="leftError"
+			            in:rightError="rightError" in:compact="barCompact" in:active="active"
+			            in:leftMarked="leftMarked" in:rightMarked="rightMarked" height="1"></commandbar>
 		</box>
-		<filepreview in:preview="preview" in:show="showPreview" flexGrow="1" when="showPreview"></filepreview>
 	</box>
-	<commandbar in:items="commandBarItems" in:notice="notice" in:leftError="leftError" in:rightError="rightError" height="1"></commandbar>
-	<commandpalette in:open="paletteOpen" in:mode="paletteMode" in:query="paletteQuery" in:items="paletteItems" in:selected="paletteIndex"></commandpalette>
-	<confirm in:confirm="confirm"></confirm>
+
+	<!-- Fullscreen inspector for narrow viewports. -->
+	<box when="showViewer" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="10"
+	     alignItems="center" justifyContent="center">
+		<box width="80%" height="90%">
+			<filepreview in:preview="preview" in:show="showViewer" in:entry="appEntry"></filepreview>
+		</box>
+	</box>
+
+	<commandpalette when="paletteOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="20"
+	                in:open="paletteOpen" in:mode="paletteMode" in:query="paletteQuery"
+	                in:items="paletteItems" in:selected="paletteIndex"></commandpalette>
+	<confirm when="confirm" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="30"
+	         in:confirm="confirm"></confirm>
+	<help when="helpOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="40"
+	      in:open="helpOpen"></help>
 </box>

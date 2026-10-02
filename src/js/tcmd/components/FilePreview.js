@@ -55,6 +55,31 @@ function previewTitle(preview) {
 	return `${preview.title}  <${badge}>`
 }
 
+// Function: entryCard
+// Metadata card for the entry the session did not preview: a directory, or a
+// file whose kind has no inline preview.
+function entryCard(entry) {
+	if (!entry) return ""
+	const lines = []
+	lines.push("")
+	lines.push(`  ${entry.isDir ? "directory" : "file"}: ${entry.name}${entry.isDir ? "/" : ""}`)
+	if (entry.isDir) lines.push("  open it to list its contents")
+	else lines.push(`  size: ${formatSize(entry.size)}`)
+	lines.push("")
+	return lines.join("\n")
+}
+
+// Function: headerTitle
+// The inspector title: the preview's own title, else the cursor entry.
+function headerTitle(preview, entry) {
+	if (preview) return previewTitle(preview)
+	if (entry) {
+		const badge = entry.isDir ? "DIR" : (entry.ext || "file").toUpperCase()
+		return `${entry.name}${entry.isDir ? "/" : ""}  <${badge}>`
+	}
+	return "inspector"
+}
+
 // Function: createBehaviors
 // Builds the FilePreview behavior map for the given renderer environment.
 function createBehaviors(env) {
@@ -63,8 +88,15 @@ function createBehaviors(env) {
 		actionsFg: () => env.dimFg,
 		cardText: (_self, data) => cardText(unwrap(data.preview)),
 		dimFg: () => env.dimFg,
+		emptyText: () => "  No file selected\n  Move the cursor or press v",
+		entryText: (_self, data) => entryCard(unwrap(data.entry)),
 		hasCard: (_self, data) => hasCard(unwrap(data.preview)),
+		// The metadata card fills in whenever there is a cursor entry but no
+		// preview payload (a directory, or a non-text file).
+		hasEntryCard: (_self, data) => !unwrap(data.preview) && Boolean(unwrap(data.entry)),
 		hasText: (_self, data) => hasText(unwrap(data.preview)),
+		headerTitle: (_self, data) => headerTitle(unwrap(data.preview), unwrap(data.entry)),
+		isEmpty: (_self, data) => !unwrap(data.preview) && !unwrap(data.entry),
 		previewText: (_self, data) => unwrap(data.preview)?.text ?? "",
 		previewTitle: (_self, data) => previewTitle(unwrap(data.preview)),
 		previewTitleColor: () => env.titleFg,
@@ -73,6 +105,6 @@ function createBehaviors(env) {
 	}
 }
 
-export { cardText, createBehaviors, hasCard, hasText, previewTitle }
+export { cardText, createBehaviors, entryCard, hasCard, hasText, headerTitle, previewTitle }
 
 // EOF
