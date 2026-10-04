@@ -8,13 +8,13 @@
 // logic lives in `TabItem.js`.
 //
 // Environment: `rows(data)` returning the keyed row list, `listClass` (web
-// root class), `dimFg` (the "+" hint).
+// root class), `textSecondaryFg` (the "+" hint).
 
 // Function: createBehaviors
 // Builds the TabBar behavior map for the given renderer environment.
 function createBehaviors(env) {
 	const behaviors = {
-		addFg: () => env?.dimFg,
+		addFg: () => env?.textSecondaryFg,
 		addLabel: () => "+ ",
 		listClass: () => env?.listClass,
 	}

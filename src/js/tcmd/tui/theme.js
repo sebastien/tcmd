@@ -14,65 +14,122 @@
 // Every token is an OpenTUI color string, or `undefined` to mean "terminal
 // default" (which is what mono uses throughout). Non-color emphasis (markers,
 // borders, bold/underline attributes) carries the state in mono.
+//
+// Token groups (see tui/catalogue.js for the env they feed):
+//
+// - Surfaces:  panel/overlay backgrounds and the two selection rows.
+// - Text:      primary, secondary (hints) and heading (titles/breadcrumbs).
+// - Borders:   secondary (pane dividers, active/inactive) and primary (the
+//              frame and the modal overlays).
+// - Accent:    primary (cursor, active tab) and secondary (marks).
+// - Semantic:  error, warning and tip, each with a background + foreground
+//              for filled badges (the command bar status, the confirm dialog).
+// - Content:   the file-listing colors (file/link/device/directory).
 
 // Constant: DARK
 // Tokyo-Night-ish dark palette.
 const DARK = {
 	// Surfaces
-	panelBg: "#1f2335",
-	selectedBg: "#2f3b5c",
+	surfaceBg: "#1f2335",
+	overlayBg: "#1f2335",
+	mutedBg: "#292e42",
 	cursorBg: "#3a5f8a",
+	selectionBg: "#2f3b5c",
 	// Text
 	textFg: "#c0caf5",
-	dimFg: "#565f89",
-	titleFg: "#a9b1d6",
-	// Semantics: `errorFg` is the shared behaviors' failure color.
+	textSecondaryFg: "#565f89",
+	textHeadingFg: "#a9b1d6",
+	// Borders
+	borderSecondaryFg: "#414868",
+	borderSecondaryActiveFg: "#9ece6a",
+	borderPrimaryFg: "#565f89",
+	borderPrimaryActiveFg: "#7aa2f7",
+	// Accent
 	accentFg: "#9ece6a",
+	accentBg: "#2f3b5c",
+	accentSecondaryFg: "#e0af68",
+	accentSecondaryBg: "#3a3a30",
+	// Semantics
 	errorFg: "#f7768e",
-	// Chrome
-	borderFg: "#414868",
-	frameBorderFg: "#565f89",
-	// Listing
+	errorBg: "#3a2630",
+	warningFg: "#ff9e64",
+	warningBg: "#3a2e24",
+	tipFg: "#7dcfff",
+	tipBg: "#26323a",
+	// Content
+	fileFg: "#c0caf5",
+	linkFg: "#7dcfff",
+	devFg: "#bb9af7",
 	dirFg: "#7aa2f7",
-	markFg: "#e0af68",
-	paletteBg: "#1f2335",
 }
 
 // Constant: LIGHT
 // Palette tuned for light terminal backgrounds: darker, lower-chroma hues.
 const LIGHT = {
-	panelBg: "#e6e7ea",
-	selectedBg: "#c4c8d6",
+	// Surfaces
+	surfaceBg: "#e6e7ea",
+	overlayBg: "#e6e7ea",
+	mutedBg: "#d0d3dc",
 	cursorBg: "#9fb4d6",
+	selectionBg: "#c4c8d6",
+	// Text
 	textFg: "#1f2335",
-	dimFg: "#6b7089",
-	titleFg: "#343b58",
+	textSecondaryFg: "#6b7089",
+	textHeadingFg: "#343b58",
+	// Borders
+	borderSecondaryFg: "#b7b9c4",
+	borderSecondaryActiveFg: "#33635c",
+	borderPrimaryFg: "#8b8fa3",
+	borderPrimaryActiveFg: "#3d59a1",
+	// Accent
 	accentFg: "#33635c",
-	borderFg: "#b7b9c4",
-	frameBorderFg: "#8b8fa3",
-	dirFg: "#3d59a1",
-	markFg: "#8f5e15",
+	accentBg: "#c4c8d6",
+	accentSecondaryFg: "#8f5e15",
+	accentSecondaryBg: "#d8d2bf",
+	// Semantics
 	errorFg: "#8c4351",
-	paletteBg: "#e6e7ea",
+	errorBg: "#e2c6cc",
+	warningFg: "#b45309",
+	warningBg: "#ecd6bd",
+	tipFg: "#33635c",
+	tipBg: "#c8dbe4",
+	// Content
+	fileFg: "#1f2335",
+	linkFg: "#20639b",
+	devFg: "#6a3f8c",
+	dirFg: "#3d59a1",
 }
 
 // Constant: MONO
 // No color at all: the terminal's own foreground/background. State is carried
 // by markers (`>`, `*`, `[`, `]`, `▸`) and the selected-row background.
 const MONO = {
-	panelBg: undefined,
-	selectedBg: undefined,
+	surfaceBg: undefined,
+	overlayBg: undefined,
+	mutedBg: undefined,
 	cursorBg: undefined,
+	selectionBg: undefined,
 	textFg: undefined,
-	dimFg: undefined,
-	titleFg: undefined,
+	textSecondaryFg: undefined,
+	textHeadingFg: undefined,
+	borderSecondaryFg: undefined,
+	borderSecondaryActiveFg: undefined,
+	borderPrimaryFg: undefined,
+	borderPrimaryActiveFg: undefined,
 	accentFg: undefined,
-	borderFg: undefined,
-	frameBorderFg: undefined,
-	dirFg: undefined,
-	markFg: undefined,
+	accentBg: undefined,
+	accentSecondaryFg: undefined,
+	accentSecondaryBg: undefined,
 	errorFg: undefined,
-	paletteBg: undefined,
+	errorBg: undefined,
+	warningFg: undefined,
+	warningBg: undefined,
+	tipFg: undefined,
+	tipBg: undefined,
+	fileFg: undefined,
+	linkFg: undefined,
+	devFg: undefined,
+	dirFg: undefined,
 }
 
 // Function: resolveTheme

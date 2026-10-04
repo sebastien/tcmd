@@ -59,6 +59,7 @@ function webViewBehaviors() {
 			segments: data.leftSegments,
 			paneId: data.leftId,
 		}),
+		leftDetailView: (_self, data) => ({ entry: data.leftEntry }),
 		leftFilterView: (_self, data) => ({
 			query: data.leftFilter,
 			paneId: data.leftId,
@@ -98,6 +99,7 @@ function webViewBehaviors() {
 			segments: data.rightSegments,
 			paneId: data.rightId,
 		}),
+		rightDetailView: (_self, data) => ({ entry: data.rightEntry }),
 		rightFilterView: (_self, data) => ({
 			query: data.rightFilter,
 			paneId: data.rightId,

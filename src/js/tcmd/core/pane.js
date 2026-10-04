@@ -45,6 +45,7 @@ function createPane({ fs, path: initialPath, labels } = {}) {
 	pane.sort = switched(pane.activeTab, (tab) => tab?.sort)
 	pane.entries = switched(pane.activeTab, (tab) => tab?.entries)
 	pane.cursor = switched(pane.activeTab, (tab) => tab?.cursor)
+	pane.cursorStat = switched(pane.activeTab, (tab) => tab?.cursorStat)
 	pane.marked = switched(pane.activeTab, (tab) => tab?.marked)
 	pane.disk = switched(pane.activeTab, (tab) => tab?.disk)
 	pane.segments = switched(pane.activeTab, (tab) => tab?.segments)

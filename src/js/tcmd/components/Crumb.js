@@ -7,7 +7,7 @@
 // A single breadcrumb segment. Behaviors read `{ item: segment, paneId }`, the
 // same bag shape in both engines (built by `Component.map`).
 //
-// Environment: `dimFg`, `titleFg`, `rootClass`, `childClass`.
+// Environment: `textSecondaryFg`, `textHeadingFg`, `rootClass`, `childClass`.
 
 // Function: crumbLabel
 // Root crumb renders as "[/]"; the rest as "name /".
@@ -27,7 +27,7 @@ function createBehaviors(env) {
 	return {
 		crumbClass: (_self, data) => (isRoot(data.item) ? env.rootClass : env.childClass),
 		crumbLabel: (_self, data) => crumbLabel(data.item),
-		crumbFg: (_self, data) => (isRoot(data.item) ? env.dimFg : env.titleFg),
+		crumbFg: (_self, data) => (isRoot(data.item) ? env.textSecondaryFg : env.textHeadingFg),
 	}
 }
 

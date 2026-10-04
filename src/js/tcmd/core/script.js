@@ -96,7 +96,7 @@ async function runLine(session, line, options = {}) {
 	}
 	try {
 		const message = await op.run(session, args, options)
-		if (message) session.notice.set({ kind: "info", text: message })
+		if (message) session.notice.set({ kind: "tip", text: message })
 		return "ran"
 	} catch (error) {
 		session.notice.set({ kind: "error", text: `${error?.message ?? error}` })

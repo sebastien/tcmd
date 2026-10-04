@@ -54,8 +54,8 @@ function createFrameBehaviors(env) {
 			const width = sizeOf(data, self)?.width ?? 0
 			return ` ${formatTitle(unwrap(data.appHost), unwrap(data.appPath), Math.max(0, width - 4))} `
 		},
-		frameBorderFg: () => env.theme.frameBorderFg,
-		frameTitleFg: () => env.theme.titleFg,
+		frameBorderFg: () => env.theme.borderPrimaryFg,
+		frameTitleFg: () => env.theme.textHeadingFg,
 
 		// Responsive gates. `uiSize` is absent in tests and the web, so the
 		// workspace renders normally there.
@@ -69,6 +69,9 @@ function createFrameBehaviors(env) {
 			const size = sizeOf(data, self) ?? { width: 0, height: 0 }
 			return `need ${MIN_WIDTH}x${MIN_HEIGHT}, have ${size.width ?? 0}x${size.height ?? 0}`
 		},
+		// The min-size gate text uses the heading/secondary text tokens.
+		titleFg: () => env.theme.textHeadingFg,
+		dimFg: () => env.theme.textSecondaryFg,
 
 		// One divider between the panes; the inspector brings its own border.
 		leftDivider: () => ["right"],

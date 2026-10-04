@@ -102,10 +102,10 @@ describe("script", () => {
 		expect(await runLine(session, "")).toBe("empty")
 	})
 
-	test("runLine runs operations and sets an info notice", async () => {
+	test("runLine runs operations and sets a tip notice", async () => {
 		const { session } = await makeSession()
 		expect(await runLine(session, "touch fresh.txt")).toBe("ran")
-		expect(session.notice.value.kind).toBe("info")
+		expect(session.notice.value.kind).toBe("tip")
 		expect(session.notice.value.text).toContain("touched")
 	})
 })

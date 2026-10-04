@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { formatCounts, formatDisk, formatSize, formatTitle } from "../../src/js/tcmd/components/format.js"
+import { formatCounts, formatDisk, formatMode, formatSize, formatTime, formatTitle } from "../../src/js/tcmd/components/format.js"
 
 describe("format", () => {
 	test("formats sizes, disk and counts", () => {
@@ -12,6 +12,18 @@ describe("format", () => {
 				{ isDir: false, size: 10 },
 			]),
 		).toBe("1 dirs, 1 files, 10B")
+	})
+
+	test("formats timestamps and POSIX modes", () => {
+		const stamp = new Date(2026, 9, 6, 7, 55).getTime()
+		expect(formatTime(stamp)).toBe("2026-10-06 07:55")
+		expect(formatTime(0)).toBe("")
+		expect(formatMode(0o100644)).toBe("-rw-r--r--")
+		expect(formatMode(0o040755)).toBe("drwxr-xr-x")
+		expect(formatMode(0o120777)).toBe("lrwxrwxrwx")
+		// setuid replaces the execute slot.
+		expect(formatMode(0o104755)).toBe("-rwsr-xr-x")
+		expect(formatMode(0)).toBe("")
 	})
 
 	test("formats the header title, compressing middle segments to fit", () => {

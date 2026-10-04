@@ -34,6 +34,7 @@ describe("FilterBar", () => {
 		const behaviors = createBehaviors(behaviorEnv)
 		const data = { query: "zzz", paneId: "left", filtering: null, entries: [] }
 		expect(behaviors.alert(null, data)).toBe("no match")
+		expect(behaviors.alertFg()).toBe("warning")
 		expect(behaviors.alert(null, { ...data, entries: [{ name: "a" }] })).toBe("")
 		// A whitespace-only query is not an active filter.
 		expect(behaviors.alert(null, { ...data, query: "   " })).toBe("")

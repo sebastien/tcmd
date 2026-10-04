@@ -24,4 +24,5 @@ describe("tui theme", () => {
 	test("mono uses terminal defaults, so no colour is emitted", () => {
 		for (const value of Object.values(MONO)) expect(value).toBeUndefined()
 	})
+
 })

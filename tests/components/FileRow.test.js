@@ -5,6 +5,8 @@ import { behaviorEnv } from "../helpers/behavior-env.js"
 
 const DIR = { isDir: true, name: "sub", path: "/sub", size: 0 }
 const FILE = { isDir: false, name: "a.txt", path: "/a.txt", size: 10 }
+const LINK = { isDir: false, isSymlink: true, name: "ln", path: "/ln", size: 0 }
+const DEV = { isDir: false, isDevice: true, name: "null", path: "/dev/null", size: 0 }
 
 describe("FileRow", () => {
 	test("names, sizes and markers", () => {
@@ -26,7 +28,9 @@ describe("FileRow", () => {
 		expect(behaviors.rowClass(null, { index: 1, cursor: 1 })).toBe("is-current")
 		expect(behaviors.rowClass(null, { index: 0, cursor: 1 })).toBeNull()
 		expect(behaviors.rowNameFg(null, { item: DIR })).toBe("dir")
-		expect(behaviors.rowNameFg(null, { item: FILE })).toBe("text")
+		expect(behaviors.rowNameFg(null, { item: FILE })).toBe("file")
+		expect(behaviors.rowNameFg(null, { item: LINK })).toBe("link")
+		expect(behaviors.rowNameFg(null, { item: DEV })).toBe("dev")
 		expect(behaviors.rowNameClass(null, { item: DIR })).toBe("is-dir")
 		expect(behaviors.rowNameClass(null, { item: FILE })).toBeNull()
 		expect(behaviors.rowMarkerFg(null, { item: FILE, marked: new Set(["/a.txt"]) })).toBe("mark")

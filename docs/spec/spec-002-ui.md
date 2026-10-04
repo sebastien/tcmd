@@ -16,6 +16,12 @@ Each pane:
 - one header row: tab chips, breadcrumbs, and the inline filter (`/ query`),
   so a filter never shifts the listing or the other pane;
 - contents (scrollable, cursorable);
+- one entry-detail block (two rows, a separator rule on top): the selected
+  entry's `mtime · type · size` and, when the backend exposes them,
+  `ctime · owner · mode`. It follows the pane cursor and stays blank when the
+  listing is empty. The type is coloured like the listing (file/link/device/
+  directory) and the mode is brightened, so both stand out from the dim
+  timestamp/size fields;
 - one summary row (counts + disk), always at the same row in both panes.
 
 The inspector is context-aware: text files show their leading content, other
@@ -88,5 +94,26 @@ Mono uses terminal defaults throughout and relies on markers (`>`, `*`, `▸`,
 `[`/`]`) and layout, never colour alone. The same applies at every level: the
 active pane, active tab, selected row and current file all have a non-colour
 carrier.
+
+The token set is grouped (see `tui/theme.js` for the palette values):
+
+- surfaces: `surfaceBg`, `overlayBg`, `mutedBg` (neutral badge grey),
+  `cursorBg`, `selectionBg`;
+- text: `textFg`, `textSecondaryFg`, `textHeadingFg`;
+- borders: `borderSecondaryFg`/`borderSecondaryActiveFg` (pane dividers) and
+  `borderPrimaryFg`/`borderPrimaryActiveFg` (frame and modal overlays);
+- accent: `accentFg`/`accentBg` (cursor, active tab) and
+  `accentSecondaryFg`/`accentSecondaryBg` (marks);
+- semantic states, each as a background + foreground pair for badges: error,
+  warning and tip;
+- content: `fileFg`, `linkFg` (symlinks), `devFg` (device nodes) and `dirFg`.
+
+Each command-bar action renders as a Yazi-style Powerline pill: the action
+name (`OP`) is the accent block with dark text on it, and the shortcut
+(`KEY`) is the accent drawn on a neutral grey. Powerline caps bound the two
+segments — the accent cap on the grey, then the grey cap on the terminal
+default — so the accent tapers into the grey and the grey back into the
+default. The most important action uses the primary accent, the rest the
+secondary.
 
 Only the TUI consumes this theme; the web view keeps its CSS state classes.

@@ -8,8 +8,8 @@
 // paneId }`, the same bag shape in both engines. `active` is a reactive cell,
 // read with `unwrap` at the point of use.
 //
-// Environment: `accentFg`, `dimFg`, `borderFg` (TUI marker color),
-// `activeClass` (web).
+// Environment: `accentFg`, `accentBg`, `textSecondaryFg`, `borderSecondaryFg`
+// (TUI marker color), `activeClass` (web).
 
 import { unwrap } from "select/state/cells"
 
@@ -29,12 +29,13 @@ function isActive(index, active) {
 // Builds the TabItem behavior map for the given renderer environment.
 function createBehaviors(env) {
 	return {
+		tabBg: (_self, data) => (isActive(data.index, data.active) ? env?.accentBg : undefined),
 		tabClass: (_self, data) => (isActive(data.index, data.active) ? env?.activeClass : null),
-		tabFg: (_self, data) => (isActive(data.index, data.active) ? env?.accentFg : env?.dimFg),
+		tabFg: (_self, data) => (isActive(data.index, data.active) ? env?.accentFg : env?.textSecondaryFg),
 		tabLabel: (_self, data) => tabLabel(data.item),
 		// TUI: a leading marker so the active tab is not color-only.
 		tabMarker: (_self, data) => (isActive(data.index, data.active) ? "▸" : " "),
-		tabMarkerFg: (_self, data) => (isActive(data.index, data.active) ? env?.accentFg : env?.borderFg),
+		tabMarkerFg: (_self, data) => (isActive(data.index, data.active) ? env?.accentFg : env?.borderSecondaryFg),
 	}
 }
 

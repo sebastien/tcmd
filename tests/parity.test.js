@@ -61,10 +61,14 @@ describe("cross-engine parity", () => {
 		setup.renderer.destroy()
 
 		try {
-			for (const name of ["tester", "notes.txt", "home", "etc", "TinyCmd", "Open[Enter]"]) {
+			for (const name of ["tester", "notes.txt", "home", "etc", "TinyCmd"]) {
 				expect(webText).toContain(name)
 				expect(frame).toContain(name)
 			}
+			expect(webText).toContain("Open[Enter]")
+			expect(frame).toContain("Open")
+			expect(frame).toContain("Enter")
+			expect(frame).toContain("")
 		} finally {
 			webInstance?.unmount?.()
 		}

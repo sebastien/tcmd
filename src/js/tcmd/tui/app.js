@@ -99,9 +99,9 @@ function createAppComponent(session, options = {}) {
 			},
 			// TUI-only presentation of the shared App state.
 			leftBorderFg: (_self, data) =>
-				unwrap(data.active) === "left" ? tuiTheme.accentFg : tuiTheme.borderFg,
+				unwrap(data.active) === "left" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
 			rightBorderFg: (_self, data) =>
-				unwrap(data.active) === "right" ? tuiTheme.accentFg : tuiTheme.borderFg,
+				unwrap(data.active) === "right" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
 		})
 		.sub(appEvents())
 		.using(appXml)

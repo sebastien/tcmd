@@ -8,7 +8,7 @@
 // their leading content; other kinds show a metadata card. Renderer-agnostic
 // logic; `FilePreview.xml` / `FilePreview.html` are the presentations.
 //
-// Environment: `textFg`, `dimFg`, `titleFg`.
+// Environment: `textFg`, `textSecondaryFg`, `textHeadingFg`.
 
 import { unwrap } from "select/state/cells"
 import { formatSize } from "./format.js"
@@ -85,9 +85,9 @@ function headerTitle(preview, entry) {
 function createBehaviors(env) {
 	return {
 		actions: () => "[O]pen [E]dit",
-		actionsFg: () => env.dimFg,
+		actionsFg: () => env.textSecondaryFg,
 		cardText: (_self, data) => cardText(unwrap(data.preview)),
-		dimFg: () => env.dimFg,
+		dimFg: () => env.textSecondaryFg,
 		emptyText: () => "  No file selected\n  Move the cursor or press v",
 		entryText: (_self, data) => entryCard(unwrap(data.entry)),
 		hasCard: (_self, data) => hasCard(unwrap(data.preview)),
@@ -99,7 +99,7 @@ function createBehaviors(env) {
 		isEmpty: (_self, data) => !unwrap(data.preview) && !unwrap(data.entry),
 		previewText: (_self, data) => unwrap(data.preview)?.text ?? "",
 		previewTitle: (_self, data) => previewTitle(unwrap(data.preview)),
-		previewTitleColor: () => env.titleFg,
+		previewTitleColor: () => env.textHeadingFg,
 		show: (_self, data) => Boolean(unwrap(data.show)),
 		textFg: () => env.textFg,
 	}

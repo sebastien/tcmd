@@ -56,6 +56,39 @@ function formatDisk(disk) {
 	return `${formatSize(disk.free)} free of ${formatSize(disk.total)}`
 }
 
+// Function: formatTime
+// Local `YYYY-MM-DD HH:MM` stamp for a millisecond epoch; empty when absent.
+function formatTime(ms) {
+	const value = Number(ms)
+	if (!Number.isFinite(value) || value <= 0) return ""
+	const date = new Date(value)
+	const pad = (n) => `${n}`.padStart(2, "0")
+	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+// Function: formatMode
+// POSIX permission string ("-rw-r--r--", "drwxr-xr-x") from a stat mode; empty
+// when the backend does not provide one. The leading character reflects the
+// file type and the setuid/setgid/sticky bits replace the execute slot.
+function formatMode(mode) {
+	if (!Number.isFinite(mode) || mode <= 0) return ""
+	const type = mode & 0o170000
+	const fileType = type === 0o040000 ? "d" : type === 0o120000 ? "l" : type === 0o020000 ? "c" : type === 0o060000 ? "b" : type === 0o010000 ? "p" : "-"
+	const bits = mode & 0o7777
+	const triple = (shift, special, set, unset) => {
+		const part = (bits >> shift) & 7
+		const exec = part & 1 ? "x" : "-"
+		const execSpecial = special ? (exec === "x" ? set : unset) : exec
+		return `${part & 4 ? "r" : "-"}${part & 2 ? "w" : "-"}${execSpecial}`
+	}
+	return (
+		fileType +
+		triple(6, bits & 0o4000, "s", "S") +
+		triple(3, bits & 0o2000, "s", "S") +
+		triple(0, bits & 0o1000, "t", "T")
+	)
+}
+
 // Function: formatCounts
 // Summary counts line: "3 dirs, 12 files, 4.2K".
 function formatCounts(entries) {
@@ -73,6 +106,6 @@ function formatCounts(entries) {
 	return `${dirs} dirs, ${files} files, ${formatSize(bytes)}`
 }
 
-export { formatCounts, formatDisk, formatSize, formatTitle }
+export { formatCounts, formatDisk, formatMode, formatSize, formatTime, formatTitle }
 
 // EOF

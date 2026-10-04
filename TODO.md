@@ -1,4 +1,4 @@
-Theme Colors:
+<35;70;10M<35;56;11MTheme Colors:
 - Border Secondary (Active/Inactive), for most panels
 - Border Primary (Active/Inactive), for panels we want to emphasize
 - Text Primary: Main text

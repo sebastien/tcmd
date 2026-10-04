@@ -11,7 +11,7 @@
 // Environment:
 // - `rows(data)` returning the keyed row list.
 // - `scrollTop(self, data)` (TUI viewport tracking).
-// - `dimFg` for the state rows.
+// - `textSecondaryFg` for the state rows.
 
 import { unwrap } from "select/state/cells"
 
@@ -20,9 +20,9 @@ import { unwrap } from "select/state/cells"
 function createBehaviors(env) {
 	const behaviors = {
 		emptyText: () => "  (empty)",
-		emptyFg: () => env?.dimFg,
+		emptyFg: () => env?.textSecondaryFg,
 		loadingText: () => "  loading…",
-		loadingFg: () => env?.dimFg,
+		loadingFg: () => env?.textSecondaryFg,
 		showEmpty: (_self, data) =>
 			!unwrap(data.loading) && (unwrap(data.entries)?.length ?? 0) === 0,
 		showLoading: (_self, data) => Boolean(unwrap(data.loading)),

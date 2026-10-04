@@ -29,11 +29,39 @@ describe("tui app", () => {
 			expect(frame).toContain("home")
 			expect(frame).toContain("etc")
 			// Command bar key hints from the command registry.
-			expect(frame).toContain("Open[Enter]")
-			expect(frame).toContain("Switch[Tab]")
+			expect(frame).toContain("Open")
+			expect(frame).toContain("Open")
+			expect(frame).toContain("Enter")
+			expect(frame).toContain("Switch")
+			expect(frame).toContain("Tab")
+			expect(frame).toContain("")
+			expect(frame).toContain("")
 			// Summary counts.
 			expect(frame).toContain("files")
 			expect(session.panes.left.entries.value.length).toBe(3)
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("the entry detail sits above the directory summary", async () => {
+		const { setup, session } = await makeSetup()
+		try {
+			const frame = setup.captureCharFrame()
+			const lines = frame.split("\n")
+			// The cursor starts on `notes.txt` (index 1 after `tester/`).
+			session.panes.left.cursor.set(1)
+			await settle(setup)
+			const detail = setup.captureCharFrame()
+			const detailLine = detail.split("\n").find((line) => line.includes("file · 26B"))
+			expect(detailLine).toBeDefined()
+			expect(detail).toContain("rw-r--r--")
+			// The detail block sits above the counts row, which still renders.
+			const countsIndex = detail.split("\n").findIndex((line) => line.includes("files"))
+			const detailIndex = detail.split("\n").findIndex((line) => line.includes("file · 26B"))
+			expect(detailIndex).toBeGreaterThan(-1)
+			expect(countsIndex).toBeGreaterThan(detailIndex)
+			expect(lines.length).toBeGreaterThan(0)
 		} finally {
 			setup.renderer.destroy()
 		}

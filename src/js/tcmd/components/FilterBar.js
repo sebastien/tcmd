@@ -12,8 +12,8 @@
 // the query matches no entry it shows a `no match` alert. The key hints live in
 // the command bar, not here.
 //
-// Environment: `accentFg` (the applied label), `dimFg` (the `/` prompt),
-// `errorFg` (the no-match alert).
+// Environment: `accentFg` (the applied label), `textSecondaryFg` (the `/`
+// prompt), `warningFg` (the no-match alert).
 
 import { unwrap } from "select/state/cells"
 
@@ -29,7 +29,7 @@ function createBehaviors(env) {
 		// The row exists while editing or once a non-empty filter is applied.
 		alert: (self, data) =>
 			activeQuery(self, data).length > 0 && matchCount(self, data) === 0 ? "no match" : "",
-		alertFg: () => env.errorFg,
+		alertFg: () => env.warningFg,
 		applied: (self, data) => !editing(self, data) && activeQuery(self, data).length > 0,
 		editing,
 		focused: editing,
@@ -40,7 +40,7 @@ function createBehaviors(env) {
 		// input and the accepted state read the same.
 		labelText: (self, data) => `/ ${queryText(self, data)}`,
 		prompt: () => "/ ",
-		promptFg: () => env.dimFg,
+		promptFg: () => env.textSecondaryFg,
 		visible: (self, data) => editing(self, data) || activeQuery(self, data).length > 0,
 	}
 }

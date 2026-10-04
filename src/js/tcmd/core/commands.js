@@ -25,7 +25,7 @@ const PAGE = 10
 const PALETTE_KEYS = [
 	{ id: null, title: "Navigate", keys: "↑/↓" },
 	{ id: null, title: "Complete", keys: "Tab" },
-	{ id: null, title: "Run", keys: "Enter" },
+	{ id: null, title: "Run", keys: "Enter", primary: true },
 	{ id: null, title: "Close", keys: "Esc" },
 ]
 
@@ -34,7 +34,7 @@ const PALETTE_KEYS = [
 // itself).
 const SCRIPT_KEYS = [
 	{ id: null, title: "Complete", keys: "Tab" },
-	{ id: null, title: "Run", keys: "Enter" },
+	{ id: null, title: "Run", keys: "Enter", primary: true },
 	{ id: null, title: "Close", keys: "Esc" },
 ]
 
@@ -42,7 +42,7 @@ const SCRIPT_KEYS = [
 // Command-bar hints shown while a pane filter is capturing input.
 const FILTER_KEYS = [
 	{ id: null, title: "Navigate", keys: "↑/↓" },
-	{ id: null, title: "Done", keys: "Enter" },
+	{ id: null, title: "Done", keys: "Enter", primary: true },
 	{ id: null, title: "Clear", keys: "Esc" },
 ]
 
@@ -107,6 +107,7 @@ const commands = [
 		keys: "Enter",
 		kind: "ui",
 		bar: true,
+		primary: true,
 		run(session) {
 			return pane(session).open()
 		},
@@ -258,7 +259,7 @@ const commands = [
 		run(session) {
 			const entry = session.previewEntry.value
 			if (!entry || entry.isDir) {
-				session.notice.set({ kind: "error", text: "no file to edit" })
+				session.notice.set({ kind: "warning", text: "no file to edit" })
 				return
 			}
 			return session.os.edit(entry.path).then(() => session.panes[session.active.value].refresh())
@@ -445,6 +446,7 @@ function commandRow(command) {
 		title: command.title,
 		keys: command.keys,
 		kind: command.kind ?? "ui",
+		primary: command.primary === true,
 		completion: command.completion ?? command.title,
 	}
 }

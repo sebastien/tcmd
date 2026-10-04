@@ -72,7 +72,21 @@ function createOpfsFs({ root, home = "/home/tester" } = {}) {
 	async function toEntry(dirPath, handle) {
 		const path = join(dirPath, handle.name)
 		if (handle.kind === "directory") {
-			return { name: handle.name, path, isDir: true, isSymlink: false, size: 0, mtimeMs: 0, ext: null }
+			return {
+				name: handle.name,
+				path,
+				isDir: true,
+				isSymlink: false,
+				isDevice: false,
+				size: 0,
+				mtimeMs: 0,
+				ctimeMs: 0,
+				mode: 0,
+				uid: null,
+				gid: null,
+				owner: "",
+				ext: null,
+			}
 		}
 		const file = await handle.getFile()
 		return {
@@ -80,8 +94,14 @@ function createOpfsFs({ root, home = "/home/tester" } = {}) {
 			path,
 			isDir: false,
 			isSymlink: false,
+			isDevice: false,
 			size: file.size,
 			mtimeMs: file.lastModified,
+			ctimeMs: 0,
+			mode: 0,
+			uid: null,
+			gid: null,
+			owner: "",
 			ext: extname(handle.name),
 		}
 	}
@@ -90,10 +110,11 @@ function createOpfsFs({ root, home = "/home/tester" } = {}) {
 	// Stat info for a file, a directory, or null when `path` does not exist.
 	async function stat(path) {
 		const normalized = normalize(path)
-		if (normalized === "/") return { isDir: true, isSymlink: false, size: 0, mtimeMs: 0 }
+		const zero = { ctimeMs: 0, mode: 0, uid: null, gid: null, owner: "" }
+		if (normalized === "/") return { isDir: true, isSymlink: false, isDevice: false, size: 0, mtimeMs: 0, ...zero }
 		try {
 			await resolveDir(normalized)
-			return { isDir: true, isSymlink: false, size: 0, mtimeMs: 0 }
+			return { isDir: true, isSymlink: false, isDevice: false, size: 0, mtimeMs: 0, ...zero }
 		} catch (error) {
 			// Not a directory (missing, or a file sits at this path).
 		}
@@ -101,7 +122,7 @@ function createOpfsFs({ root, home = "/home/tester" } = {}) {
 			const handle = await resolveFile(normalized)
 			if (!handle) return null
 			const file = await handle.getFile()
-			return { isDir: false, isSymlink: false, size: file.size, mtimeMs: file.lastModified }
+			return { isDir: false, isSymlink: false, isDevice: false, size: file.size, mtimeMs: file.lastModified, ...zero }
 		} catch (error) {
 			return null
 		}

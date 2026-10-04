@@ -41,15 +41,32 @@ function createMockFs(tree) {
 	async function stat(path) {
 		const normalized = normalize(path)
 		if (dirs.has(normalized)) {
-			return { isDir: true, isSymlink: false, size: 0, mtimeMs: 0 }
+			return {
+				isDir: true,
+				isSymlink: false,
+				isDevice: false,
+				size: 0,
+				mtimeMs: 0,
+				ctimeMs: 0,
+				mode: 0o040755,
+				uid: null,
+				gid: null,
+				owner: "",
+			}
 		}
 		const entry = findEntry(normalized)
 		if (!entry) return null
 		return {
 			isDir: false,
 			isSymlink: Boolean(entry.isSymlink),
+			isDevice: Boolean(entry.isDevice),
 			size: entry.size ?? entry.text?.length ?? 0,
 			mtimeMs: entry.mtimeMs ?? 0,
+			ctimeMs: entry.ctimeMs ?? 0,
+			mode: entry.mode ?? 0o100644,
+			uid: entry.uid ?? null,
+			gid: entry.gid ?? null,
+			owner: entry.owner ?? "",
 		}
 	}
 
@@ -108,8 +125,14 @@ function createMockFs(tree) {
 				path: join(path, entry.name),
 				isDir: Boolean(entry.isDir),
 				isSymlink: Boolean(entry.isSymlink),
+				isDevice: Boolean(entry.isDevice),
 				size: entry.isDir ? 0 : entry.size ?? entry.text?.length ?? 0,
 				mtimeMs: entry.mtimeMs ?? 0,
+				ctimeMs: entry.ctimeMs ?? 0,
+				mode: entry.isDir ? 0o040755 : entry.mode ?? 0o100644,
+				uid: entry.uid ?? null,
+				gid: entry.gid ?? null,
+				owner: entry.owner ?? "",
 				ext: entry.isDir ? null : extname(entry.name),
 			}))
 		},

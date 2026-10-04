@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { createPane } from "../../src/js/tcmd/core/pane.js"
 import { createSession, load } from "../../src/js/tcmd/core/session.js"
-import { getCommand, getCommands } from "../../src/js/tcmd/core/commands.js"
+import { getCommand, getCommandBarItems, getCommands } from "../../src/js/tcmd/core/commands.js"
 import { createMockFs } from "../helpers/mock-fs.js"
 
 const TREE = {
@@ -98,6 +98,14 @@ describe("commands", () => {
 	test("unknown commands are ignored", () => {
 		const session = makeSession()
 		expect(session.dispatch("nope")).toBeNull()
+	})
+
+	test("the command bar marks the Open action as primary", () => {
+		const items = getCommandBarItems(false, "ui", null)
+		const open = items.find((item) => item.id === "pane.enter")
+		expect(open.primary).toBe(true)
+		const others = items.filter((item) => item.id && item.id !== "pane.enter")
+		expect(others.every((item) => item.primary !== true)).toBe(true)
 	})
 
 	test("failures land on the active pane error", async () => {

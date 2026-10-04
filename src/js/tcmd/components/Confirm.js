@@ -9,8 +9,8 @@
 // pending question; App routes y/enter to `confirm.yes` and n/esc to
 // `confirm.no`.
 //
-// Environment: `paletteBg` (surface), `errorFg` (border), `titleFg` (text),
-// `dimFg` (key hints).
+// Environment: `overlayBg` (surface), `errorFg` (border), `textHeadingFg`
+// (text), `textSecondaryFg` (key hints).
 
 import { unwrap } from "select/state/cells"
 
@@ -18,15 +18,15 @@ import { unwrap } from "select/state/cells"
 // Builds the Confirm behavior map for the given renderer environment.
 function createBehaviors(env) {
 	return {
-		bg: () => env.paletteBg,
+		bg: () => env.overlayBg,
 		borderFg: () => env.errorFg,
-		keysFg: () => env.dimFg,
+		keysFg: () => env.textSecondaryFg,
 		text: (_self, data) => {
 			const pending = unwrap(data.confirm)
 			if (!pending) return ""
 			return `${pending.text ?? ""}  [y]es [n]o`
 		},
-		textFg: () => env.titleFg,
+		textFg: () => env.textHeadingFg,
 		visible: (_self, data) => Boolean(unwrap(data.confirm)),
 	}
 }

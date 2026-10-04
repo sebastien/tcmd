@@ -28,11 +28,16 @@ describe("CommandBar", () => {
 		expect(behaviors.showKeys(null, error)).toBe(false)
 		expect(behaviors.statusClass(null, error)).toBe("is-error")
 
-		const notice = { leftError: null, notice: { kind: "info", text: "copied 3 files" }, rightError: null }
+		const notice = { leftError: null, notice: { kind: "tip", text: "copied 3 files" }, rightError: null }
 		expect(behaviors.status(null, notice)).toBe("copied 3 files")
 		expect(behaviors.showStatus(null, notice)).toBe(true)
 		expect(behaviors.statusClass(null, notice)).toBeNull()
-		expect(behaviors.statusFg(null, notice)).toBe("accent")
+		expect(behaviors.statusFg(null, notice)).toBe("tip")
+		expect(behaviors.statusBg(null, notice)).toBe("tipBg")
+
+		const warning = { leftError: null, notice: { kind: "warning", text: "no file to edit" }, rightError: null }
+		expect(behaviors.statusFg(null, warning)).toBe("warning")
+		expect(behaviors.statusBg(null, warning)).toBe("warningBg")
 	})
 
 	test("prefers the session notice over pane errors", () => {

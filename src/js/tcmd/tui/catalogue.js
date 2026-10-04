@@ -22,6 +22,7 @@ import commandItemXml from "../components/CommandItem.xml" with { type: "text" }
 import commandPaletteXml from "../components/CommandPalette.xml" with { type: "text" }
 import confirmXml from "../components/Confirm.xml" with { type: "text" }
 import crumbXml from "../components/Crumb.xml" with { type: "text" }
+import entryDetailXml from "../components/EntryDetail.xml" with { type: "text" }
 import fileListXml from "../components/FileList.xml" with { type: "text" }
 import filePreviewXml from "../components/FilePreview.xml" with { type: "text" }
 import fileRowXml from "../components/FileRow.xml" with { type: "text" }
@@ -43,6 +44,7 @@ import {
 	confirmBehaviors,
 	crumbBehaviors,
 	crumbRows,
+	entryDetailBehaviors,
 	fileListBehaviors,
 	filePreviewBehaviors,
 	fileRowBehaviors,
@@ -65,20 +67,33 @@ let registered = false
 // The TUI renderer environment: OpenTUI colors plus TUI-only hooks.
 function tuiEnv() {
 	return {
+		accentBg: tuiTheme.accentBg,
 		accentFg: tuiTheme.accentFg,
-		borderFg: tuiTheme.borderFg,
+		accentSecondaryBg: tuiTheme.accentSecondaryBg,
+		accentSecondaryFg: tuiTheme.accentSecondaryFg,
+		borderPrimaryActiveFg: tuiTheme.borderPrimaryActiveFg,
+		borderPrimaryFg: tuiTheme.borderPrimaryFg,
+		borderSecondaryActiveFg: tuiTheme.borderSecondaryActiveFg,
+		borderSecondaryFg: tuiTheme.borderSecondaryFg,
 		cursorBg: tuiTheme.cursorBg,
-		dimFg: tuiTheme.dimFg,
+		devFg: tuiTheme.devFg,
 		dirFg: tuiTheme.dirFg,
+		errorBg: tuiTheme.errorBg,
 		errorFg: tuiTheme.errorFg,
-		frameBorderFg: tuiTheme.frameBorderFg,
-		lineFg: tuiTheme.dimFg,
-		markFg: tuiTheme.markFg,
-		paletteBg: tuiTheme.paletteBg,
-		panelBg: tuiTheme.panelBg,
-		selectedBg: tuiTheme.selectedBg,
+		fileFg: tuiTheme.fileFg,
+		lineFg: tuiTheme.textSecondaryFg,
+		linkFg: tuiTheme.linkFg,
+		mutedBg: tuiTheme.mutedBg,
+		overlayBg: tuiTheme.overlayBg,
+		selectionBg: tuiTheme.selectionBg,
+		surfaceBg: tuiTheme.surfaceBg,
 		textFg: tuiTheme.textFg,
-		titleFg: tuiTheme.titleFg,
+		textHeadingFg: tuiTheme.textHeadingFg,
+		textSecondaryFg: tuiTheme.textSecondaryFg,
+		tipBg: tuiTheme.tipBg,
+		tipFg: tuiTheme.tipFg,
+		warningBg: tuiTheme.warningBg,
+		warningFg: tuiTheme.warningFg,
 	}
 }
 
@@ -186,6 +201,7 @@ function createComponents() {
 			scrollTop: paletteScrollTop,
 		})),
 		Confirm: bind(ui, "Confirm", confirmXml, confirmBehaviors(env)),
+		EntryDetail: bind(ui, "EntryDetail", entryDetailXml, entryDetailBehaviors(env)),
 		FileList: bind(ui, "FileList", fileListXml, fileListBehaviors({
 			...env,
 			rows: fileRows(fileRow),
@@ -232,6 +248,7 @@ function registerComponents() {
 		commandbar: components.CommandBar,
 		commandpalette: components.CommandPalette,
 		confirm: components.Confirm,
+		entrydetail: components.EntryDetail,
 		filelist: components.FileList,
 		filepreview: components.FilePreview,
 		filterbar: components.FilterBar,

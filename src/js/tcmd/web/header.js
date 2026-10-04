@@ -8,8 +8,8 @@
 // `TinyCmd - HOST DIR/BASE` for the active pane's directory (compressed to fit).
 // Web-only: the TUI carries the same identity in the frame border title.
 //
-// Environment: `titleFg`, plus `width(self)` returning the available columns
-// (renderer-specific; 0/omitted disables compression).
+// Environment: `textHeadingFg`, plus `width(self)` returning the available
+// columns (renderer-specific; 0/omitted disables compression).
 
 import { unwrap } from "select/state/cells"
 import { formatTitle } from "../components/format.js"
@@ -20,7 +20,7 @@ function createBehaviors(env) {
 	return {
 		title: (self, data) =>
 			formatTitle(unwrap(data.host), unwrap(data.path), env.width ? env.width(self, data) : 0),
-		titleFg: () => env.titleFg,
+		titleFg: () => env.textHeadingFg,
 	}
 }
 

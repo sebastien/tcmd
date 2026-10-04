@@ -9,7 +9,7 @@
 // `unwrap` at the point of use. Script rows carry a `detail` (operation
 // signature, fileset count) appended to the label.
 //
-// Environment: `accentFg`, `textFg`, `selectedBg` (TUI row background),
+// Environment: `accentFg`, `textFg`, `selectionBg` (TUI row background),
 // `selectedClass` (web).
 
 import { unwrap } from "select/state/cells"
@@ -28,7 +28,7 @@ function paletteLabel(command) {
 function createBehaviors(env) {
 	return {
 		paletteLabel: (_self, data) => paletteLabel(data.item),
-		rowBg: (_self, data) => (data.index === unwrap(data.selected) ? env.selectedBg : undefined),
+		rowBg: (_self, data) => (data.index === unwrap(data.selected) ? env.selectionBg : undefined),
 		rowClass: (_self, data) =>
 			data.index === unwrap(data.selected) ? env.selectedClass : null,
 		rowFg: (_self, data) =>

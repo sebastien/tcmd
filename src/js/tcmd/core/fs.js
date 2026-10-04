@@ -9,7 +9,8 @@
 //
 // An adapter provides:
 // - `readDir(path)`: Promise<FileEntry-like[]> - directory listing with stat info
-// - `stat(path)`: Promise<{ isDir, isSymlink, size, mtimeMs } | null>
+// - `stat(path)`: Promise<{ isDir, isSymlink, size, mtimeMs, ctimeMs, mode, uid,
+//   gid } | null>
 // - `isDir(path)`: Promise<boolean>
 // - `readTextHead(path, maxBytes)`: Promise<string> - leading bytes as text
 // - `du(path)`: Promise<number> - recursive size in bytes
@@ -25,6 +26,43 @@ import nodeOs from "node:os"
 import nodePath from "node:path"
 import { extname, join as pathJoin } from "./path.js"
 
+// Owner-name caches, filled lazily from /etc/passwd and /etc/group. Browsers
+// and non-POSIX hosts never populate them (the adapters there omit `owner`).
+let passwdNames = null
+let groupNames = null
+
+// Function: resolveOwner
+// "user:group" for a uid/gid, resolving names from /etc/passwd and /etc/group
+// (cached once). Falls back to the numeric ids, or "" when both are absent.
+async function resolveOwner(uid, gid) {
+	if (uid == null && gid == null) return ""
+	if (process.platform !== "win32") {
+		passwdNames ??= await parseColonFile("/etc/passwd", 2)
+		groupNames ??= await parseColonFile("/etc/group", 2)
+	}
+	const user = uid == null ? "" : passwdNames?.get(uid) ?? `${uid}`
+	const group = gid == null ? "" : groupNames?.get(gid) ?? `${gid}`
+	return user && group ? `${user}:${group}` : user || group
+}
+
+// Function: parseColonFile
+// Reads a passwd/group-style file into a `{ id -> name }` map; unreadable
+// files yield an empty map (names then fall back to the numeric id).
+async function parseColonFile(path, nameColumn) {
+	const map = new Map()
+	try {
+		const text = await fs.readFile(path, "utf8")
+		for (const line of text.split("\n")) {
+			const parts = line.split(":")
+			const id = Number(parts[2])
+			if (parts.length > nameColumn && Number.isFinite(id)) map.set(id, parts[0])
+		}
+	} catch (error) {
+		// No passwd/group file: numeric ids only.
+	}
+	return map
+}
+
 function toEntry(name, dirPath, isDir, stats) {
 	const stat = stats || {}
 	return {
@@ -32,10 +70,23 @@ function toEntry(name, dirPath, isDir, stats) {
 		path: pathJoin(dirPath, name),
 		isDir,
 		isSymlink: Boolean(stat.isSymlink),
+		isDevice: Boolean(stat.isDevice),
 		size: isDir ? 0 : stat.size ?? 0,
 		mtimeMs: stat.mtimeMs ?? 0,
+		ctimeMs: stat.ctimeMs ?? 0,
+		mode: stat.mode ?? 0,
+		uid: stat.uid ?? null,
+		gid: stat.gid ?? null,
 		ext: isDir ? null : extname(name),
 	}
+}
+
+// Function: isDeviceNode
+// True when a stat/dirent is a special node (block/char device, FIFO, socket).
+function isDeviceNode(node) {
+	return Boolean(
+		node?.isBlockDevice?.() || node?.isCharacterDevice?.() || node?.isFIFO?.() || node?.isSocket?.(),
+	)
 }
 
 // Function: createNodeFs
@@ -48,14 +99,18 @@ function createNodeFs() {
 			for (let i = 0; i < dirents.length; i++) {
 				const d = dirents[i]
 				const full = pathJoin(path, d.name)
-				const stats = d.isDirectory()
-					? null
-					: await statSafe(full)
+				const stats = await statSafe(full)
 				entries[i] = toEntry(d.name, path, d.isDirectory(), {
 					isSymlink: d.isSymbolicLink(),
+					isDevice: isDeviceNode(d),
 					size: stats?.size ?? 0,
 					mtimeMs: stats?.mtimeMs ?? 0,
+					ctimeMs: stats?.ctimeMs ?? 0,
+					mode: stats?.mode ?? 0,
+					uid: stats?.uid ?? null,
+					gid: stats?.gid ?? null,
 				})
+				entries[i].owner = await resolveOwner(stats?.uid, stats?.gid)
 			}
 			return entries
 		},
@@ -168,8 +223,14 @@ async function statSafe(path) {
 		return {
 			isDir: stats.isDirectory(),
 			isSymlink: stats.isSymbolicLink(),
+			isDevice: isDeviceNode(stats),
 			size: stats.size,
 			mtimeMs: stats.mtimeMs,
+			ctimeMs: stats.ctimeMs,
+			mode: stats.mode,
+			uid: stats.uid,
+			gid: stats.gid,
+			owner: await resolveOwner(stats.uid, stats.gid),
 		}
 	} catch (error) {
 		return null

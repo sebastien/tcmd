@@ -15,15 +15,15 @@ import { helpLines } from "./frame.js"
 // Builds the Help behavior map for the given TUI environment.
 function createBehaviors(env) {
 	return {
-		bg: () => env.theme.panelBg,
-		borderFg: () => env.theme.borderFg,
-		dimFg: () => env.theme.dimFg,
+		bg: () => env.theme.surfaceBg,
+		borderFg: () => env.theme.borderPrimaryActiveFg,
+		dimFg: () => env.theme.textSecondaryFg,
 		hint: () => " Esc / ? close ",
 		open: (_self, data) => Boolean(unwrap(data.open)),
 		text: () => helpLines().join("\n"),
 		textFg: () => env.theme.textFg,
 		title: () => " Keys ",
-		titleFg: () => env.theme.titleFg,
+		titleFg: () => env.theme.textHeadingFg,
 	}
 }
 

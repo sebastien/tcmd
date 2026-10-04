@@ -20,6 +20,7 @@ export { createBehaviors as commandItemBehaviors } from "./CommandItem.js"
 export { createBehaviors as commandPaletteBehaviors } from "./CommandPalette.js"
 export { createBehaviors as confirmBehaviors } from "./Confirm.js"
 export { createBehaviors as crumbBehaviors } from "./Crumb.js"
+export { createBehaviors as entryDetailBehaviors } from "./EntryDetail.js"
 export { createBehaviors as fileListBehaviors } from "./FileList.js"
 export { createBehaviors as filePreviewBehaviors } from "./FilePreview.js"
 export { createBehaviors as fileRowBehaviors } from "./FileRow.js"
@@ -30,7 +31,7 @@ export { createBehaviors as tabBarBehaviors } from "./TabBar.js"
 export { createBehaviors as tabItemBehaviors } from "./TabItem.js"
 
 // Helpers
-export { formatCounts, formatDisk, formatSize } from "./format.js"
+export { formatCounts, formatDisk, formatMode, formatSize, formatTime } from "./format.js"
 export { commandItemRows, crumbRows, fileRows, paletteRows, tabItemRows } from "./rows.js"
 
 // EOF

@@ -44,8 +44,10 @@ describe("golden frames", () => {
 			expect(frame).toContain("directory: documents/")
 			expect(frame).toContain("[O]pen [E]dit")
 			// The status bar shows hints on the left, inside the frame.
-			const bar = frame.split("\n").find((line) => line.includes("Open[Enter]"))
+			const bar = frame.split("\n").find((line) => line.includes("Open") && line.includes("Enter"))
 			expect(bar).toBeDefined()
+			expect(bar).toContain("")
+			expect(bar).toContain("")
 			// No scrollbar chrome: the content is tracked by keepVisible.
 			expect(frame).not.toContain("█")
 			for (const width of widths(frame)) {
@@ -146,7 +148,8 @@ describe("golden frames", () => {
 			await settle(setup)
 			const narrow = setup.captureCharFrame()
 			expect(narrow).not.toContain("[O]pen [E]dit")
-			expect(narrow).toContain("Switch[Tab]")
+			expect(narrow).toContain("Switch")
+			expect(narrow).toContain("Tab")
 			expect(narrow).not.toContain("New tab[t]")
 
 			// Grow again: the inspector returns.

@@ -18,6 +18,7 @@ import commandItemHtml from "../components/CommandItem.html" with { type: "text"
 import commandPaletteHtml from "../components/CommandPalette.html" with { type: "text" }
 import confirmHtml from "../components/Confirm.html" with { type: "text" }
 import crumbHtml from "../components/Crumb.html" with { type: "text" }
+import entryDetailHtml from "../components/EntryDetail.html" with { type: "text" }
 import fileListHtml from "../components/FileList.html" with { type: "text" }
 import filePreviewHtml from "../components/FilePreview.html" with { type: "text" }
 import fileRowHtml from "../components/FileRow.html" with { type: "text" }
@@ -39,6 +40,7 @@ import {
 	confirmBehaviors,
 	crumbBehaviors,
 	crumbRows,
+	entryDetailBehaviors,
 	fileListBehaviors,
 	filePreviewBehaviors,
 	fileRowBehaviors,
@@ -111,6 +113,7 @@ function createComponents() {
 			rows: paletteRows(paletteRow),
 		})),
 		Confirm: bind(ui, "Confirm", confirmHtml, confirmBehaviors(webTheme)),
+		EntryDetail: bind(ui, "EntryDetail", entryDetailHtml, entryDetailBehaviors(webTheme)),
 		FileList: bind(ui, "FileList", fileListHtml, fileListBehaviors({
 			...webTheme,
 			rows: fileRows(fileRow),
@@ -142,6 +145,7 @@ function registerWebComponents() {
 	ui.format("CommandBar", components.CommandBar)
 	ui.format("CommandPalette", components.CommandPalette)
 	ui.format("Confirm", components.Confirm)
+	ui.format("EntryDetail", components.EntryDetail)
 	ui.format("FileList", components.FileList)
 	ui.format("FilePreview", components.FilePreview)
 	ui.format("FilterBar", components.FilterBar)

@@ -67,4 +67,19 @@ describe("tab", () => {
 		expect(tab.filter.value).toBe("")
 		expect(tab.entries.value.map((e) => e.name)).toEqual(["tester", "notes.txt"])
 	})
+
+	test("cursorStat enriches the selected entry with stat-only fields", async () => {
+		const tab = createTab({ fs: createMockFs(TREE), path: "/home", label: "A", marks: cell({}) })
+		await tab.refresh()
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(tab.cursorStat.value.name).toBe("tester")
+		expect(tab.cursorStat.value.isDir).toBe(true)
+
+		tab.cursor.set(1) // notes.txt
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(tab.cursorStat.value.name).toBe("notes.txt")
+		expect(tab.cursorStat.value.mode).toBe(0o100644)
+		expect(tab.cursorStat.value.owner).toBe("")
+		tab.dispose()
+	})
 })

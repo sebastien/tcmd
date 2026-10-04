@@ -60,12 +60,14 @@ function createSession({ fs, os, left, right, host }) {
 	// the input so keystrokes never leak into another pane's filter.
 	effect([session.active, left.activeIndex, right.activeIndex], () => session.filtering.set(null))
 
-	// The entry under the cursor of each pane, as a small plain object.
-	session.leftCursorEntry = derived([left.entries, left.cursor], ([entries, cursor]) =>
-		entrySummary(entries[cursor]),
+	// The entry under the cursor of each pane, as a small plain object. The
+	// stat details (ctime, mode, uid, gid) come from the tab's lazy
+	// `cursorStat`, so the pane detail line updates as the cursor moves.
+	session.leftCursorEntry = derived([left.entries, left.cursor, left.cursorStat], ([entries, cursor, stat]) =>
+		entrySummary(stat ?? entries[cursor]),
 	)
-	session.rightCursorEntry = derived([right.entries, right.cursor], ([entries, cursor]) =>
-		entrySummary(entries[cursor]),
+	session.rightCursorEntry = derived([right.entries, right.cursor, right.cursorStat], ([entries, cursor, stat]) =>
+		entrySummary(stat ?? entries[cursor]),
 	)
 
 	// Preview target: a `view`/`stat` pin, or the active pane's cursor entry.
@@ -205,7 +207,21 @@ async function load(session) {
 
 function entrySummary(entry) {
 	if (!entry) return null
-	return { name: entry.name, path: entry.path, isDir: entry.isDir, size: entry.size, ext: entry.ext }
+	return {
+		name: entry.name,
+		path: entry.path,
+		isDir: entry.isDir,
+		isSymlink: entry.isSymlink,
+		isDevice: entry.isDevice,
+		size: entry.size,
+		mtimeMs: entry.mtimeMs,
+		ctimeMs: entry.ctimeMs,
+		mode: entry.mode,
+		uid: entry.uid,
+		gid: entry.gid,
+		owner: entry.owner,
+		ext: entry.ext,
+	}
 }
 
 // Function: collectFilesets

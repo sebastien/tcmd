@@ -19,6 +19,7 @@ Advanced features:
 
 Main components:
 - FileList: list of files, directory first, configurable details, selection, filter
+- EntryDetail: the selected entry's metadata block (mtime/type/size and ctime/owner/mode)
 - FilePreview: preview of file (text, image, PDF, audio, video, generic file)
 - PathBreadcrumbs: clickable list of path elements
 - PathSummary: number of files, dirs, weight, disk available on a compact line

@@ -1,0 +1,14 @@
+<box flexDirection="column" height="3" out:border="detailBorder" out:borderColor="detailBorderFg"
+     borderStyle="single" overflow="hidden">
+	<box flexDirection="row" height="1" overflow="hidden">
+		<text when="detailHasLead" out="detailLead" out:fg="dimFg" wrapMode="none"></text>
+		<text out="detailType" out:fg="detailTypeFg" wrapMode="none"></text>
+		<text when="detailHasTail" out="detailTail" out:fg="dimFg" wrapMode="none" truncate="true"></text>
+	</box>
+	<box flexDirection="row" height="1" overflow="hidden">
+		<text when="metaHasLead" out="metaLead" out:fg="dimFg" wrapMode="none"></text>
+		<text when="metaHasOwner" out="metaOwner" out:fg="dimFg" wrapMode="none" truncate="true"></text>
+		<text when="metaHasSep" out="metaSep" out:fg="dimFg" wrapMode="none"></text>
+		<text when="metaHasMode" out="metaMode" out:fg="metaModeFg" wrapMode="none"></text>
+	</box>
+</box>

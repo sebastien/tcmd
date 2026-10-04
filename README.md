@@ -37,8 +37,9 @@ pane (`Enter` keeps it, `Esc` clears), `^P` command palette, `:` scripting mode,
 `!` run a shell command, `^R` reload, `?` key reference, `q` quit.
 
 The workspace is a single rounded frame. The frame title carries the active
-path; each pane has one header row (tabs + breadcrumbs + the inline filter) and
-one summary row, so the two panes stay aligned. A context-aware inspector sits
+path; each pane has one header row (tabs + breadcrumbs + the inline filter), an
+entry-detail block for the selected entry, and one summary row, so the two panes
+stay aligned. A context-aware inspector sits
 on the right when the terminal is at least 100 columns wide, and becomes a
 fullscreen viewer below that. The status bar keeps the key hints on the left and
 notices/errors on the right, so an error never hides the hints. Below 64×16 the

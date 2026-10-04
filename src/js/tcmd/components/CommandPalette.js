@@ -9,9 +9,10 @@
 // `:`. The row logic lives in `PaletteRow.js`; this parent maps its `items` to
 // rows.
 //
-// Environment: `paletteBg`, `borderFg`, `dimFg` (footer), `titleFg` (exposed
-// as the `titleColor` behavior), `rows(data)` returning the keyed rows and
-// `scrollTop(self, data)` (TUI viewport tracking).
+// Environment: `overlayBg`, `borderPrimaryActiveFg`, `textSecondaryFg`
+// (footer), `textHeadingFg` (exposed as the `titleColor` behavior),
+// `rows(data)` returning the keyed rows and `scrollTop(self, data)` (TUI
+// viewport tracking).
 
 import { unwrap } from "select/state/cells"
 
@@ -30,18 +31,18 @@ function paletteTitle(mode) {
 // Builds the CommandPalette behavior map for the given renderer environment.
 function createBehaviors(env) {
 	const behaviors = {
-		bg: () => env.paletteBg,
-		borderFg: () => env.borderFg,
+		bg: () => env.overlayBg,
+		borderFg: () => env.borderPrimaryActiveFg,
 		confirm: (self, data) => self.pub("palette:confirm", unwrap(data.query) ?? ""),
 		focused: (_self, data) => Boolean(unwrap(data.open)),
 		footer: (_self, data) =>
 			unwrap(data.mode) === "script"
 				? "Tab complete   ↵ run   Esc close"
 				: "↑↓ move   Tab complete   ↵ run   Esc close",
-		footerFg: () => env.dimFg,
+		footerFg: () => env.textSecondaryFg,
 		sign: (_self, data) => paletteSign(data.mode),
 		title: (_self, data) => paletteTitle(data.mode),
-		titleColor: () => env.titleFg,
+		titleColor: () => env.textHeadingFg,
 	}
 	if (env?.rows) {
 		behaviors.rows = (_self, data) => env.rows(data)

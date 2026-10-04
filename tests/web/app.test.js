@@ -64,6 +64,11 @@ describe("web app", () => {
 			expect(host.querySelectorAll(".file-row.is-current").length).toBeGreaterThan(0)
 			expect(host.querySelectorAll(".name.is-dir").length).toBeGreaterThan(0)
 			expect(host.querySelector(".crumb.is-root")).not.toBeNull()
+			// The entry detail sits between the list and the summary.
+			const detail = host.querySelector(".pane-left .entry-detail")
+			expect(detail).not.toBeNull()
+			// Cursor starts on the `tester/` directory.
+			expect(detail.textContent).toContain("drwxr-xr-x")
 			// One labelled tab per pane plus the add affordance.
 			expect(host.querySelectorAll(".pane-left .tab").length).toBe(1)
 			expect(host.querySelector(".pane-left .tab.is-active")).not.toBeNull()

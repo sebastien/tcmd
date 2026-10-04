@@ -27,6 +27,7 @@
 					</box>
 					<filelist in:entries="leftEntries" in:cursor="leftCursor" in:marked="leftMarked"
 					          in:paneId="leftId" in:loading="leftLoading"></filelist>
+					<entrydetail in:entry="leftEntry" height="3"></entrydetail>
 					<summary in:entries="leftEntries" in:disk="leftDisk" height="1"></summary>
 				</box>
 				<box flexDirection="column" flexGrow="1" out:border="rightDivider" out:borderColor="rightBorderFg"
@@ -40,6 +41,7 @@
 					</box>
 					<filelist in:entries="rightEntries" in:cursor="rightCursor" in:marked="rightMarked"
 					          in:paneId="rightId" in:loading="rightLoading"></filelist>
+					<entrydetail in:entry="rightEntry" height="3"></entrydetail>
 					<summary in:entries="rightEntries" in:disk="rightDisk" height="1"></summary>
 				</box>
 				<filepreview when="showInspectorInline" in:preview="preview" in:show="showInspectorInline"

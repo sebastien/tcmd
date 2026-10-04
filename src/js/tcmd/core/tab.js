@@ -17,6 +17,23 @@ import { SEP, parent as parentPath, split, prefix } from "./path.js"
 
 let TAB_SEQ = 0
 
+// Function: enrichEntry
+// Merges `stat` details (ctime, mode, uid, gid) the listing may not carry.
+async function enrichEntry(fs, entry) {
+	if (!entry) return null
+	const stats = await fs.stat(entry.path).catch(() => null)
+	if (!stats) return entry
+	return {
+		...entry,
+		size: entry.isDir ? 0 : (stats.size ?? entry.size),
+		mtimeMs: stats.mtimeMs ?? entry.mtimeMs,
+		ctimeMs: stats.ctimeMs ?? entry.ctimeMs,
+		mode: stats.mode ?? entry.mode,
+		uid: stats.uid ?? entry.uid,
+		gid: stats.gid ?? entry.gid,
+	}
+}
+
 // Function: createTab
 // Creates tab state bound to a filesystem adapter and a pane-level marks cell
 // (a `{ [tabId]: Set<path> }` map), so selections across tabs stay reactive.
@@ -41,6 +58,11 @@ function createTab({ fs, path: initialPath, label = "A", marks = cell({}) }) {
 	)
 	tab.cursor = cell(0)
 	tab.disk = cell(null)
+	// Stat details (ctime, mode, uid, gid) for the entry under the cursor,
+	// fetched lazily: listings only carry size/mtime, so the pane detail line
+	// re-stats the selected path when the cursor moves (cached by path).
+	tab.cursorStat = cell(null)
+	let cursorStatPath = null
 	// Selection buffer: a reactive view into the pane's marks map, so every
 	// tab's marks can be observed from one cell (the session filesets).
 	tab.marked = marks.select(tab.id, new Set())
@@ -48,6 +70,18 @@ function createTab({ fs, path: initialPath, label = "A", marks = cell({}) }) {
 	// A changing filter re-ranks the listing: snap the cursor back to the top
 	// match. Disposed with the tab (see `dispose`).
 	const stopFilterWatch = effect([tab.filter], () => tab.cursor.set(0))
+
+	// Re-stat the cursor entry on movement; cache by path so a re-render that
+	// does not move the cursor does not hit the filesystem again.
+	const stopCursorWatch = effect([tab.entries, tab.cursor], () => {
+		const entry = currentEntry(tab.entries.value, tab.cursor.value)
+		if (!entry || entry.path === cursorStatPath) return
+		cursorStatPath = entry.path
+		tab.cursorStat.set(entry)
+		void enrichEntry(fs, entry).then((enriched) => {
+			if (cursorStatPath === entry.path) tab.cursorStat.set(enriched)
+		})
+	})
 
 	// Function: refresh
 	// Re-reads the directory at `tab.path`, updating `rawEntries` and clamping
@@ -116,7 +150,10 @@ function createTab({ fs, path: initialPath, label = "A", marks = cell({}) }) {
 
 	// Function: dispose
 	// Releases the tab's reactive watchers; the pane calls it on close.
-	tab.dispose = () => stopFilterWatch()
+	tab.dispose = () => {
+		stopFilterWatch()
+		stopCursorWatch()
+	}
 
 	return tab
 }

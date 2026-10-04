@@ -1,3 +1,7 @@
 <box flexDirection="row" height="1" on:click="item.id!commandbar:run">
-	<text out="itemLabel" out:fg="itemFg" wrapMode="none" truncate="true"></text>
+	<text out="opLeft" out:fg="opLeftFg" out:bg="opLeftBg" wrapMode="none"></text>
+	<text out="op" out:fg="opFg" out:bg="opBg" wrapMode="none"></text>
+	<text out="mid" out:fg="midFg" out:bg="midBg" wrapMode="none"></text>
+	<text out="key" out:fg="keyFg" out:bg="keyBg" wrapMode="none"></text>
+	<text out="end" out:fg="endFg" out:bg="endBg" wrapMode="none"></text>
 </box>

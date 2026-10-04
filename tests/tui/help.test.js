@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test"
 import { createBehaviors } from "../../src/js/tcmd/tui/help.js"
 
 const theme = {
-	borderFg: "border",
-	dimFg: "dim",
-	panelBg: "panel",
+	borderPrimaryActiveFg: "border",
+	textSecondaryFg: "dim",
+	surfaceBg: "panel",
 	textFg: "text",
-	titleFg: "title",
+	textHeadingFg: "title",
 }
 
 describe("tui help", () => {

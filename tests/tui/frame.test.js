@@ -2,12 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { BAR_COMPACT_WIDTH, createFrameBehaviors, helpLines, INSPECTOR_INLINE_WIDTH, keyGlyph } from "../../src/js/tcmd/tui/frame.js"
 
 const theme = {
-	borderFg: "border",
-	dimFg: "dim",
-	frameBorderFg: "frame",
-	selectedBg: "selected",
-	textFg: "text",
-	titleFg: "title",
+	borderPrimaryFg: "frame",
+	textHeadingFg: "title",
 }
 
 // A fake instance whose renderer dimensions stand in for the viewport.
