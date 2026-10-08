@@ -17,6 +17,8 @@
 
 import { extend, ui } from "select.tui"
 import { unwrap } from "select/state/cells"
+import bookmarkListXml from "../components/BookmarkList.xml" with { type: "text" }
+import bookmarkRowXml from "../components/BookmarkRow.xml" with { type: "text" }
 import commandBarXml from "../components/CommandBar.xml" with { type: "text" }
 import commandItemXml from "../components/CommandItem.xml" with { type: "text" }
 import commandPaletteXml from "../components/CommandPalette.xml" with { type: "text" }
@@ -28,14 +30,16 @@ import filePreviewXml from "../components/FilePreview.xml" with { type: "text" }
 import fileRowXml from "../components/FileRow.xml" with { type: "text" }
 import filterBarXml from "../components/FilterBar.xml" with { type: "text" }
 import helpXml from "../components/Help.xml" with { type: "text" }
+import paneLabelXml from "../components/PaneLabel.xml" with { type: "text" }
 import paletteRowXml from "../components/PaletteRow.xml" with { type: "text" }
 import rowListXml from "../components/RowList.xml" with { type: "text" }
 import summaryXml from "../components/Summary.xml" with { type: "text" }
-import tabBarXml from "../components/TabBar.xml" with { type: "text" }
-import tabItemXml from "../components/TabItem.xml" with { type: "text" }
 
 import {
 	bind,
+	bookmarkListBehaviors,
+	bookmarkRowBehaviors,
+	bookmarkRows,
 	breadcrumbsBehaviors,
 	commandBarBehaviors,
 	commandItemBehaviors,
@@ -50,12 +54,10 @@ import {
 	fileRowBehaviors,
 	fileRows,
 	filterBarBehaviors,
+	paneLabelBehaviors,
 	paletteRowBehaviors,
 	paletteRows,
 	summaryBehaviors,
-	tabBarBehaviors,
-	tabItemBehaviors,
-	tabItemRows,
 } from "../components/index.js"
 import { createBehaviors as helpBehaviors } from "./help.js"
 import { INSPECTOR_INLINE_WIDTH } from "./frame.js"
@@ -76,6 +78,7 @@ function tuiEnv() {
 		borderSecondaryActiveFg: tuiTheme.borderSecondaryActiveFg,
 		borderSecondaryFg: tuiTheme.borderSecondaryFg,
 		cursorBg: tuiTheme.cursorBg,
+		cursorInactiveBg: tuiTheme.cursorInactiveBg,
 		devFg: tuiTheme.devFg,
 		dirFg: tuiTheme.dirFg,
 		errorBg: tuiTheme.errorBg,
@@ -101,6 +104,27 @@ function tuiEnv() {
 // Display width of a string, counting wide CJK/emoji cells as two.
 function measure(text) {
 	return globalThis.Bun?.stringWidth ? globalThis.Bun.stringWidth(text) : `${text}`.length
+}
+
+// Function: elide
+// Truncate `text` to `width` columns with a trailing ellipsis.
+function elide(text, width) {
+	if (width < 12 || measure(text) <= width) return text
+	return `${text.slice(0, Math.max(0, width - 1))}…`
+}
+
+// Function: paneWidth
+// Content width of a pane from the instance box, falling back to a viewport
+// estimate (panes share the width, minus the inspector when inline) because
+// the box geometry is unresolved when a behavior first runs. The next render
+// uses the real width.
+function paneWidth(self) {
+	const own = Math.floor(self.ref.box?.width ?? 0)
+	if (own > 0) return own
+	const total = Math.floor(self.ctx?.width ?? 0)
+	if (total <= 0) return 0
+	const columns = total >= INSPECTOR_INLINE_WIDTH ? 3 : 2
+	return Math.max(12, Math.floor(total / columns) - 6)
 }
 
 // Edge fractions of the viewport kept as a scroll margin: the view nudges one
@@ -143,6 +167,11 @@ function paletteScrollTop(self, data) {
 	return keepVisible(self.ref.list, unwrap(data.selected) ?? 0, unwrap(data.items)?.length ?? 0)
 }
 
+// Keep the bookmark picker selection inside its viewport.
+function bookmarkScrollTop(self, data) {
+	return keepVisible(self.ref.list, unwrap(data.selected) ?? 0, unwrap(data.items)?.length ?? 0)
+}
+
 // Constant: BAR_COMPACT
 // The command-bar hints kept on narrow viewports. The rest stay reachable from
 // the command palette and the `?` reference.
@@ -154,6 +183,7 @@ const BAR_COMPACT = new Set([
 	"view.togglePreview",
 	"palette.toggle",
 	"filter.start",
+	"bookmark.jump",
 ])
 
 // Function: commandBarRows
@@ -180,16 +210,21 @@ function createComponents() {
 	const fileRow = bind(ui, "FileRow", fileRowXml, fileRowBehaviors(env))
 	const filterBar = bind(ui, "FilterBar", filterBarXml, filterBarBehaviors(env))
 	const paletteRow = bind(ui, "PaletteRow", paletteRowXml, paletteRowBehaviors(env))
-	const tabItem = bind(ui, "TabItem", tabItemXml, tabItemBehaviors(env))
+	const bookmarkRow = bind(ui, "BookmarkRow", bookmarkRowXml, bookmarkRowBehaviors(env))
 	return {
+		BookmarkRow: bookmarkRow,
 		CommandItem: commandItem,
 		Crumb: crumb,
 		FileRow: fileRow,
 		PaletteRow: paletteRow,
-		TabItem: tabItem,
 		Breadcrumbs: bind(ui, "Breadcrumbs", rowListXml, breadcrumbsBehaviors({
 			...env,
 			rows: crumbRows(crumb),
+		})),
+		BookmarkList: bind(ui, "BookmarkList", bookmarkListXml, bookmarkListBehaviors({
+			...env,
+			rows: bookmarkRows(bookmarkRow),
+			scrollTop: bookmarkScrollTop,
 		})),
 		CommandBar: bind(ui, "CommandBar", commandBarXml, commandBarBehaviors({
 			...env,
@@ -201,7 +236,12 @@ function createComponents() {
 			scrollTop: paletteScrollTop,
 		})),
 		Confirm: bind(ui, "Confirm", confirmXml, confirmBehaviors(env)),
-		EntryDetail: bind(ui, "EntryDetail", entryDetailXml, entryDetailBehaviors(env)),
+		EntryDetail: bind(ui, "EntryDetail", entryDetailXml, entryDetailBehaviors({
+			...env,
+			width: paneWidth,
+			measure,
+			elide,
+		})),
 		FileList: bind(ui, "FileList", fileListXml, fileListBehaviors({
 			...env,
 			rows: fileRows(fileRow),
@@ -210,28 +250,12 @@ function createComponents() {
 		FilePreview: bind(ui, "FilePreview", filePreviewXml, filePreviewBehaviors(env)),
 		FilterBar: filterBar,
 		Help: bind(ui, "Help", helpXml, helpBehaviors({ theme: tuiTheme })),
+		PaneLabel: bind(ui, "PaneLabel", paneLabelXml, paneLabelBehaviors(env)),
 		Summary: bind(ui, "Summary", summaryXml, summaryBehaviors({
 			...env,
-			// The box width is unresolved when the behavior first runs, so fall
-			// back to an estimate from the viewport (panes share it, minus the
-			// inspector when inline). The next render uses the real width.
-			width: (self) => {
-				const own = Math.floor(self.ref.box?.width ?? 0)
-				if (own > 0) return own
-				const total = Math.floor(self.ctx?.width ?? 0)
-				if (total <= 0) return 0
-				const columns = total >= INSPECTOR_INLINE_WIDTH ? 3 : 2
-				return Math.max(12, Math.floor(total / columns) - 6)
-			},
+			width: paneWidth,
 			measure,
-			elide: (text, width) => {
-				if (width < 12 || measure(text) <= width) return text
-				return `${text.slice(0, Math.max(0, width - 1))}…`
-			},
-		})),
-		TabBar: bind(ui, "TabBar", tabBarXml, tabBarBehaviors({
-			...env,
-			rows: tabItemRows(tabItem),
+			elide,
 		})),
 	}
 }
@@ -244,6 +268,7 @@ function registerComponents() {
 	if (registered) return components
 	registered = true
 	extend({
+		bookmarklist: components.BookmarkList,
 		breadcrumbs: components.Breadcrumbs,
 		commandbar: components.CommandBar,
 		commandpalette: components.CommandPalette,
@@ -253,8 +278,8 @@ function registerComponents() {
 		filepreview: components.FilePreview,
 		filterbar: components.FilterBar,
 		help: components.Help,
+		panelabel: components.PaneLabel,
 		summary: components.Summary,
-		tabbar: components.TabBar,
 	})
 	return components
 }

@@ -1,0 +1,12 @@
+<div class="bookmark-list" when="open">
+	<div class="bookmark-dialog">
+		<header>
+			<span class="bookmark-sign" out="sign"></span>
+			<input class="bookmark-query" type="text" inout="query" on:enter="confirm">
+		</header>
+		<p class="bookmark-target" when="inputVisible" out="target"></p>
+		<p class="bookmark-empty" when="emptyList" out="empty"></p>
+		<ul class="bookmark-rows" when="listVisible" out="rows"></ul>
+		<footer out="footer"></footer>
+	</div>
+</div>

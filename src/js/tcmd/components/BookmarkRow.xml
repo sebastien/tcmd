@@ -1,0 +1,9 @@
+<box flexDirection="row" height="1" columnGap="1" out:backgroundColor="rowBg" on:click="item.name!bookmark:select">
+	<text out="rowMarker" width="2" out:fg="rowFg"></text>
+	<box minWidth="12" flexShrink="0">
+		<text out="rowName" out:fg="rowFg" wrapMode="none" truncate="true"></text>
+	</box>
+	<box flexGrow="1" minWidth="0" overflow="hidden">
+		<text out="rowPath" out:fg="rowPathFg" wrapMode="none" truncate="true"></text>
+	</box>
+</box>

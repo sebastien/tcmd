@@ -13,35 +13,39 @@
 			<text out="minSizeHint" out:fg="dimFg"></text>
 		</box>
 
-		<!-- Workspace: two panes split by a divider, plus the inline inspector. -->
+		<!-- Workspace: two boxed panes plus the inline inspector. -->
 		<box when="!tooSmall" flexDirection="column" flexGrow="1" overflow="hidden">
 			<box flexDirection="row" flexGrow="1" overflow="hidden">
-				<box flexDirection="column" flexGrow="1" out:border="leftDivider" out:borderColor="leftBorderFg"
+				<box flexDirection="column" flexGrow="1" border borderStyle="single"
+				     out:border="leftBorder" out:borderColor="leftBorderFg"
 				     on:click="leftId!pane:activate">
 					<box flexDirection="row" height="1" overflow="hidden">
-						<tabbar in:tabs="leftTabs" in:active="leftActiveIndex" in:paneId="leftId" height="1"></tabbar>
+						<paneLabel in:paneId="leftId" in:active="active" height="1"></paneLabel>
 						<box when="!leftFilterOn" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
 							<breadcrumbs in:segments="leftSegments" in:paneId="leftId" height="1"></breadcrumbs>
 						</box>
 						<filterbar in:query="leftFilter" in:paneId="leftId" in:filtering="filtering" in:entries="leftEntries"></filterbar>
 					</box>
+					<box height="1" out:border="headRule" out:borderColor="leftHeadRuleFg"></box>
 					<filelist in:entries="leftEntries" in:cursor="leftCursor" in:marked="leftMarked"
-					          in:paneId="leftId" in:loading="leftLoading"></filelist>
-					<entrydetail in:entry="leftEntry" height="3"></entrydetail>
+					          in:active="leftActive" in:paneId="leftId" in:loading="leftLoading"></filelist>
+					<entrydetail in:entry="leftEntry" height="2"></entrydetail>
 					<summary in:entries="leftEntries" in:disk="leftDisk" height="1"></summary>
 				</box>
-				<box flexDirection="column" flexGrow="1" out:border="rightDivider" out:borderColor="rightBorderFg"
+				<box flexDirection="column" flexGrow="1" border borderStyle="single"
+				     out:border="rightBorder" out:borderColor="rightBorderFg"
 				     on:click="rightId!pane:activate">
 					<box flexDirection="row" height="1" overflow="hidden">
-						<tabbar in:tabs="rightTabs" in:active="rightActiveIndex" in:paneId="rightId" height="1"></tabbar>
+						<paneLabel in:paneId="rightId" in:active="active" height="1"></paneLabel>
 						<box when="!rightFilterOn" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
 							<breadcrumbs in:segments="rightSegments" in:paneId="rightId" height="1"></breadcrumbs>
 						</box>
 						<filterbar in:query="rightFilter" in:paneId="rightId" in:filtering="filtering" in:entries="rightEntries"></filterbar>
 					</box>
+					<box height="1" out:border="headRule" out:borderColor="rightHeadRuleFg"></box>
 					<filelist in:entries="rightEntries" in:cursor="rightCursor" in:marked="rightMarked"
-					          in:paneId="rightId" in:loading="rightLoading"></filelist>
-					<entrydetail in:entry="rightEntry" height="3"></entrydetail>
+					          in:active="rightActive" in:paneId="rightId" in:loading="rightLoading"></filelist>
+					<entrydetail in:entry="rightEntry" height="2"></entrydetail>
 					<summary in:entries="rightEntries" in:disk="rightDisk" height="1"></summary>
 				</box>
 				<filepreview when="showInspectorInline" in:preview="preview" in:show="showInspectorInline"
@@ -64,6 +68,9 @@
 	<commandpalette when="paletteOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="20"
 	                in:open="paletteOpen" in:mode="paletteMode" in:query="paletteQuery"
 	                in:items="paletteItems" in:selected="paletteIndex"></commandpalette>
+	<bookmarklist when="bookmarkOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="25"
+	              in:open="bookmarkOpen" in:mode="bookmarkMode" in:query="bookmarkQuery"
+	              in:target="bookmarkTarget" in:items="bookmarkItems" in:selected="bookmarkIndex"></bookmarklist>
 	<confirm when="confirm" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="30"
 	         in:confirm="confirm"></confirm>
 	<help when="helpOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="40"

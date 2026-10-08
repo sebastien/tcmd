@@ -7,16 +7,16 @@
 // Terminal UI entry point: builds the session from the core, wires the app
 // component and hands it to the select.tui/OpenTUI renderer. The host adapter
 // releases the terminal around `$EDITOR`/shell commands and restores it when
-// they exit.
-//
-// The TUI owns two presentation-only cells the core knows nothing about:
-// `size` (viewport dimensions used for breakpoints and truncation) and `help`
-// (the `?` overlay). Neither is part of the session model.
+// they exit. This layer also wires the JSON-file bookmark store (the core
+// stays free of Node imports).
 
 import nodeOs from "node:os"
+import nodePath from "node:path"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { cell } from "select/state/cells"
 import { render } from "select.tui"
 import { commandRow, getPaletteCommands } from "../core/commands.js"
+import { createBookmarks, createFileBookmarkStore } from "../core/bookmarks.js"
 import { createNodeFs, createNodeOs, createPane, createSession, load } from "../core/index.js"
 import { createAppComponent } from "./app.js"
 
@@ -48,6 +48,16 @@ function readSize(payload, height) {
 	return height === undefined ? {} : { height }
 }
 
+// Function: bookmarkFile
+// The JSON file the TUI persists bookmarks to:
+// `$TCMD_BOOKMARKS_FILE` or `$XDG_CONFIG_HOME/tcmd/bookmarks.json` (default
+// `~/.config/tcmd/bookmarks.json`).
+function bookmarkFile() {
+	if (process.env.TCMD_BOOKMARKS_FILE) return process.env.TCMD_BOOKMARKS_FILE
+	const configHome = process.env.XDG_CONFIG_HOME || nodePath.join(nodeOs.homedir(), ".config")
+	return nodePath.join(configHome, "tcmd", "bookmarks.json")
+}
+
 // Function: main
 // Runs the TUI. `paths` are optional initial directories [left, right].
 async function main(paths = []) {
@@ -59,7 +69,15 @@ async function main(paths = []) {
 		suspend: () => instance?._ownedRenderer?.suspend?.(),
 		resume: () => instance?._ownedRenderer?.resume?.(),
 	})
-	const session = createSession({ fs, os, left, right, host: nodeOs.hostname() })
+	const bookmarks = createBookmarks({
+		store: createFileBookmarkStore({
+			file: bookmarkFile(),
+			readFile,
+			writeFile,
+			mkdir,
+		}),
+	})
+	const session = createSession({ fs, os, left, right, host: nodeOs.hostname(), bookmarks })
 	session.paletteCommands.set(tuiPaletteCommands())
 	await load(session)
 	const size = cell({ width: 0, height: 0 })

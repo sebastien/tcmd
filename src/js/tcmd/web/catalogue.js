@@ -13,6 +13,8 @@
 // presentation bind the same source (`Breadcrumbs` uses `RowList.html`).
 
 import { ui } from "select/ui"
+import bookmarkListHtml from "../components/BookmarkList.html" with { type: "text" }
+import bookmarkRowHtml from "../components/BookmarkRow.html" with { type: "text" }
 import commandBarHtml from "../components/CommandBar.html" with { type: "text" }
 import commandItemHtml from "../components/CommandItem.html" with { type: "text" }
 import commandPaletteHtml from "../components/CommandPalette.html" with { type: "text" }
@@ -24,14 +26,16 @@ import filePreviewHtml from "../components/FilePreview.html" with { type: "text"
 import fileRowHtml from "../components/FileRow.html" with { type: "text" }
 import filterBarHtml from "../components/FilterBar.html" with { type: "text" }
 import headerHtml from "./header.html" with { type: "text" }
+import paneLabelHtml from "../components/PaneLabel.html" with { type: "text" }
 import paletteRowHtml from "../components/PaletteRow.html" with { type: "text" }
 import rowListHtml from "../components/RowList.html" with { type: "text" }
 import summaryHtml from "../components/Summary.html" with { type: "text" }
-import tabBarHtml from "../components/TabBar.html" with { type: "text" }
-import tabItemHtml from "../components/TabItem.html" with { type: "text" }
 
 import {
 	bind,
+	bookmarkListBehaviors,
+	bookmarkRowBehaviors,
+	bookmarkRows,
 	breadcrumbsBehaviors,
 	commandBarBehaviors,
 	commandItemBehaviors,
@@ -46,12 +50,10 @@ import {
 	fileRowBehaviors,
 	fileRows,
 	filterBarBehaviors,
+	paneLabelBehaviors,
 	paletteRowBehaviors,
 	paletteRows,
 	summaryBehaviors,
-	tabBarBehaviors,
-	tabItemBehaviors,
-	tabItemRows,
 } from "../components/index.js"
 import { createBehaviors as headerBehaviors } from "./header.js"
 import { webTheme } from "./theme.js"
@@ -91,17 +93,21 @@ function createComponents() {
 	const fileRow = bind(ui, "FileRow", fileRowHtml, fileRowBehaviors(webTheme))
 	const filterBar = bind(ui, "FilterBar", filterBarHtml, filterBarBehaviors(webTheme))
 	const paletteRow = bind(ui, "PaletteRow", paletteRowHtml, paletteRowBehaviors(webTheme))
-	const tabItem = bind(ui, "TabItem", tabItemHtml, tabItemBehaviors(webTheme))
+	const bookmarkRow = bind(ui, "BookmarkRow", bookmarkRowHtml, bookmarkRowBehaviors(webTheme))
 	return {
+		BookmarkRow: bookmarkRow,
 		CommandItem: commandItem,
 		Crumb: crumb,
 		FileRow: fileRow,
 		PaletteRow: paletteRow,
-		TabItem: tabItem,
 		Breadcrumbs: bind(ui, "Breadcrumbs", rowListHtml, breadcrumbsBehaviors({
 			...webTheme,
 			listClass: "breadcrumbs",
 			rows: crumbRows(crumb),
+		})),
+		BookmarkList: bind(ui, "BookmarkList", bookmarkListHtml, bookmarkListBehaviors({
+			...webTheme,
+			rows: bookmarkRows(bookmarkRow),
 		})),
 		CommandBar: bind(ui, "CommandBar", commandBarHtml, commandBarBehaviors({
 			...webTheme,
@@ -124,12 +130,8 @@ function createComponents() {
 			...webTheme,
 			width: (self) => columnWidth(self.ref.box),
 		})),
+		PaneLabel: bind(ui, "PaneLabel", paneLabelHtml, paneLabelBehaviors(webTheme)),
 		Summary: bind(ui, "Summary", summaryHtml, summaryBehaviors(webTheme)),
-		TabBar: bind(ui, "TabBar", tabBarHtml, tabBarBehaviors({
-			...webTheme,
-			listClass: "tabs",
-			rows: tabItemRows(tabItem),
-		})),
 	}
 }
 
@@ -142,6 +144,7 @@ function registerWebComponents() {
 	if (registered) return components
 	registered = true
 	ui.format("Breadcrumbs", components.Breadcrumbs)
+	ui.format("BookmarkList", components.BookmarkList)
 	ui.format("CommandBar", components.CommandBar)
 	ui.format("CommandPalette", components.CommandPalette)
 	ui.format("Confirm", components.Confirm)
@@ -150,8 +153,8 @@ function registerWebComponents() {
 	ui.format("FilePreview", components.FilePreview)
 	ui.format("FilterBar", components.FilterBar)
 	ui.format("Header", components.Header)
+	ui.format("PaneLabel", components.PaneLabel)
 	ui.format("Summary", components.Summary)
-	ui.format("TabBar", components.TabBar)
 	return components
 }
 

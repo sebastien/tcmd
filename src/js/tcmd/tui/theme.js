@@ -18,10 +18,13 @@
 // Token groups (see tui/catalogue.js for the env they feed):
 //
 // - Surfaces:  panel/overlay backgrounds and the two selection rows.
+//              `cursorBg` marks the active pane's cursor row and
+//              `cursorInactiveBg` the inactive pane's, so focus is visible
+//              from the cursor alone.
 // - Text:      primary, secondary (hints) and heading (titles/breadcrumbs).
-// - Borders:   secondary (pane dividers, active/inactive) and primary (the
-//              frame and the modal overlays).
-// - Accent:    primary (cursor, active tab) and secondary (marks).
+// - Borders:   secondary (pane box borders, header rules, active/inactive) and
+//              primary (the frame and the modal overlays).
+// - Accent:    primary (cursor, active pane label) and secondary (marks).
 // - Semantic:  error, warning and tip, each with a background + foreground
 //              for filled badges (the command bar status, the confirm dialog).
 // - Content:   the file-listing colors (file/link/device/directory).
@@ -34,6 +37,7 @@ const DARK = {
 	overlayBg: "#1f2335",
 	mutedBg: "#292e42",
 	cursorBg: "#3a5f8a",
+	cursorInactiveBg: "#2a3149",
 	selectionBg: "#2f3b5c",
 	// Text
 	textFg: "#c0caf5",
@@ -71,6 +75,7 @@ const LIGHT = {
 	overlayBg: "#e6e7ea",
 	mutedBg: "#d0d3dc",
 	cursorBg: "#9fb4d6",
+	cursorInactiveBg: "#c3cad9",
 	selectionBg: "#c4c8d6",
 	// Text
 	textFg: "#1f2335",
@@ -108,6 +113,7 @@ const MONO = {
 	overlayBg: undefined,
 	mutedBg: undefined,
 	cursorBg: undefined,
+	cursorInactiveBg: undefined,
 	selectionBg: undefined,
 	textFg: undefined,
 	textSecondaryFg: undefined,

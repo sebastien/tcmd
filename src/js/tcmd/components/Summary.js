@@ -19,13 +19,17 @@
 import { unwrap } from "select/state/cells"
 import { formatCounts, formatDisk, formatSize } from "./format.js"
 
+// Constant: INDENT
+// Leading inset so the summary aligns with the detail line above it.
+const INDENT = "  "
+
 // Function: summaryText
 // The full, untruncated summary line for `entries` and `disk`.
 function summaryText(entries, disk) {
 	let text = formatCounts(entries)
 	const diskText = formatDisk(disk)
 	if (diskText) text += ` · ${diskText}`
-	return text
+	return `${INDENT}${text}`
 }
 
 // Function: summaryCounts
@@ -59,7 +63,7 @@ function createBehaviors(env) {
 			const width = env.width ? env.width(self) : 0
 			const full = summaryText(entries, disk)
 			if (!width || measure(full) <= width) return full
-			const counts = summaryCounts(entries)
+			const counts = `${INDENT}${summaryCounts(entries)}`
 			const short = disk ? `${counts} · ${summaryShortDisk(disk)}` : counts
 			if (measure(short) <= width) return short
 			if (measure(counts) <= width) return counts

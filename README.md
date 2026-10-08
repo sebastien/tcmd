@@ -10,7 +10,13 @@
 
 TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
 
-- Browse files in two panes (left and right), with tabs per pane
+- Browse files in two panes (the left **SRC** source, the right **DST**
+  destination)
+- Named bookmarks: `b` records the cursor entry (or the pane directory) under
+  a name defaulting to its basename, remembering whether it is a file or a
+  directory; `g` opens a fzf-style picker over bookmark names and paths. A
+  directory bookmark opens to show its contents, a file bookmark is selected
+  and previewed in its directory.
 - Operations over the current panes: copy, move, delete/erase, stat, touch,
   selection buffers, edit/view/open and shell commands
 - Command palette with UI actions, plus a scripting mode (`:`) that completes
@@ -30,20 +36,28 @@ bun run tcmd /tmp ~  # open specific directories
 ```
 
 Keys: `↑/↓` move, `Enter/→` open, `←/Bksp` parent, `Tab`/`⇧Tab` switch panes
-(`⇧Tab` goes back), `Space` mark, `v` preview (fullscreen viewer when the
-terminal is narrow), `t` new tab, `^W` close tab,
-`[`/`]` tabs, `O`/`E` open/edit the previewed file, `/` fuzzy-filter the active
-pane (`Enter` keeps it, `Esc` clears), `^P` command palette, `:` scripting mode,
-`!` run a shell command, `^R` reload, `?` key reference, `q` quit.
+(`⇧Tab` goes back), `Space` mark, `b` bookmark the cursor entry (or the pane
+directory) under a basename-defaulted name, `g` jump to a bookmark,
+`v` preview (fullscreen viewer when the
+terminal is narrow), `O`/`E` open/edit the previewed file, `/` fuzzy-filter the
+active pane (`Enter` keeps it, `Esc` clears), `^P` command palette, `:` scripting
+mode, `!` run a shell command, `^R` reload, `?` key reference, `q` quit.
 
 The workspace is a single rounded frame. The frame title carries the active
-path; each pane has one header row (tabs + breadcrumbs + the inline filter), an
-entry-detail block for the selected entry, and one summary row, so the two panes
-stay aligned. A context-aware inspector sits
+path; each pane is its own single-line box (the two middle edges sit side by
+side) labelled **SRC** (left, source) / **DST** (right, destination), with a
+header row (label + breadcrumbs + the inline filter) separated by a
+rule from the listing, an entry-detail line for the selected entry, and one
+summary row, so the two panes stay aligned. The detail line shows
+`date · type · size · rights` with the rights right-aligned, the date and size
+bright, and the size/rights dropping out when the pane is too narrow; the
+summary row is indented to match. The active pane's border and header
+rule are highlighted and its cursor row uses the strong cursor colour, while
+the inactive pane stays dim with a muted cursor. A context-aware inspector sits
 on the right when the terminal is at least 100 columns wide, and becomes a
-fullscreen viewer below that. The status bar keeps the key hints on the left and
-notices/errors on the right, so an error never hides the hints. Below 64×16 the
-app shows a resize hint instead of the workspace.
+fullscreen viewer below that. The status bar keeps the key hints on the left
+and notices/errors on the right, so an error never hides the hints. Below 64×16
+the app shows a resize hint instead of the workspace.
 
 ### Web version
 
@@ -74,7 +88,7 @@ token injected into `index.html`. `TCMD_WEB_ROOT=/some/dir` confines the API
 don't expose the port. With OPFS, deleting moves entries to `/.trash`; the API
 uses the desktop trash. Open/edit/run are unavailable in the browser either
 way (the null host adapter reports it in the command bar); everything else —
-navigation, tabs, marks, scripting, copy/move/erase — works on either
+navigation, marks, scripting, copy/move/erase — works on either
 backend. `public/index.html` is the host page; `public/main.js` is generated.
 
 ## Architecture
@@ -90,9 +104,10 @@ src/js/tcmd/
     path.js      pure string path ops
     entries.js   filter/sort over file entries (dirs first)
     selection.js cursor/mark arithmetic
-    tab.js       one tab: path, entries, derived view, cursor, marks, labels
-    pane.js      a pane's tabs, proxying the active tab
-    session.js   two panes + active pane, preview, palette, filesets, dispatch
+    directory.js one pane's directory: path, entries, view, cursor, marks
+    pane.js      one directory, proxying its cells
+    bookmarks.js named bookmarks (path + file/dir kind) + the memory/file stores
+    session.js   two panes + active pane, preview, palette, bookmarks, dispatch
     keymap.js    key chords -> command ids
     commands.js  command registry; commands are `run(session, payload)`
     operations.js scripting operations (copy/move/delete/erase/stat/sel/…)
@@ -188,11 +203,11 @@ tests run the shared logic through select.js on a happy-dom document.
 - [x] Walking skeleton: two panes, navigation, breadcrumbs, summary, command
       bar, command palette, text preview
 - [x] File operations (copy/move/delete/erase/stat/touch/sel), scripting mode
-      with filesets, tabs
+      with the `$A`/`$B` pane filesets
 - [x] Scripting completion (operations, filesets, active-directory and nested
       paths)
 - [x] Pane fuzzy filtering (`/` to filter, `Enter` to keep, `Esc` to clear)
+- [x] Named bookmarks (`b` records, `g` jumps, persisted to a JSON file)
 - [ ] Quick find, grep
 - [ ] Image/PDF/audio/video previews
-- [ ] Bookmarks
 - [x] Web view on the same core (shared components rendered by select.js)

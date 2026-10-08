@@ -14,7 +14,7 @@
 // `quit(self)`. Renderer-specific bindings (pane borders, status color) live in
 // the per-renderer app binding.
 
-import { unwrap } from "select/state/cells"
+import { derived, unwrap } from "select/state/cells"
 import { DEFAULT_KEYMAP, matchKeymap } from "../core/keymap.js"
 
 // Function: createInit
@@ -22,6 +22,10 @@ import { DEFAULT_KEYMAP, matchKeymap } from "../core/keymap.js"
 function createInit(session) {
 	const left = session.panes.left
 	const right = session.panes.right
+	// Pane-focus flags so the listing can render the cursor differently in the
+	// inactive pane. Shared by both engines.
+	const leftActive = derived([session.active], ([active]) => active === "left")
+	const rightActive = derived([session.active], ([active]) => active === "right")
 	return () => ({
 		active: session.active,
 		// The preview target entry, so the inspector can show a directory card
@@ -29,11 +33,17 @@ function createInit(session) {
 		appEntry: session.previewEntry,
 		appHost: session.host,
 		appPath: session.activePath,
+		bookmarkIndex: session.bookmarkIndex,
+		bookmarkItems: session.bookmarkItems,
+		bookmarkMode: session.bookmarkMode,
+		bookmarkOpen: session.bookmarkOpen,
+		bookmarkQuery: session.bookmarkQuery,
+		bookmarkTarget: session.bookmarkTarget,
 		commandBarItems: session.commandBarItems,
 		confirm: session.confirm,
 		dispatch: session.dispatch,
 		filtering: session.filtering,
-		leftActiveIndex: left.activeIndex,
+		leftActive,
 		leftCursor: left.cursor,
 		leftDisk: left.disk,
 		leftEntries: left.entries,
@@ -44,7 +54,6 @@ function createInit(session) {
 		leftLoading: left.loading,
 		leftMarked: left.marked,
 		leftSegments: left.segments,
-		leftTabs: left.tabs,
 		notice: session.notice,
 		paletteIndex: session.paletteIndex,
 		paletteItems: session.paletteItems,
@@ -52,7 +61,7 @@ function createInit(session) {
 		paletteOpen: session.paletteOpen,
 		paletteQuery: session.paletteQuery,
 		preview: session.preview,
-		rightActiveIndex: right.activeIndex,
+		rightActive,
 		rightCursor: right.cursor,
 		rightDisk: right.disk,
 		rightEntries: right.entries,
@@ -63,7 +72,6 @@ function createInit(session) {
 		rightLoading: right.loading,
 		rightMarked: right.marked,
 		rightSegments: right.segments,
-		rightTabs: right.tabs,
 		showPreview: session.showPreview,
 	})
 }
@@ -106,6 +114,36 @@ function createBehaviors(env) {
 					return
 				}
 				// Let the focused input handle typing.
+				return
+			}
+			if (unwrap(data.bookmarkOpen)) {
+				const mode = unwrap(data.bookmarkMode)
+				if (key?.name === "escape") {
+					data.dispatch("bookmark.cancel")
+					return
+				}
+				if (mode === "name") {
+					// The input owns typing; Enter saves.
+					if (key?.name === "return" || key?.name === "enter") {
+						self.pub("bookmark:confirm")
+						return
+					}
+					return
+				}
+				// List mode: arrows move, Enter jumps.
+				if (key?.name === "up") {
+					data.dispatch("bookmark.up")
+					return
+				}
+				if (key?.name === "down") {
+					data.dispatch("bookmark.down")
+					return
+				}
+				if (key?.name === "return" || key?.name === "enter") {
+					self.pub("bookmark:confirm")
+					return
+				}
+				// Let the focused input handle typing the fuzzy query.
 				return
 			}
 			const active = unwrap(data.active)
@@ -165,8 +203,20 @@ function createEvents() {
 		"crumbs:go": (_self, data, event) => data.dispatch("pane.setPath", event.data),
 		"list:select": (_self, data, event) => data.dispatch("list.cursor", event.data),
 		"pane:activate": (_self, data, event) => data.dispatch("pane.activate", { paneId: event.data }),
-		"tabs:new": (_self, data, event) => data.dispatch("tab.new", event.data),
-		"tabs:select": (_self, data, event) => data.dispatch("tab.select", event.data),
+		"bookmark:select": (_self, data, event) => {
+			// Clicking a bookmark row selects and jumps to it.
+			if (!unwrap(data.bookmarkOpen)) return
+			const items = unwrap(data.bookmarkItems) ?? []
+			const index = items.findIndex((row) => row.name === event.data)
+			if (index < 0) return
+			data.dispatch("bookmark.setIndex", { index })
+			data.dispatch("bookmark.select")
+		},
+		"bookmark:confirm": (_self, data) => {
+			if (!unwrap(data.bookmarkOpen)) return
+			if (unwrap(data.bookmarkMode) === "name") data.dispatch("bookmark.save")
+			else data.dispatch("bookmark.select")
+		},
 		"palette:confirm": (_self, data, event) => {
 			// The global key handler and the input's on:enter can both fire;
 			// only the first one (while the palette is open) acts.

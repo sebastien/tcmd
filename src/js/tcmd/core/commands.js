@@ -15,6 +15,7 @@
 // - `bar`: true when the command appears in the command bar's key hints.
 // - `hidden`: true for internal commands that never show in the palette.
 
+import { basename, parent as parentOf } from "./path.js"
 import { clampCursor, moveCursor } from "./selection.js"
 import { runLine } from "./script.js"
 
@@ -44,6 +45,21 @@ const FILTER_KEYS = [
 	{ id: null, title: "Navigate", keys: "↑/↓" },
 	{ id: null, title: "Done", keys: "Enter", primary: true },
 	{ id: null, title: "Clear", keys: "Esc" },
+]
+
+// Constant: BOOKMARK_NAME_KEYS
+// Command-bar hints while naming a bookmark.
+const BOOKMARK_NAME_KEYS = [
+	{ id: null, title: "Save", keys: "Enter", primary: true },
+	{ id: null, title: "Cancel", keys: "Esc" },
+]
+
+// Constant: BOOKMARK_LIST_KEYS
+// Command-bar hints while picking a bookmark.
+const BOOKMARK_LIST_KEYS = [
+	{ id: null, title: "Navigate", keys: "↑/↓" },
+	{ id: null, title: "Jump", keys: "Enter", primary: true },
+	{ id: null, title: "Close", keys: "Esc" },
 ]
 
 const commands = [
@@ -152,51 +168,134 @@ const commands = [
 		},
 	},
 	{
-		id: "tab.new",
-		title: "New tab",
-		keys: "t",
+		id: "bookmark.record",
+		title: "Bookmark",
+		keys: "b",
 		kind: "ui",
 		bar: true,
 		run(session) {
-			return pane(session).addTab()
+			// Record the entry under the cursor; fall back to the pane's
+			// directory when the listing is empty.
+			const entry = pane(session).currentEntry()
+			const path = entry?.path ?? pane(session).path.value
+			const isDir = entry ? Boolean(entry.isDir) : true
+			const existing = session.bookmarks.find(path)
+			if (existing) {
+				// Already bookmarked: no need to re-name it.
+				session.notice.set({ kind: "tip", text: `bookmark ${existing.name}` })
+				return
+			}
+			// The default name is the path's basename.
+			session.bookmarkTarget.set({ path, isDir })
+			session.bookmarkQuery.set(basename(path))
+			session.bookmarkMode.set("name")
+			session.bookmarkOpen.set(true)
 		},
 	},
 	{
-		id: "tab.close",
-		title: "Close tab",
-		keys: "^W",
+		id: "bookmark.jump",
+		title: "Bookmarks",
+		keys: "g",
 		kind: "ui",
+		bar: true,
 		run(session) {
-			pane(session).closeTab()
+			session.bookmarkTarget.set(null)
+			session.bookmarkQuery.set("")
+			session.bookmarkMode.set("list")
+			session.bookmarkOpen.set(true)
 		},
 	},
 	{
-		id: "tab.next",
-		title: "Next tab",
-		keys: "]",
+		id: "bookmark.up",
+		title: "Previous bookmark",
 		kind: "ui",
+		hidden: true,
 		run(session) {
-			pane(session).nextTab()
+			moveBookmark(session, -1)
 		},
 	},
 	{
-		id: "tab.prev",
-		title: "Previous tab",
-		keys: "[",
+		id: "bookmark.down",
+		title: "Next bookmark",
 		kind: "ui",
+		hidden: true,
 		run(session) {
-			pane(session).prevTab()
+			moveBookmark(session, 1)
 		},
 	},
 	{
-		id: "tab.select",
-		title: "Select tab",
+		id: "bookmark.save",
+		title: "Save bookmark",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			const name = `${session.bookmarkQuery.value ?? ""}`.trim()
+			const target = session.bookmarkTarget.value
+			if (!name) {
+				session.notice.set({ kind: "warning", text: "bookmark needs a name" })
+				return
+			}
+			if (!target) {
+				closeBookmark(session)
+				return
+			}
+			// Close synchronously: the global key handler and the input's
+			// `on:enter` can both fire, and a second save while the overlay is
+			// still open would re-record and flash the notice twice. A rejected
+			// `record` (rejected name) still surfaces through the dispatch's
+			// error notice.
+			closeBookmark(session)
+			return session.bookmarks.record(name, target.path, target.isDir).then(() => {
+				session.notice.set({ kind: "tip", text: `bookmarked ${name}` })
+			})
+		},
+	},
+	{
+		id: "bookmark.setIndex",
+		title: "Highlight bookmark",
 		kind: "ui",
 		hidden: true,
 		run(session, payload) {
-			const target = payload?.paneId ? session.panes[payload.paneId] : pane(session)
-			activate(session, payload?.paneId)
-			target.selectTab(payload?.index ?? 0)
+			session.bookmarkIndex.set(Math.max(0, payload?.index ?? 0))
+		},
+	},
+	{
+		id: "bookmark.select",
+		title: "Jump to bookmark",
+		kind: "ui",
+		hidden: true,
+		async run(session) {
+			const items = session.bookmarkItems.value
+			const item = items[clampCursor(session.bookmarkIndex.value, items.length)]
+			if (!item) return
+			const target = session.panes[session.active.value]
+			const path = item.path
+			// Resolve the kind when it is unknown (legacy path-only bookmark).
+			let isDir = item.isDir
+			if (isDir == null) isDir = Boolean((await session.fs.stat(path))?.isDir)
+			closeBookmark(session)
+			// A directory: open it (show its contents).
+			if (isDir) return target.navigate(path)
+			// A file: select it in its directory and preview it (a path at the
+			// filesystem root has no parent: stay at the root).
+			return target.navigate(parentOf(path) ?? "/").then(() => {
+				const entries = target.entries.value
+				const index = entries.findIndex((entry) => entry.path === path)
+				if (index < 0) return
+				target.cursor.set(index)
+				// Pin the preview so it shows even if the effect lags the cursor.
+				session.previewTarget.set(target.currentEntry() ?? null)
+				session.showPreview.set(true)
+			})
+		},
+	},
+	{
+		id: "bookmark.cancel",
+		title: "Cancel bookmark",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			closeBookmark(session)
 		},
 	},
 	{
@@ -432,7 +531,8 @@ function getPaletteCommands() {
 // Command-bar rows for the current context: the palette's key hints while it
 // is open (scripting mode has its own), the filter hints while a pane filter is
 // capturing input, the `bar`-flagged UI commands otherwise (keymap order).
-function getCommandBarItems(paletteOpen, paletteMode, filtering) {
+function getCommandBarItems(paletteOpen, paletteMode, filtering, bookmarkOpen, bookmarkMode) {
+	if (bookmarkOpen) return bookmarkMode === "name" ? BOOKMARK_NAME_KEYS : BOOKMARK_LIST_KEYS
 	if (paletteOpen) return paletteMode === "script" ? SCRIPT_KEYS : PALETTE_KEYS
 	if (filtering) return FILTER_KEYS
 	return commands.filter((command) => command.bar).map(commandRow)
@@ -495,6 +595,15 @@ function bump(session, delta) {
 function movePalette(session, delta) {
 	const length = session.paletteItems.value.length
 	session.paletteIndex.set(moveCursor(session.paletteIndex.value, delta, length))
+}
+
+function moveBookmark(session, delta) {
+	const length = session.bookmarkItems.value.length
+	session.bookmarkIndex.set(moveCursor(session.bookmarkIndex.value, delta, length))
+}
+
+function closeBookmark(session) {
+	session.bookmarkOpen.set(false)
 }
 
 function openPalette(session, mode, query) {

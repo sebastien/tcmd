@@ -14,6 +14,8 @@ export { bind } from "./bind.js"
 
 // Behaviors
 export { createBehaviors as appBehaviors, createEvents as appEvents, createInit as appInit } from "./App.js"
+export { createBehaviors as bookmarkListBehaviors } from "./BookmarkList.js"
+export { createBehaviors as bookmarkRowBehaviors } from "./BookmarkRow.js"
 export { createBehaviors as breadcrumbsBehaviors } from "./Breadcrumbs.js"
 export { createBehaviors as commandBarBehaviors } from "./CommandBar.js"
 export { createBehaviors as commandItemBehaviors } from "./CommandItem.js"
@@ -25,13 +27,12 @@ export { createBehaviors as fileListBehaviors } from "./FileList.js"
 export { createBehaviors as filePreviewBehaviors } from "./FilePreview.js"
 export { createBehaviors as fileRowBehaviors } from "./FileRow.js"
 export { createBehaviors as filterBarBehaviors } from "./FilterBar.js"
+export { createBehaviors as paneLabelBehaviors } from "./PaneLabel.js"
 export { createBehaviors as paletteRowBehaviors } from "./PaletteRow.js"
 export { createBehaviors as summaryBehaviors } from "./Summary.js"
-export { createBehaviors as tabBarBehaviors } from "./TabBar.js"
-export { createBehaviors as tabItemBehaviors } from "./TabItem.js"
 
 // Helpers
 export { formatCounts, formatDisk, formatMode, formatSize, formatTime } from "./format.js"
-export { commandItemRows, crumbRows, fileRows, paletteRows, tabItemRows } from "./rows.js"
+export { bookmarkRows, commandItemRows, crumbRows, fileRows, paletteRows } from "./rows.js"
 
 // EOF

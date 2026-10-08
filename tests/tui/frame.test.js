@@ -46,10 +46,14 @@ describe("tui frame", () => {
 		expect(BAR_COMPACT_WIDTH).toBeGreaterThan(INSPECTOR_INLINE_WIDTH)
 	})
 
-	test("dividers split the panes with a single rule", () => {
+	test("pane boxes tile with a full border each and a header rule", () => {
 		const behaviors = createFrameBehaviors({ theme })
-		expect(behaviors.leftDivider()).toEqual(["right"])
-		expect(behaviors.rightDivider()).toEqual([])
+		// Each pane draws all four edges so its border colour tracks its own
+		// focus; the middle therefore shows two adjacent rules.
+		expect(behaviors.leftBorder()).toEqual(["top", "left", "bottom", "right"])
+		expect(behaviors.rightBorder()).toEqual(["top", "left", "bottom", "right"])
+		// A top-only border renders the header rule.
+		expect(behaviors.headRule()).toEqual(["top"])
 	})
 
 	test("key glyphs are human readable", () => {
@@ -66,8 +70,10 @@ describe("tui frame", () => {
 		expect(lines).toContain("Panes")
 		expect(lines).toContain("Cursor up")
 		expect(lines).toContain("Open")
-		expect(lines).toContain("^W")
+		expect(lines).toContain("^R")
+		expect(lines).toContain("Bookmarks")
+		expect(lines).toContain("Bookmark")
 		// One row per command, derived from the registry.
-		expect(lines).toContain("New tab")
+		expect(lines).not.toContain("Tabs")
 	})
 })

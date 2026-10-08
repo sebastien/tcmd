@@ -5,15 +5,17 @@
 
 // Module: tcmd/core/session
 // A Session wires two panes plus cross-pane UI state (active pane, preview,
-// command palette) into one dispatchable model. Everything reactive is a cell
-// or derived cell; views subscribe, commands mutate.
+// command palette, bookmarks) into one dispatchable model. Everything reactive
+// is a cell or derived cell; views subscribe, commands mutate.
 
 import { cell, derived, effect } from "select/state/cells"
+import { createBookmarks } from "./bookmarks.js"
 import { commandRow, createDispatch, getCommandBarItems, getPaletteCommands } from "./commands.js"
 import { createNullOs } from "./os.js"
 import { basename, join } from "./path.js"
+import { PANE_BUFFERS } from "./pane.js"
 import { completionToken, scriptItems } from "./script.js"
-import { createLabels } from "./tab.js"
+import { hasMatch, score } from "../vendor/fzy.js"
 
 const PREVIEW_BYTES = 65536
 
@@ -26,17 +28,15 @@ const PREVIEW_BYTES = 65536
 // await session.load()
 // session.dispatch("pane.toggle")
 // ```
-function createSession({ fs, os, left, right, host }) {
+function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	const session = {}
 	session.fs = fs
 	session.os = os ?? createNullOs()
 	session.panes = { left, right }
 	// Shown in the header title; empty when the environment has no hostname.
 	session.host = host ?? ""
-	// One label allocator for both panes: tab A is the left pane's first tab,
-	// tab B the right pane's first tab, and so on (see core/tab).
-	const labels = createLabels()
-	for (const pane of [left, right]) pane.useLabels?.(labels)
+	// Bookmark model (named paths). The store defaults to in-memory.
+	session.bookmarks = bookmarks ?? createBookmarks()
 	session.active = cell("left")
 	// The active pane's current directory, tracked by the header title.
 	session.activePath = derived([session.active, left.path, right.path], ([active, l, r]) =>
@@ -52,16 +52,27 @@ function createSession({ fs, os, left, right, host }) {
 	// The pane whose filter input currently owns the keyboard, or null.
 	session.filtering = cell(null)
 
+	// Bookmark overlay: `bookmarkMode` is "name" while recording (an input for
+	// the new bookmark's name) or "list" while jumping (a fuzzy picker).
+	session.bookmarkOpen = cell(false)
+	session.bookmarkMode = cell("list")
+	session.bookmarkQuery = cell("")
+	session.bookmarkIndex = cell(0)
+	// The path being recorded while in "name" mode.
+	session.bookmarkTarget = cell(null)
+
 	// The command palette keeps its cursor on the first match whenever the
 	// query changes.
 	effect([session.paletteQuery], () => session.paletteIndex.set(0))
+	// The bookmark picker likewise.
+	effect([session.bookmarkQuery], () => session.bookmarkIndex.set(0))
 
-	// Filter editing is bound to the active tab: switching pane or tab drops
-	// the input so keystrokes never leak into another pane's filter.
-	effect([session.active, left.activeIndex, right.activeIndex], () => session.filtering.set(null))
+	// Filter editing is bound to the active pane: switching pane drops the
+	// input so keystrokes never leak into another pane's filter.
+	effect([session.active], () => session.filtering.set(null))
 
 	// The entry under the cursor of each pane, as a small plain object. The
-	// stat details (ctime, mode, uid, gid) come from the tab's lazy
+	// stat details (ctime, mode, uid, gid) come from the directory's lazy
 	// `cursorStat`, so the pane detail line updates as the cursor moves.
 	session.leftCursorEntry = derived([left.entries, left.cursor, left.cursorStat], ([entries, cursor, stat]) =>
 		entrySummary(stat ?? entries[cursor]),
@@ -119,15 +130,21 @@ function createSession({ fs, os, left, right, host }) {
 		})
 	})
 
-	// Selection filesets: every non-empty tab buffer named by its label
-	// ($A, $B, …), plus $FILE for the entry the preview is following. These
-	// are the values scripting-mode completions offer (see core/script).
+	// Selection filesets: each pane's non-empty mark buffer ($A for the source
+	// pane, $B for the destination), plus $FILE for the entry the preview is
+	// following. These are the values scripting-mode completions offer.
 	session.filesets = derived(
-		[left.tabs, left.marks, right.tabs, right.marks, session.previewEntry],
-		([leftTabs, leftMarks, rightTabs, rightMarks, previewEntry]) => {
+		[left.marked, right.marked, session.previewEntry],
+		([leftMarks, rightMarks, previewEntry]) => {
 			const sets = []
-			collectFilesets(sets, leftTabs, leftMarks)
-			collectFilesets(sets, rightTabs, rightMarks)
+			if (leftMarks && leftMarks.size) {
+				const label = PANE_BUFFERS.left
+				sets.push({ id: `$${label}`, label, paths: [...leftMarks], count: leftMarks.size })
+			}
+			if (rightMarks && rightMarks.size) {
+				const label = PANE_BUFFERS.right
+				sets.push({ id: `$${label}`, label, paths: [...rightMarks], count: rightMarks.size })
+			}
 			if (previewEntry && !previewEntry.isDir) {
 				sets.push({
 					id: "$FILE",
@@ -147,7 +164,7 @@ function createSession({ fs, os, left, right, host }) {
 	)
 
 	// Script path completion: the entries of the directory being typed (a
-	// token containing "/"), or the active tab's entries otherwise.
+	// token containing "/"), or the active pane's entries otherwise.
 	session.completionEntries = cell([])
 	session._completionToken = 0
 	effect(
@@ -162,7 +179,7 @@ function createSession({ fs, os, left, right, host }) {
 				session.completionEntries.set(activeEntries ?? [])
 				return
 			}
-			const base = session.panes[active]?.current()?.path.value ?? session.fs.cwd()
+			const base = session.panes[active]?.path.value ?? session.fs.cwd()
 			const dir = token.dir.startsWith("/") ? token.dir : join(base, token.dir)
 			const mine = ++session._completionToken
 			const entries = await session.fs.readDir(dir).catch(() => [])
@@ -171,10 +188,33 @@ function createSession({ fs, os, left, right, host }) {
 		},
 	)
 
+	// Bookmark picker rows: the bookmarks fuzzily matched by name or path,
+	// ranked by fzy score. Only meaningful in "list" mode.
+	session.bookmarkItems = derived(
+		[session.bookmarks.entries, session.bookmarkQuery, session.bookmarkMode],
+		([entries, query, mode]) => {
+			if (mode !== "list") return []
+			const rows = Object.entries(entries ?? {}).map(([name, entry]) => ({ name, ...entry }))
+			const q = `${query ?? ""}`.trim()
+			if (!q) return rows.sort((a, b) => a.name.localeCompare(b.name))
+			const ranked = []
+			for (const row of rows) {
+				const best = Math.max(
+					hasMatch(q, row.name) ? score(q, row.name) : -Infinity,
+					hasMatch(q, row.path) ? score(q, row.path) : -Infinity,
+				)
+				if (best > -Infinity) ranked.push({ row, score: best })
+			}
+			ranked.sort((a, b) => (a.score !== b.score ? b.score - a.score : a.row.name.localeCompare(b.row.name)))
+			return ranked.map((match) => match.row)
+		},
+	)
+
 	// Command bar rows: context-dependent key hints (see core/commands).
 	session.commandBarItems = derived(
-		[session.paletteOpen, session.paletteMode, session.filtering],
-		([open, mode, filtering]) => getCommandBarItems(open, mode, filtering),
+		[session.paletteOpen, session.paletteMode, session.filtering, session.bookmarkOpen, session.bookmarkMode],
+		([open, mode, filtering, bookmarkOpen, bookmarkMode]) =>
+			getCommandBarItems(open, mode, filtering, bookmarkOpen, bookmarkMode),
 	)
 
 	// Command palette rows: UI actions by default; in scripting mode, the
@@ -200,9 +240,13 @@ function createSession({ fs, os, left, right, host }) {
 }
 
 // Function: load
-// Reads the initial listing for both panes.
+// Reads the initial listing for both panes and the persisted bookmarks.
 async function load(session) {
-	await Promise.all([session.panes.left.refresh(), session.panes.right.refresh()])
+	await Promise.all([
+		session.panes.left.refresh(),
+		session.panes.right.refresh(),
+		session.bookmarks.load?.(),
+	])
 }
 
 function entrySummary(entry) {
@@ -222,21 +266,6 @@ function entrySummary(entry) {
 		owner: entry.owner,
 		ext: entry.ext,
 	}
-}
-
-// Function: collectFilesets
-// Appends one `$LABEL` fileset per tab whose marks are non-empty, ordered by
-// label (A, B, …, Z, A1, …).
-function collectFilesets(sets, tabs, marks) {
-	const rows = []
-	for (const tab of tabs) {
-		const paths = marks?.[tab.id]
-		if (paths && paths.size) {
-			rows.push({ id: `$${tab.label}`, label: tab.label, paths: [...paths], count: paths.size })
-		}
-	}
-	rows.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))
-	sets.push(...rows)
 }
 
 // Function: filterCommandRows
@@ -266,5 +295,3 @@ function hasBinaryByte(text) {
 }
 
 export { createSession, load }
-
-// EOF

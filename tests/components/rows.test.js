@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { cell } from "select/state/cells"
-import { commandItemRows, crumbRows, fileRows, paletteRows, tabItemRows } from "../../src/js/tcmd/components/rows.js"
+import { bookmarkRows, commandItemRows, crumbRows, fileRows, paletteRows } from "../../src/js/tcmd/components/rows.js"
 
 // Captures what each builder passes to `Component.map` and returns a sentinel.
 function fakeRow() {
@@ -59,14 +59,14 @@ describe("rows", () => {
 		expect(call.key(command)).toBe("pane.toggle")
 	})
 
-	test("tabItemRows keeps the active cell and keys by tab id", () => {
+	test("bookmarkRows keeps the selected cell and keys by name", () => {
 		const Row = fakeRow()
-		const active = cell(0)
-		const tab = { id: "tab-1", label: "A" }
-		expect(tabItemRows(Row)({ tabs: [tab], active, paneId: "left" })).toBe("MAPPED")
+		const selected = cell(0)
+		const bookmark = { name: "home", path: "/home" }
+		expect(bookmarkRows(Row)({ items: [bookmark], selected })).toBe("MAPPED")
 		const [call] = Row.calls
-		expect(call.processor(tab, 0)).toEqual({ item: tab, index: 0, active, paneId: "left" })
-		expect(call.key(tab)).toBe("tab-1")
+		expect(call.processor(bookmark, 0)).toEqual({ item: bookmark, index: 0, selected })
+		expect(call.key(bookmark)).toBe("home")
 	})
 
 	test("commandItemRows keys by command id and defaults missing collections", () => {

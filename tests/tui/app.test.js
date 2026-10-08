@@ -196,33 +196,41 @@ describe("tui app", () => {
 		}
 	})
 
-	test("tab bar shows the pane tabs and t/[ ]/^W manage them", async () => {
+	test("the header shows SRC/DST labels and b/g manage bookmarks", async () => {
 		const { setup, session } = await makeSetup()
 		try {
-			// The pane header (tabs + path) sits on the first row inside the frame.
-			const first = setup.captureCharFrame().split("\n")[1]
-			expect(first).toContain("A")
-			expect(first).toContain("+")
+			// The pane header (label + path) sits below the pane's top border.
+			const first = setup.captureCharFrame().split("\n")[2]
+			expect(first).toContain("SRC")
+			expect(first).toContain("DST")
+			expect(first).not.toContain("+")
 
-			setup.mockInput.pressKey("t")
-			await Promise.resolve()
+			// b records the cursor entry: the name prompt opens, pre-filled
+			// with the basename.
+			setup.mockInput.pressArrow("down")
+			await settle(setup)
+			setup.mockInput.pressKey("b")
+			await settle(setup)
+			expect(session.bookmarkOpen.value).toBe(true)
+			expect(session.bookmarkMode.value).toBe("name")
+			expect(session.bookmarkQuery.value).toBe("notes.txt")
+			expect(session.bookmarkTarget.value).toEqual({ path: "/home/notes.txt", isDir: false })
+			setup.mockInput.pressKey("\r")
 			await new Promise((resolve) => setTimeout(resolve, 0))
 			await setup.renderOnce()
-			expect(session.panes.left.tabs.value.map((tab) => tab.label)).toEqual(["A", "C"])
-			expect(session.panes.left.activeIndex.value).toBe(1)
-			expect(setup.captureCharFrame().split("\n")[1]).toContain("C")
+			expect(session.bookmarks.entries.value["notes.txt"].path).toBe("/home/notes.txt")
+			expect(session.bookmarks.entries.value["notes.txt"].isDir).toBe(false)
 
-			setup.mockInput.pressKey("[")
+			// g opens the fuzzy picker and jumping selects+previews the file.
+			setup.mockInput.pressKey("g")
 			await settle(setup)
-			expect(session.panes.left.activeIndex.value).toBe(0)
-			setup.mockInput.pressKey("]")
-			await settle(setup)
-			expect(session.panes.left.activeIndex.value).toBe(1)
-
-			setup.mockInput.pressKey("w", { ctrl: true })
-			await settle(setup)
-			expect(session.panes.left.tabs.value.length).toBe(1)
-			expect(session.panes.left.activeIndex.value).toBe(0)
+			expect(session.bookmarkMode.value).toBe("list")
+			expect(session.bookmarkItems.value.map((row) => row.name)).toContain("notes.txt")
+			setup.mockInput.pressKey("\r")
+			await new Promise((resolve) => setTimeout(resolve, 0))
+			await setup.renderOnce()
+			expect(session.bookmarkOpen.value).toBe(false)
+			expect(session.panes.left.currentEntry().path).toBe("/home/notes.txt")
 		} finally {
 			setup.renderer.destroy()
 		}

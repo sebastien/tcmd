@@ -15,7 +15,7 @@ describe("tui entry point", () => {
 		expect(ids).not.toContain("nav.up")
 		expect(ids).not.toContain("nav.pageDown")
 		expect(ids).toContain("pane.enter")
-		expect(ids).toContain("tab.new")
+		expect(ids).toContain("bookmark.jump")
 		expect(ids).toContain("view.togglePreview")
 	})
 })

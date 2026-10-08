@@ -7,13 +7,14 @@
 // The scripting operations: the file-management verbs the command palette's
 // scripting mode completes and runs. An operation receives the session and
 // its raw argument tokens; path arguments resolve filesets ($A … $FILE), `~`
-// and paths relative to the active tab. Operations own their side effects and
+// and paths relative to the active pane. Operations own their side effects and
 // return a one-line message (shown in the command bar) or undefined.
 //
 // Registry entries carry the presentation metadata the palette renders:
 // `signature`, `description`, `aliases` and an optional `confirmText`.
 
 import { basename, extname, join, normalize } from "./path.js"
+import { PANE_BUFFERS } from "./pane.js"
 
 const operations = [
 	{
@@ -131,16 +132,17 @@ const operations = [
 			const { sign, buffer, tokens } = parseSelection(args)
 			if (!tokens.length) throw new Error("sel needs at least one path")
 			const paths = expandAll(session, tokens)
-			const tab = findBuffer(session, buffer)
-			const marks = new Set(tab.marked.value)
+			const target = findBuffer(session, buffer)
+			const label = buffer ? `${buffer}`.toUpperCase() : PANE_BUFFERS[session.active.value] ?? PANE_BUFFERS.left
+			const marks = new Set(target.marked.value)
 			for (const path of paths) {
 				if (sign === "-") marks.delete(path)
 				else marks.add(path)
 			}
-			tab.marked.set(marks)
+			target.marked.set(marks)
 			const verb = sign === "-" ? "removed" : "added"
 			const to = sign === "-" ? "from" : "to"
-			return `${verb} ${paths.length} path${paths.length === 1 ? "" : "s"} ${to} $${tab.label}`
+			return `${verb} ${paths.length} path${paths.length === 1 ? "" : "s"} ${to} $${label}`
 		},
 	},
 	{
@@ -183,16 +185,42 @@ const operations = [
 		},
 	},
 	{
+		name: "bookmark",
+		signature: "bookmark [NAME] [PATH]",
+		description: "List, add or remove named bookmarks",
+		arity: { min: 0, max: 2 },
+		async run(session, args) {
+			const bookmarks = session.bookmarks
+			if (args.length === 0) {
+				const rows = bookmarks.rows()
+				if (!rows.length) return "no bookmarks"
+				return `bookmarks:\n${rows
+					.map((row) => `  ${row.name}  ${row.path}${row.isDir === true ? "/" : ""}`)
+					.join("\n")}`
+			}
+			const [name, path] = args
+			if (!path) {
+				if (!(await bookmarks.remove(name))) throw new Error(`no such bookmark: ${name}`)
+				return `removed bookmark ${name}`
+			}
+			const target = expandArg(session, path)
+			if (target.length !== 1) throw new Error("bookmark: PATH must be a single path")
+			const stats = await session.fs.stat(target[0])
+			await bookmarks.record(name, target[0], stats ? Boolean(stats.isDir) : null)
+			return `bookmarked ${name} → ${target[0]}`
+		},
+	},
+	{
 		name: "run",
 		signature: "run CMD",
 		aliases: ["!"],
-		description: "Run a shell command in the active tab",
+		description: "Run a shell command in the active pane",
 		raw: true,
 		arity: { min: 1 },
 		async run(session, args) {
 			const command = `${args[0] ?? ""}`.trim()
 			if (!command) throw new Error("run needs a command")
-			const cwd = session.panes[session.active.value]?.current()?.path.value
+			const cwd = session.panes[session.active.value]?.path.value
 			await session.os.run(command, { cwd })
 			await refreshPanes(session)
 			return `ran ${command}`
@@ -219,7 +247,7 @@ function getOperation(name) {
 
 // Function: expandArg
 // Expands one argument token to paths: filesets ($A, $FILE), `~` and paths
-// relative to the active tab.
+// relative to the active pane.
 function expandArg(session, token) {
 	const text = `${token ?? ""}`
 	if (text.startsWith("$")) {
@@ -234,7 +262,7 @@ function expandArg(session, token) {
 		return [rest ? join(session.fs.home(), rest) : session.fs.home()]
 	}
 	if (text.startsWith("/")) return [normalize(text)]
-	const base = session.panes[session.active.value]?.current()?.path.value ?? session.fs.cwd()
+	const base = session.panes[session.active.value]?.path.value ?? session.fs.cwd()
 	return [join(base, text)]
 }
 
@@ -272,8 +300,9 @@ async function previewTarget(session, path, details) {
 
 // Function: parseSelection
 // Splits `sel` arguments into a sign, an optional buffer label and the path
-// tokens: `+A paths` adds to buffer A, `-1 paths` removes from buffer 1;
-// a bare path list defaults to `+` on the active tab.
+// tokens: `+A paths` adds to buffer A (the source pane), `-B paths` removes
+// from buffer B (the destination pane); a bare path list defaults to `+` on the
+// active pane.
 function parseSelection(args) {
 	const match = /^([+-])(\w*)$/.exec(args[0] ?? "")
 	if (match) {
@@ -283,15 +312,15 @@ function parseSelection(args) {
 }
 
 // Function: findBuffer
-// Resolves a selection buffer to its tab: the active tab by default, or the
-// tab whose label matches `name`.
+// Resolves a selection buffer to a pane's marks cell: the active pane by
+// default, or the pane whose buffer label matches `name` (`A` = source/left,
+// `B` = destination/right).
 function findBuffer(session, name) {
 	const active = session.panes[session.active.value] ?? session.panes.left
-	if (!name) return active.current()
+	if (!name) return active
+	const target = `${name}`.toUpperCase()
 	for (const paneId of Object.keys(session.panes)) {
-		for (const tab of session.panes[paneId].tabs.value) {
-			if (tab.label.toLowerCase() === `${name}`.toLowerCase()) return tab
-		}
+		if (PANE_BUFFERS[paneId] === target) return session.panes[paneId]
 	}
 	throw new Error(`unknown selection buffer: ${name}`)
 }

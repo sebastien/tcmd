@@ -1,0 +1,18 @@
+<box when="open" width="100%" height="100%" alignItems="center" justifyContent="center">
+	<box width="72%" height="60%" border borderStyle="rounded"
+	     out:title="title" out:titleColor="titleColor" out:borderColor="borderFg"
+	     out:backgroundColor="bg" flexDirection="column">
+		<box flexDirection="row" height="1" paddingLeft="1">
+			<text out="sign" out:fg="titleColor"></text>
+			<input ref="query" inout="query" flexGrow="1" height="1" out:focused="focused" on:enter="confirm"></input>
+		</box>
+		<text when="inputVisible" out="target" out:fg="pathFg" paddingLeft="1" wrapMode="none" truncate="true"></text>
+		<text when="emptyList" out="empty" out:fg="emptyFg" paddingLeft="1" wrapMode="none"></text>
+		<scrollbox when="listVisible" ref="list" flexGrow="1">
+			<box out="rows" flexDirection="column"></box>
+		</scrollbox>
+		<box flexDirection="row" height="1" paddingLeft="1">
+			<text out="footer" out:fg="footerFg"></text>
+		</box>
+	</box>
+</box>

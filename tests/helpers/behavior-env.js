@@ -21,6 +21,7 @@ const behaviorEnv = {
 	borderSecondaryFg: "border",
 	childClass: "is-child",
 	cursorBg: "cursor",
+	cursorInactiveBg: "cursorInactive",
 	currentClass: "is-current",
 	devFg: "dev",
 	dirClass: "is-dir",

@@ -150,6 +150,18 @@ describe("operations", () => {
 		expect(session.notice.value.kind).toBe("error")
 	})
 
+	test("bookmark op lists, adds and removes named bookmarks", async () => {
+		const { session } = await makeSession()
+		await runLine(session, "bookmark notes notes.txt")
+		expect(session.bookmarks.entries.value.notes).toEqual({ path: "/home/notes.txt", isDir: false })
+		await runLine(session, "bookmark docs docs")
+		expect(session.bookmarks.entries.value.docs).toEqual({ path: "/home/docs", isDir: true })
+		expect(session.bookmarks.rows().map((row) => row.name)).toEqual(["docs", "notes"])
+		await runLine(session, "bookmark notes")
+		expect(session.bookmarks.entries.value.notes).toBeUndefined()
+		expect(await runLine(session, "bookmark ghost")).toBe("error")
+	})
+
 	test("edit, open and run go through the host adapter", async () => {
 		const { os, session } = await makeSession()
 		await runLine(session, "edit notes.txt")

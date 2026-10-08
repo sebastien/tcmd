@@ -14,8 +14,15 @@ export { createNodeFs } from "./fs.js"
 export { createNullOs, createNodeOs } from "./os.js"
 export { filterEntries, rankEntries, sortEntries, viewEntries } from "./entries.js"
 export { clampCursor, currentEntry, moveCursor, toggleMark } from "./selection.js"
-export { createPane } from "./pane.js"
-export { createLabels, createTab } from "./tab.js"
+export { PANE_BUFFERS, PANE_LABELS, createPane } from "./pane.js"
+export { createDirectory } from "./directory.js"
+export {
+	createBookmarks,
+	createFileBookmarkStore,
+	createMemoryBookmarkStore,
+	isValidName,
+	normalizeName,
+} from "./bookmarks.js"
 export { DEFAULT_KEYMAP, matchKeymap } from "./keymap.js"
 export { createDispatch, getCommand, getCommands } from "./commands.js"
 export { expandAll, expandArg, getOperation, getOperations } from "./operations.js"

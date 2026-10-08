@@ -8,8 +8,9 @@
 // paneId }`, the same bag shape in both engines. `cursor` and `marked` are
 // reactive cells, read with `unwrap` at the point of use.
 //
-// Environment: `cursorBg`, `currentClass`, `accentSecondaryFg`, `accentFg`,
-// `linkFg`, `dirFg`, `devFg`, `fileFg`, `textSecondaryFg`, `dirClass`.
+// Environment: `cursorBg`, `cursorInactiveBg`, `currentClass`,
+// `accentSecondaryFg`, `accentFg`, `linkFg`, `dirFg`, `devFg`, `fileFg`,
+// `textSecondaryFg`, `dirClass`.
 
 import { unwrap } from "select/state/cells"
 import { formatSize } from "./format.js"
@@ -59,7 +60,13 @@ function nameFg(item, env) {
 function createBehaviors(env) {
 	return {
 		rowBg: (_self, data) => {
-			if (isCurrent(data.index, unwrap(data.cursor))) return env.cursorBg
+			if (isCurrent(data.index, unwrap(data.cursor))) {
+				// The active pane's cursor is the strong accent; the inactive
+				// pane keeps a muted cursor so focus is visible from the row
+				// alone. A missing `active` (web, single-pane hosts) reads as
+				// active.
+				return unwrap(data.active) === false ? env.cursorInactiveBg : env.cursorBg
+			}
 			if (isMarked(data.item, unwrap(data.marked))) return env.accentSecondaryBg
 			return undefined
 		},

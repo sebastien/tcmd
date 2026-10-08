@@ -7,6 +7,12 @@ function makeData(overrides = {}) {
 		calls,
 		data: {
 			active: "left",
+			bookmarkIndex: 0,
+			bookmarkItems: [],
+			bookmarkMode: "list",
+			bookmarkOpen: false,
+			bookmarkQuery: "",
+			bookmarkTarget: null,
 			confirm: null,
 			dispatch: (id, payload) => calls.push({ id, payload }),
 			filtering: null,
@@ -47,6 +53,12 @@ describe("App", () => {
 		const session = {
 			active: "active",
 			activePath: "ap",
+			bookmarkIndex: "bi",
+			bookmarkItems: "bits",
+			bookmarkMode: "bm",
+			bookmarkOpen: "bo",
+			bookmarkQuery: "bq",
+			bookmarkTarget: "bt",
 			commandBarItems: "barItems",
 			confirm: "confirm",
 			dispatch: "dispatch",
@@ -66,6 +78,8 @@ describe("App", () => {
 			active: "active",
 			appHost: "test-host",
 			appPath: "ap",
+			bookmarkItems: "bits",
+			bookmarkMode: "bm",
 			commandBarItems: "barItems",
 			confirm: "confirm",
 			dispatch: "dispatch",
@@ -186,8 +200,6 @@ describe("App", () => {
 		events["commandbar:run"](null, data, { data: "pane.reload" })
 		events["commandbar:run"](null, data, { data: null })
 		events["palette:run"](null, data, { data: "view.togglePreview" })
-		events["tabs:new"](null, data, { data: { paneId: "left" } })
-		events["tabs:select"](null, data, { data: { paneId: "left", index: 1 } })
 		events["pane:activate"](null, data, { data: "right" })
 		expect(calls.map((call) => call.id)).toEqual([
 			"pane.setPath",
@@ -195,9 +207,52 @@ describe("App", () => {
 			"pane.reload",
 			"view.togglePreview",
 			"palette.toggle",
-			"tab.new",
-			"tab.select",
 			"pane.activate",
+		])
+	})
+
+	test("bookmark events route to select, save and jump", () => {
+		const events = createEvents()
+		const { calls, data } = makeData({
+			bookmarkItems: [{ name: "notes", path: "/home/notes.txt" }],
+			bookmarkOpen: true,
+		})
+		events["bookmark:select"](null, data, { data: "notes" })
+		expect(calls).toEqual([
+			{ id: "bookmark.setIndex", payload: { index: 0 } },
+			{ id: "bookmark.select", payload: undefined },
+		])
+
+		const naming = makeData({ bookmarkOpen: true, bookmarkMode: "name" })
+		events["bookmark:confirm"](null, naming.data, {})
+		expect(naming.calls).toEqual([{ id: "bookmark.save", payload: undefined }])
+
+		const listing = makeData({
+			bookmarkOpen: true,
+			bookmarkMode: "list",
+			bookmarkItems: [{ name: "notes", path: "/home/notes.txt" }],
+		})
+		events["bookmark:confirm"](null, listing.data, {})
+		expect(listing.calls).toEqual([{ id: "bookmark.select", payload: undefined }])
+	})
+
+	test("bookmark mode routes navigation, save and cancel", () => {
+		const behaviors = createBehaviors({ quit: () => {} })
+		// Name mode: Enter publishes confirm, Esc cancels.
+		const naming = makeData({ bookmarkOpen: true, bookmarkMode: "name" })
+		behaviors.keys({ pub: () => {} }, naming.data, { name: "escape" })
+		expect(naming.calls).toEqual([{ id: "bookmark.cancel", payload: undefined }])
+		const namingSelf = { pub: (name) => naming.calls.push({ id: name }) }
+		behaviors.keys(namingSelf, naming.data, { name: "return" })
+		expect(naming.calls).toContainEqual({ id: "bookmark:confirm" })
+
+		// List mode: arrows move, Enter jumps.
+		const listing = makeData({ bookmarkOpen: true, bookmarkMode: "list" })
+		behaviors.keys({ pub: () => {} }, listing.data, { name: "down" })
+		behaviors.keys({ pub: () => {} }, listing.data, { name: "up" })
+		expect(listing.calls).toEqual([
+			{ id: "bookmark.down", payload: undefined },
+			{ id: "bookmark.up", payload: undefined },
 		])
 	})
 

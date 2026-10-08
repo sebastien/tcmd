@@ -6,8 +6,9 @@
 // Module: tcmd/tui/frame
 // TUI-only presentation behaviors for the workspace chrome: the frame border
 // (identity + host), the responsive breakpoints driven by the `uiSize` cell,
-// the pane dividers and the help overlay state. Everything here is injected
-// into the App binding; none of it lives in the shared `components/` logic.
+// the pane borders, header rules and the help overlay state. Everything here
+// is injected into the App binding; none of it lives in the shared
+// `components/` logic.
 
 import { unwrap } from "select/state/cells"
 import { DEFAULT_KEYMAP } from "../core/keymap.js"
@@ -73,9 +74,14 @@ function createFrameBehaviors(env) {
 		titleFg: () => env.theme.textHeadingFg,
 		dimFg: () => env.theme.textSecondaryFg,
 
-		// One divider between the panes; the inspector brings its own border.
-		leftDivider: () => ["right"],
-		rightDivider: () => [],
+		// Each pane is a complete box. Both draw all four edges (the middle
+		// shows two adjacent rules) so each pane's border colour can track its
+		// own focus independently — a shared edge would be owned by one pane
+		// and never highlight when the other is active.
+		leftBorder: () => ["top", "left", "bottom", "right"],
+		rightBorder: () => ["top", "left", "bottom", "right"],
+		// The header rule separates the pane header row from the listing body.
+		headRule: () => ["top"],
 
 		// The breadcrumb yields the pane header row to the filter while a
 		// filter is being edited or applied.
@@ -123,16 +129,16 @@ function keyGlyph(chord) {
 
 // Constant: GROUP_ORDER / GROUP_TITLES
 // Help sections, in display order.
-const GROUP_ORDER = ["nav", "pane", "list", "tab", "view", "file", "palette", "filter", "app"]
+const GROUP_ORDER = ["nav", "pane", "list", "bookmark", "view", "file", "palette", "filter", "app"]
 const GROUP_TITLES = {
 	app: "Session",
+	bookmark: "Bookmarks",
 	file: "Files",
 	filter: "Filter",
 	list: "Selection",
 	nav: "Navigation",
 	palette: "Commands",
 	pane: "Panes",
-	tab: "Tabs",
 	view: "View",
 }
 

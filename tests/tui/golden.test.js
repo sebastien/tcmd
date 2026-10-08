@@ -39,6 +39,14 @@ describe("golden frames", () => {
 			expect(frame.split("\n")[0]).toStartWith("╭")
 			expect(frame.split("\n")[0]).toContain("TinyCmd")
 			expect(frame.split("\n")[0]).toContain("/home")
+			// Each pane is a single-line box (square corners) tiled inside the
+			// frame, with a header rule under the SRC/DST header row.
+			expect(frame).toContain("┌")
+			expect(frame).toContain("└")
+			expect(frame).toContain("│")
+			// The pane headers carry the source/destination labels.
+			expect(frame).toContain("SRC")
+			expect(frame).toContain("DST")
 			// The inline inspector holds the first entry (a directory) as a card.
 			expect(frame).toContain("documents/")
 			expect(frame).toContain("directory: documents/")
@@ -150,7 +158,8 @@ describe("golden frames", () => {
 			expect(narrow).not.toContain("[O]pen [E]dit")
 			expect(narrow).toContain("Switch")
 			expect(narrow).toContain("Tab")
-			expect(narrow).not.toContain("New tab[t]")
+			// The essential bookmark hint stays in the compact bar.
+			expect(narrow).toContain("Bookmarks")
 
 			// Grow again: the inspector returns.
 			size.set({ width: 120, height: 30 })

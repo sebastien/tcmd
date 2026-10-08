@@ -1,4 +1,0 @@
-<box flexDirection="row" height="1">
-	<box out="rows" flexDirection="row" height="1"></box>
-	<box on:click="paneId!tabs:new"><text out="addLabel" out:fg="addFg"></text></box>
-</box>

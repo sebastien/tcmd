@@ -69,10 +69,9 @@ describe("web app", () => {
 			expect(detail).not.toBeNull()
 			// Cursor starts on the `tester/` directory.
 			expect(detail.textContent).toContain("drwxr-xr-x")
-			// One labelled tab per pane plus the add affordance.
-			expect(host.querySelectorAll(".pane-left .tab").length).toBe(1)
-			expect(host.querySelector(".pane-left .tab.is-active")).not.toBeNull()
-			expect(host.querySelector(".pane-left .tab-add")).not.toBeNull()
+			// The pane header carries the SRC/DST role label.
+			expect(host.querySelector(".pane-left .pane-label").textContent).toBe("SRC")
+			expect(host.querySelector(".pane-right .pane-label").textContent).toBe("DST")
 			// App.html wrappers are neutral containers: no duplicated child roots.
 			expect(host.querySelector(".file-list .file-list")).toBeNull()
 			expect(host.querySelector("ul > ul")).toBeNull()

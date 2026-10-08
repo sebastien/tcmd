@@ -48,6 +48,14 @@ function normalizeKey(event) {
 function webViewBehaviors() {
 	return {
 		headerView: (_self, data) => ({ host: data.appHost, path: data.appPath }),
+		bookmarkView: (_self, data) => ({
+			items: data.bookmarkItems,
+			mode: data.bookmarkMode,
+			open: data.bookmarkOpen,
+			query: data.bookmarkQuery,
+			selected: data.bookmarkIndex,
+			target: data.bookmarkTarget,
+		}),
 		commandBarView: (_self, data) => ({
 			items: data.commandBarItems,
 			leftError: data.leftError,
@@ -66,6 +74,7 @@ function webViewBehaviors() {
 			filtering: data.filtering,
 			entries: data.leftEntries,
 		}),
+		leftLabelView: (_self, data) => ({ paneId: data.leftId, active: data.active }),
 		leftListView: (_self, data) => ({
 			entries: data.leftEntries,
 			cursor: data.leftCursor,
@@ -76,11 +85,6 @@ function webViewBehaviors() {
 		leftSummaryView: (_self, data) => ({
 			entries: data.leftEntries,
 			disk: data.leftDisk,
-		}),
-		leftTabsView: (_self, data) => ({
-			tabs: data.leftTabs,
-			active: data.leftActiveIndex,
-			paneId: data.leftId,
 		}),
 		paletteView: (_self, data) => ({
 			// Cells pass through (as `in:` slots do in the TUI); `query` is written
@@ -106,6 +110,7 @@ function webViewBehaviors() {
 			filtering: data.filtering,
 			entries: data.rightEntries,
 		}),
+		rightLabelView: (_self, data) => ({ paneId: data.rightId, active: data.active }),
 		rightListView: (_self, data) => ({
 			entries: data.rightEntries,
 			cursor: data.rightCursor,
@@ -116,11 +121,6 @@ function webViewBehaviors() {
 		rightSummaryView: (_self, data) => ({
 			entries: data.rightEntries,
 			disk: data.rightDisk,
-		}),
-		rightTabsView: (_self, data) => ({
-			tabs: data.rightTabs,
-			active: data.rightActiveIndex,
-			paneId: data.rightId,
 		}),
 	}
 }

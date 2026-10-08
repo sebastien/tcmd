@@ -6,23 +6,32 @@ The TUI is a single rounded frame. The frame title carries the active path
 (`TinyCmd - HOST DIR/BASE`, compressed to fit). Inside:
 
 - Top bar (inside the frame): the active path, advertised by the frame title.
-- Two panes, split by a single vertical divider, plus an optional inspector.
+- Two panes, each its own single-line box, plus an optional inspector.
 - Status bar: context key hints on the left, notices/errors and marks on the
   right.
 - Below the breakpoint the workspace is replaced by a resize hint.
 
-Each pane:
+Each pane draws all four edges (the two middle edges sit side by side), so each
+pane's border can highlight independently. The active pane's box border and
+header rule are tinted with the active border colour, and its cursor row uses
+the strong cursor background; the inactive pane keeps the dim border and a
+muted cursor, so focus reads from the border, the rule and the cursor alike.
 
-- one header row: tab chips, breadcrumbs, and the inline filter (`/ query`),
-  so a filter never shifts the listing or the other pane;
+Each pane is a single-line box containing:
+
+- one header row: the **SRC**/**DST** role label (active panes accented),
+  breadcrumbs, and the inline filter (`/ query`), so a filter never shifts the
+  listing or the other pane;
+- one header rule, separating the header row from the listing;
 - contents (scrollable, cursorable);
-- one entry-detail block (two rows, a separator rule on top): the selected
-  entry's `mtime · type · size` and, when the backend exposes them,
-  `ctime · owner · mode`. It follows the pane cursor and stays blank when the
-  listing is empty. The type is coloured like the listing (file/link/device/
-  directory) and the mode is brightened, so both stand out from the dim
-  timestamp/size fields;
-- one summary row (counts + disk), always at the same row in both panes.
+- one entry-detail line (a separator rule on top): the selected entry's
+  `date · type · size · rights`, on a single row with the rights right-aligned.
+  It follows the pane cursor and stays blank when the listing is empty; the
+  date and size (the numeric fields) are bright, the type is coloured like the
+  listing, and the rights are accented. When the pane is too narrow the size
+  gives way first, then the rights, keeping the date and type;
+- one summary row (counts + disk, indented two spaces), always at the same row
+  in both panes.
 
 The inspector is context-aware: text files show their leading content, other
 kinds show a metadata card, and a directory shows a directory card rather than
@@ -31,14 +40,18 @@ viewer (`v`) below that.
 
 ```text
 ╭─ TinyCmd · devbox ───────────────────────────────────────────────────────────────╮
-│ A  B  +   / home / tester         │ C  +   / etc           │ notes.txt    <TXT>   │
-│                                    │                        ├──────────────────────┤
-│ > documents/              <dir>    │ > hosts          19B   │ hello                │
-│   notes.txt                26B     │                        │ world                │
-│   archive.tar.gz          10.0M    │                        │ third line           │
-│   tiny.txt                  4B     │                        │                      │
-│ 2 dirs · 3 files · 10.0M           │ 1 file · 19B           │ 26B · text           │
-╰─ ↵open  ←parent  ⇥pane  ␣mark  ^P palette  / filter        ▸A · 0 marked  ? help ─╯
+│┌──────────────────────────────────┐┌──────────────────────────┐╭─notes.txt <TXT>─╮│
+││SRC  / home /                    ││DST  / etc               ││                 ││
+││──────────────────────────────────││──────────────────────────││                 ││
+││>  documents/            <dir>    ││>  hosts          19B     ││hello            ││
+││   notes.txt              26B     ││                          ││world            ││
+││   archive.tar.gz         10.0M   ││                          ││third line       ││
+││   tiny.txt                4B     ││                          ││                 ││
+││──────────────────────────────────││──────────────────────────││                 ││
+││2026-10-06 07:55 · file ·… -rw-r--││  dir ·        drwxr-xr-x ││                 ││
+││  2 dirs · 3 files · 10.0M        ││  1 file · 19B            ││[O]pen [E]dit    ││
+│└──────────────────────────────────┘└──────────────────────────┘╰─────────────────╯│
+╰─ ↵open  ←parent  ⇥pane  ␣mark  b bookmark  g bookmarks  / filter  ? help ────────╯
 ```
 
 ## Responsive behavior
@@ -63,6 +76,11 @@ events, with the renderer dimensions as a fallback):
 
 - Command palette (`^P`): centered, sectioned, with a selected-row marker and
   its own hint footer. `:` opens it in scripting mode.
+- Bookmarks (`b`/`g`): centered. `b` opens a naming prompt (defaulting to the
+  path's basename) for the cursor entry (or the pane directory), then `g` opens
+  a fzf-style picker over bookmark names and paths. Each bookmark remembers
+  whether it is a file or a directory: jumping to a directory opens it, while
+  jumping to a file selects it in its directory and previews it.
 - Confirm (destructive operations): centered modal with the question and
   `[y]es [n]o`.
 - Keys (`?`): a grouped reference built from the live keymap and command
@@ -76,7 +94,8 @@ events, with the renderer dimensions as a fallback):
 - erase PATH (does not move to trash)
 - stat PATH (info, including du)
 - touch PATH
-- sel BUF? PATH... adds/removes to selection  BUF would be +/- +A/-1 (default to +)
+- sel BUF? PATH... adds/removes to selection  BUF would be +/- +A/-B (default to +)
+- bookmark [NAME] [PATH] lists, adds or removes named bookmarks
 - edit PATH, edits with $EDITOR
 - view PATH, previews
 - open PATH, uses open/gnome-open
@@ -90,19 +109,22 @@ events, with the renderer dimensions as a fallback):
 - `NO_COLOR` or `TERM=dumb` falls back to mono;
 - otherwise dark.
 
-Mono uses terminal defaults throughout and relies on markers (`>`, `*`, `▸`,
+Mono uses terminal defaults throughout and relies on markers (`>`, `*`,
 `[`/`]`) and layout, never colour alone. The same applies at every level: the
-active pane, active tab, selected row and current file all have a non-colour
-carrier.
+active pane, selected row and current file all have a non-colour carrier — the
+active pane is identified by the `>` cursor marker in its list (and its SRC/DST
+label position).
 
 The token set is grouped (see `tui/theme.js` for the palette values):
 
 - surfaces: `surfaceBg`, `overlayBg`, `mutedBg` (neutral badge grey),
-  `cursorBg`, `selectionBg`;
+  `cursorBg` (active pane cursor row), `cursorInactiveBg` (inactive pane
+  cursor), `selectionBg`;
 - text: `textFg`, `textSecondaryFg`, `textHeadingFg`;
-- borders: `borderSecondaryFg`/`borderSecondaryActiveFg` (pane dividers) and
+- borders: `borderSecondaryFg`/`borderSecondaryActiveFg` (pane boxes and
+  header rules, inactive/active) and
   `borderPrimaryFg`/`borderPrimaryActiveFg` (frame and modal overlays);
-- accent: `accentFg`/`accentBg` (cursor, active tab) and
+- accent: `accentFg`/`accentBg` (cursor, active pane label) and
   `accentSecondaryFg`/`accentSecondaryBg` (marks);
 - semantic states, each as a background + foreground pair for badges: error,
   warning and tip;

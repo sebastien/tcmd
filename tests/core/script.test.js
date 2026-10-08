@@ -57,6 +57,7 @@ describe("script", () => {
 			"edit",
 			"view",
 			"open",
+			"bookmark",
 			"run",
 		])
 		expect(scriptItems("co", []).map((row) => row.title)).toEqual(["copy"])

@@ -76,8 +76,8 @@ function sortEntries(entries, sort) {
 }
 
 // Function: viewEntries
-// The listing a tab shows: `sortEntries` when there is no filter, otherwise the
-// fzy-ranked matches of `query` (see `rankEntries`).
+// The listing a directory shows: `sortEntries` when there is no filter,
+// otherwise the fzy-ranked matches of `query` (see `rankEntries`).
 function viewEntries(entries, query, sort) {
 	if (!normalizeQuery(query)) return sortEntries(entries, sort)
 	return rankEntries(entries, query, sort)

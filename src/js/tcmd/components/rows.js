@@ -25,7 +25,9 @@ function crumbRows(Crumb) {
 }
 
 // Function: fileRows
-// `{ item: entry, index, cursor, marked, paneId }` bags for `FileRow` rows.
+// `{ item: entry, index, cursor, marked, active, paneId }` bags for `FileRow`
+// rows. `active` is the pane-focus flag so the cursor row can render muted in
+// the inactive pane.
 function fileRows(FileRow) {
 	return (data) =>
 		FileRow.map(
@@ -35,6 +37,7 @@ function fileRows(FileRow) {
 				index,
 				cursor: data.cursor,
 				marked: data.marked,
+				active: data.active,
 				paneId: data.paneId,
 			}),
 			(entry) => entry.path,
@@ -63,17 +66,17 @@ function commandItemRows(CommandItem) {
 		)
 }
 
-// Function: tabItemRows
-// `{ item: tab, index, active, paneId }` bags for `TabItem` rows.
-function tabItemRows(TabItem) {
+// Function: bookmarkRows
+// `{ item: { name, path }, index, selected }` bags for `BookmarkRow` rows.
+function bookmarkRows(BookmarkRow) {
 	return (data) =>
-		TabItem.map(
-			data.tabs ?? [],
-			(item, index) => ({ item, index, active: data.active, paneId: data.paneId }),
-			(tab) => tab.id,
+		BookmarkRow.map(
+			data.items ?? [],
+			(item, index) => ({ item, index, selected: data.selected }),
+			(bookmark) => bookmark.name,
 		)
 }
 
-export { commandItemRows, crumbRows, fileRows, paletteRows, tabItemRows }
+export { bookmarkRows, commandItemRows, crumbRows, fileRows, paletteRows }
 
 // EOF

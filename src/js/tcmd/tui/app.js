@@ -68,7 +68,11 @@ function createAppComponent(session, options = {}) {
 				const key = event
 				const name = key?.name
 				const isQuestion = name === "?" || (name === "/" && key?.shift)
-				const busy = unwrap(data.paletteOpen) || unwrap(data.confirm) || unwrap(data.filtering)
+				const busy =
+					unwrap(data.paletteOpen) ||
+					unwrap(data.confirm) ||
+					unwrap(data.filtering) ||
+					unwrap(data.bookmarkOpen)
 
 				// Help overlay owns the keyboard while open.
 				if (unwrap(data.helpOpen)) {
@@ -101,6 +105,11 @@ function createAppComponent(session, options = {}) {
 			leftBorderFg: (_self, data) =>
 				unwrap(data.active) === "left" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
 			rightBorderFg: (_self, data) =>
+				unwrap(data.active) === "right" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
+			// The header rule carries the same focus tint as the pane border.
+			leftHeadRuleFg: (_self, data) =>
+				unwrap(data.active) === "left" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
+			rightHeadRuleFg: (_self, data) =>
 				unwrap(data.active) === "right" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
 		})
 		.sub(appEvents())

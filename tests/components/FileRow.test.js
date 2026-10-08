@@ -25,6 +25,9 @@ describe("FileRow", () => {
 		expect(behaviors.rowName(null, { item: DIR })).toBe("sub/")
 		expect(behaviors.rowBg(null, { index: 1, cursor: 1 })).toBe("cursor")
 		expect(behaviors.rowBg(null, { index: 0, cursor: 1 })).toBeUndefined()
+		// The inactive pane keeps a muted cursor; a missing flag reads active.
+		expect(behaviors.rowBg(null, { index: 1, cursor: 1, active: false })).toBe("cursorInactive")
+		expect(behaviors.rowBg(null, { index: 1, cursor: 1, active: true })).toBe("cursor")
 		expect(behaviors.rowClass(null, { index: 1, cursor: 1 })).toBe("is-current")
 		expect(behaviors.rowClass(null, { index: 0, cursor: 1 })).toBeNull()
 		expect(behaviors.rowNameFg(null, { item: DIR })).toBe("dir")

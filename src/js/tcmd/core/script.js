@@ -8,7 +8,7 @@
 // line tokenizer, operation parser and runner, plus the completion rows the
 // palette lists. A line starts with an operation name (or the `!` alias for
 // `run`); arguments may be filesets ($A, $B, $FILE), quoted paths, `~` or
-// paths relative to the active tab.
+// paths relative to the active pane.
 
 import { getOperation, getOperations, humanSize } from "./operations.js"
 
@@ -106,7 +106,7 @@ async function runLine(session, line, options = {}) {
 
 // Function: scriptItems
 // Palette rows for scripting mode: the session's available filesets first,
-// then every operation, then matching entries of the active tab (path
+// then every operation, then matching entries of the active pane (path
 // completion). Rows carry the full query replacement `completion` for Tab.
 function scriptItems(query, filesets, context = {}) {
 	const text = `${query ?? ""}`

@@ -1,4 +1,0 @@
-<box flexDirection="row" height="1" out:backgroundColor="tabBg" on:click="paneId:paneId,index:index!tabs:select">
-	<text out="tabMarker" width="1" out:fg="tabMarkerFg"></text>
-	<text out="tabLabel" out:fg="tabFg"></text>
-</box>

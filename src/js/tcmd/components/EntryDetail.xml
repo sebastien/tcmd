@@ -1,14 +1,14 @@
-<box flexDirection="column" height="3" out:border="detailBorder" out:borderColor="detailBorderFg"
+<box ref="box" flexDirection="column" height="2" out:border="detailBorder" out:borderColor="detailBorderFg"
      borderStyle="single" overflow="hidden">
 	<box flexDirection="row" height="1" overflow="hidden">
-		<text when="detailHasLead" out="detailLead" out:fg="dimFg" wrapMode="none"></text>
-		<text out="detailType" out:fg="detailTypeFg" wrapMode="none"></text>
-		<text when="detailHasTail" out="detailTail" out:fg="dimFg" wrapMode="none" truncate="true"></text>
-	</box>
-	<box flexDirection="row" height="1" overflow="hidden">
-		<text when="metaHasLead" out="metaLead" out:fg="dimFg" wrapMode="none"></text>
-		<text when="metaHasOwner" out="metaOwner" out:fg="dimFg" wrapMode="none" truncate="true"></text>
-		<text when="metaHasSep" out="metaSep" out:fg="dimFg" wrapMode="none"></text>
-		<text when="metaHasMode" out="metaMode" out:fg="metaModeFg" wrapMode="none"></text>
+		<text when="detailHasIndent" out="detailIndent" out:fg="dimFg" wrapMode="none"></text>
+		<text when="detailHasTime" out="detailTime" out:fg="brightFg" wrapMode="none"></text>
+		<text when="detailSepType" out="detailSep" out:fg="dimFg" wrapMode="none"></text>
+		<text when="detailHasType" out="detailType" out:fg="detailTypeFg" wrapMode="none"></text>
+		<text when="detailSepSize" out="detailSep" out:fg="dimFg" wrapMode="none"></text>
+		<text when="detailHasSize" out="detailSize" out:fg="brightFg" wrapMode="none"></text>
+		<box when="detailHasMode" flexGrow="1" minWidth="0" flexShrink="1"></box>
+		<text when="detailSepMode" out="detailSep" out:fg="dimFg" wrapMode="none" flexShrink="0"></text>
+		<text when="detailHasMode" out="detailMode" out:fg="detailModeFg" wrapMode="none" flexShrink="0"></text>
 	</box>
 </box>

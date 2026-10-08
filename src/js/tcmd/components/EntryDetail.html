@@ -1,13 +1,13 @@
 <div class="entry-detail">
 	<div class="entry-detail-line">
-		<span class="entry-detail-lead" out="detailLead"></span>
+		<span class="entry-detail-indent" out="detailIndent"></span>
+		<span class="entry-detail-time" out="detailTime"></span>
+		<span class="entry-detail-sep" when="detailSepType" out="detailSep"></span>
 		<span class="entry-detail-type" out:class="detailTypeClass" out="detailType"></span>
-		<span class="entry-detail-tail" out="detailTail"></span>
-	</div>
-	<div class="entry-detail-line">
-		<span class="entry-detail-lead" out="metaLead"></span>
-		<span class="entry-detail-owner" out="metaOwner"></span>
-		<span class="entry-detail-sep" out="metaSep"></span>
-		<span class="entry-detail-mode" out="metaMode"></span>
+		<span class="entry-detail-sep" when="detailSepSize" out="detailSep"></span>
+		<span class="entry-detail-size" out="detailSize"></span>
+		<span class="entry-detail-spacer" when="detailHasMode"></span>
+		<span class="entry-detail-sep" when="detailSepMode" out="detailSep"></span>
+		<span class="entry-detail-mode" out="detailMode"></span>
 	</div>
 </div>

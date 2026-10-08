@@ -2,24 +2,29 @@
 	<header out="headerView|Header"></header>
 	<main class="panes">
 		<section class="pane pane-left" out:class="leftPaneClass" on:click="leftId!pane:activate">
-			<div out="leftTabsView|TabBar"></div>
-			<div out="leftCrumbsView|Breadcrumbs"></div>
+			<div class="pane-header">
+				<div out="leftLabelView|PaneLabel"></div>
+				<div out="leftCrumbsView|Breadcrumbs"></div>
+				<div out="leftFilterView|FilterBar"></div>
+			</div>
 			<div out="leftListView|FileList"></div>
 			<div out="leftDetailView|EntryDetail"></div>
 			<div out="leftSummaryView|Summary"></div>
-			<div out="leftFilterView|FilterBar"></div>
 		</section>
 		<section class="pane pane-right" out:class="rightPaneClass" on:click="rightId!pane:activate">
-			<div out="rightTabsView|TabBar"></div>
-			<div out="rightCrumbsView|Breadcrumbs"></div>
+			<div class="pane-header">
+				<div out="rightLabelView|PaneLabel"></div>
+				<div out="rightCrumbsView|Breadcrumbs"></div>
+				<div out="rightFilterView|FilterBar"></div>
+			</div>
 			<div out="rightListView|FileList"></div>
 			<div out="rightDetailView|EntryDetail"></div>
 			<div out="rightSummaryView|Summary"></div>
-			<div out="rightFilterView|FilterBar"></div>
 		</section>
 		<div when="showPreview" out="previewView|FilePreview"></div>
 	</main>
 	<footer out="commandBarView|CommandBar"></footer>
 	<div when="paletteOpen" out="paletteView|CommandPalette"></div>
+	<div when="bookmarkOpen" out="bookmarkView|BookmarkList"></div>
 	<div out="confirmView|Confirm"></div>
 </div>
