@@ -16,6 +16,7 @@
 
 import { derived, unwrap } from "select/state/cells"
 import { DEFAULT_KEYMAP, matchKeymap } from "../core/keymap.js"
+import { PANEL_FOCUS } from "../core/panel.js"
 
 // Function: createInit
 // State initializer binding the root component to a `session`.
@@ -60,6 +61,21 @@ function createInit(session) {
 		paletteMode: session.paletteMode,
 		paletteOpen: session.paletteOpen,
 		paletteQuery: session.paletteQuery,
+		panelCommand: session.panelCommand,
+		panelDraft: session.panelDraft,
+		panelCursorRow: session.panelCursorRow,
+		panelFiltered: session.panelFiltered,
+		panelFocus: session.panelFocus,
+		panelOpIndex: session.panelOpIndex,
+		panelItems: session.panelItems,
+		panelOpen: session.panelOpen,
+		panelOperation: session.panelOperation,
+		panelQuery: session.panelQuery,
+		panelRowIndex: session.panelRowIndex,
+		panelRows: session.panelRows,
+		panelRunnable: session.panelRunnable,
+		panelTextual: session.panelTextual,
+		panelValue: session.panelValue,
 		preview: session.preview,
 		rightActive,
 		rightCursor: right.cursor,
@@ -114,6 +130,55 @@ function createBehaviors(env) {
 					return
 				}
 				// Let the focused input handle typing.
+				return
+			}
+			if (unwrap(data.panelOpen)) {
+				const focus = unwrap(data.panelFocus)
+				// Escape closes; Tab cycles the focus ring (command ⇄ args);
+				// arrows move within the focused column; Enter runs the command.
+				if (key?.name === "escape") {
+					data.dispatch("panel.cancel")
+					return
+				}
+				if (key?.name === "tab") {
+					data.dispatch("panel.tab", { delta: key.shift ? -1 : 1 })
+					return
+				}
+				if (key?.name === "up") {
+					data.dispatch(focus === PANEL_FOCUS.ARGS ? "panel.prevArg" : "panel.up")
+					return
+				}
+				if (key?.name === "down") {
+					data.dispatch(focus === PANEL_FOCUS.ARGS ? "panel.nextArg" : "panel.down")
+					return
+				}
+				if (key?.name === "return" || key?.name === "enter") {
+					// A focused textual-argument field owns Enter (its `on:enter`
+					// publishes `panel:confirm`), so the command is not run twice.
+					if (focus === PANEL_FOCUS.ARGS && unwrap(data.panelTextual)) return
+					// Enter runs the highlighted command with the current draft.
+					data.dispatch("panel.run")
+					return
+				}
+				// Space toggles a selection item in the argument column.
+				if (key?.name === "space" && focus === PANEL_FOCUS.ARGS && !unwrap(data.panelTextual)) {
+					data.dispatch("panel.toggleItem")
+					return
+				}
+				if (key?.name === "backspace" && focus === PANEL_FOCUS.ARGS) {
+					// Editing the command filter from the argument column.
+					data.dispatch("panel.type", { backspace: true })
+					return
+				}
+				// While the command column is focused, or a textual argument
+				// owns the cursor, the focused input handles typing.
+				if (focus !== PANEL_FOCUS.ARGS || unwrap(data.panelTextual)) return
+				// Typing on a non-textual argument jumps back to the command
+				// filter and appends the character.
+				if (key?.name && key.name.length === 1 && !key.ctrl && !key.meta) {
+					data.dispatch("panel.type", { char: key.name })
+					return
+				}
 				return
 			}
 			if (unwrap(data.bookmarkOpen)) {
@@ -187,6 +252,9 @@ function createBehaviors(env) {
 				env.quit(self)
 				return
 			}
+			// The command panel is a TUI-only view; the web renderer omits the
+			// capability so `m` never opens an invisible modal there.
+			if (id === "panel.toggle" && !env.panel) return
 			data.dispatch(id, { paneId: unwrap(data.active) })
 		},
 	}
@@ -199,6 +267,27 @@ function createEvents() {
 	return {
 		"commandbar:run": (_self, data, event) => {
 			if (event.data) data.dispatch(event.data)
+		},
+		"panel:select": (_self, data, event) => {
+			// Clicking an operation row moves the cursor to it; clicking an
+			// argument/item row focuses the argument column (toggling an item).
+			const items = unwrap(data.panelItems) ?? []
+			const index = items.findIndex((row) => row.id === event.data)
+			if (index >= 0) {
+				data.dispatch("panel.setOp", { index })
+				return
+			}
+			const rows = unwrap(data.panelRows) ?? []
+			const rowIndex = rows.findIndex((row) => row.key === event.data)
+			if (rowIndex < 0) return
+			data.dispatch("panel.focusArg")
+			data.dispatch("panel.setRow", { index: rowIndex })
+			const row = rows[rowIndex]
+			if (row?.type === "item") data.dispatch("panel.toggleItem")
+		},
+		"panel:confirm": (_self, data) => {
+			if (!unwrap(data.panelOpen)) return
+			data.dispatch("panel.run")
 		},
 		"crumbs:go": (_self, data, event) => data.dispatch("pane.setPath", event.data),
 		"list:select": (_self, data, event) => data.dispatch("list.cursor", event.data),

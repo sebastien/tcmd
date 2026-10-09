@@ -12,6 +12,7 @@ import { cell, derived, effect } from "select/state/cells"
 import { createBookmarks } from "./bookmarks.js"
 import { commandRow, createDispatch, getCommandBarItems, getPaletteCommands } from "./commands.js"
 import { createNullOs } from "./os.js"
+import { PANEL_FOCUS, bindArgs, filterPanelOperations, isTextualRow, panelCommand, panelOperations, panelRowList, panelRunnable, rowAt, withArgValue } from "./panel.js"
 import { basename, join } from "./path.js"
 import { PANE_BUFFERS } from "./pane.js"
 import { completionToken, scriptItems } from "./script.js"
@@ -60,6 +61,25 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	session.bookmarkIndex = cell(0)
 	// The path being recorded while in "name" mode.
 	session.bookmarkTarget = cell(null)
+
+	// Command panel (`m` / `:`): a structured Commando-style view over the
+	// operations and their argument bindings. `panelQuery` filters the
+	// operation list by typed name; `panelOpIndex` selects the operation in
+	// that filtered list; `panelRowIndex` is the cursor in the flattened
+	// argument rows (headers + items); `panelFocus` is a `PANEL_FOCUS` token
+	// ("ops": typing filters operations, "args": an argument owns the
+	// keyboard). `panelDraft` holds the transient bindings the user tweaks —
+	// it never mutates the real pane marks.
+	session.panelOpen = cell(false)
+	session.panelQuery = cell("")
+	session.panelOpIndex = cell(0)
+	session.panelRowIndex = cell(0)
+	session.panelFocus = cell(PANEL_FOCUS.OPS)
+	session.panelDraft = cell([])
+	session.panelOps = cell(panelOperations())
+	// The command panel view is TUI-only; the web view disables it at startup
+	// so no dispatch path (key, palette, command bar) opens an invisible modal.
+	session.panelEnabled = cell(true)
 
 	// The command palette keeps its cursor on the first match whenever the
 	// query changes.
@@ -210,12 +230,100 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 		},
 	)
 
-	// Command bar rows: context-dependent key hints (see core/commands).
+	// Command bar rows: context-dependent key hints (see core/commands). The
+	// TUI-only panel button is dropped when the renderer disables the panel.
 	session.commandBarItems = derived(
-		[session.paletteOpen, session.paletteMode, session.filtering, session.bookmarkOpen, session.bookmarkMode],
-		([open, mode, filtering, bookmarkOpen, bookmarkMode]) =>
-			getCommandBarItems(open, mode, filtering, bookmarkOpen, bookmarkMode),
+		[
+			session.paletteOpen,
+			session.paletteMode,
+			session.filtering,
+			session.bookmarkOpen,
+			session.bookmarkMode,
+			session.panelOpen,
+			session.panelEnabled,
+		],
+		([open, mode, filtering, bookmarkOpen, bookmarkMode, panelOpen, panelEnabled]) => {
+			const items = getCommandBarItems(open, mode, filtering, bookmarkOpen, bookmarkMode, panelOpen)
+			if (panelEnabled) return items
+			return items.filter((item) => item.id !== "panel.toggle")
+		},
 	)
+
+	// The operation list filtered by the typed query; `panelOpIndex` indexes
+	// into this filtered list.
+	session.panelFiltered = derived(
+		[session.panelOps, session.panelQuery],
+		([operations, query]) => filterPanelOperations(operations, query),
+	)
+	// The operation the command panel is editing, and its bound arguments.
+	session.panelOperation = derived(
+		[session.panelFiltered, session.panelOpIndex],
+		([operations, index]) => operations[Math.max(0, Math.min(index, operations.length - 1))] ?? null,
+	)
+	session.panelRows = derived([session.panelDraft], ([draft]) => panelRowList(draft))
+	// The assembled command line the draft maps to, and whether it is runnable.
+	// The preview answers "what will this run" as the shell would see it,
+	// prefixed with the operation name; a `«NAME»` marks a required argument
+	// still to fill.
+	session.panelCommand = derived(
+		[session.panelDraft, session.panelOperation],
+		([draft, op]) => {
+			const args = panelCommand(draft)
+			const name = op?.name ?? ""
+			return args ? `${name} ${args}` : name
+		},
+	)
+	session.panelRunnable = derived([session.panelDraft], ([draft]) => panelRunnable(draft))
+	// The cursor row and whether it is a textual argument (so the panel focuses
+	// its text field).
+	session.panelCursorRow = derived(
+		[session.panelRows, session.panelRowIndex],
+		([rows, row]) => rowAt(rows, row),
+	)
+	session.panelTextual = derived([session.panelCursorRow], ([row]) => isTextualRow(row))
+	// The text the input edits. A plain cell (the input writes through it); an
+	// effect copies the focused binding's value in whenever the cursor lands on
+	// a textual argument, and another folds typing back into the transient
+	// draft so a value survives moving to another argument.
+	session.panelValue = cell("")
+	effect([session.panelCursorRow], ([row]) => {
+		if (isTextualRow(row)) session.panelValue.set(`${row.value ?? ""}`)
+	})
+	effect([session.panelValue], ([value]) => {
+		const row = session.panelCursorRow.value
+		if (isTextualRow(row)) {
+			session.panelDraft.set(withArgValue(session.panelDraft.value, row.argIndex, value))
+		}
+	})
+
+	// A picker-row projection for the operation list (left column), over the
+	// query-filtered operations. `summary` is the argument list the row shows
+	// — the signature with the leading operation name stripped, so the name is
+	// not repeated next to the title.
+	session.panelItems = derived([session.panelFiltered], ([operations]) =>
+		operations.map((op) => ({
+			id: `op:${op.name}`,
+			title: op.name,
+			summary: `${op.signature ?? ""}`.replace(/^\S+\s*/, ""),
+			risk: op.risk ?? null,
+		})),
+	)
+
+	// Re-bind the panel draft when the panel opens or the selected operation
+	// changes. The panel is modal, so the pane context does not change
+	// underneath it; an explicit toggle owns the draft while it is open.
+	effect([session.panelOpen, session.panelOperation], ([open, op]) => {
+		if (!open) return
+		session.panelDraft.set(bindArgs(session, op))
+	})
+	// Selecting another operation resets the argument cursor.
+	effect([session.panelOperation], () => {
+		session.panelRowIndex.set(0)
+	})
+	// Typing a query re-anchors the operation cursor on the first match.
+	effect([session.panelQuery], () => {
+		session.panelOpIndex.set(0)
+	})
 
 	// Command palette rows: UI actions by default; in scripting mode, the
 	// operations plus the available filesets. Both are filtered by the query.

@@ -129,7 +129,7 @@ function keyGlyph(chord) {
 
 // Constant: GROUP_ORDER / GROUP_TITLES
 // Help sections, in display order.
-const GROUP_ORDER = ["nav", "pane", "list", "bookmark", "view", "file", "palette", "filter", "app"]
+const GROUP_ORDER = ["nav", "pane", "list", "bookmark", "view", "file", "panel", "palette", "filter", "app"]
 const GROUP_TITLES = {
 	app: "Session",
 	bookmark: "Bookmarks",
@@ -138,6 +138,7 @@ const GROUP_TITLES = {
 	list: "Selection",
 	nav: "Navigation",
 	palette: "Commands",
+	panel: "Command panel",
 	pane: "Panes",
 	view: "View",
 }

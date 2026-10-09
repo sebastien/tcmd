@@ -37,11 +37,12 @@ bun run tcmd /tmp ~  # open specific directories
 
 Keys: `↑/↓` move, `Enter/→` open, `←/Bksp` parent, `Tab`/`⇧Tab` switch panes
 (`⇧Tab` goes back), `Space` mark, `b` bookmark the cursor entry (or the pane
-directory) under a basename-defaulted name, `g` jump to a bookmark,
-`v` preview (fullscreen viewer when the
-terminal is narrow), `O`/`E` open/edit the previewed file, `/` fuzzy-filter the
-active pane (`Enter` keeps it, `Esc` clears), `^P` command palette, `:` scripting
-mode, `!` run a shell command, `^R` reload, `?` key reference, `q` quit.
+directory) under a basename-defaulted name, `g` jump to a bookmark, `:` or `m`
+open the command panel (Commando: operations, their arguments, and the live
+resolved command), `v` preview (fullscreen viewer when the terminal is narrow),
+`O`/`E` open/edit the previewed file, `/` fuzzy-filter the active pane (`Enter`
+keeps it, `Esc` clears), `^P` command palette, `!` run a shell command, `^R`
+reload, `?` key reference, `q` quit.
 
 The workspace is a single rounded frame. The frame title carries the active
 path; each pane is its own single-line box (the two middle edges sit side by
@@ -107,7 +108,8 @@ src/js/tcmd/
     directory.js one pane's directory: path, entries, view, cursor, marks
     pane.js      one directory, proxying its cells
     bookmarks.js named bookmarks (path + file/dir kind) + the memory/file stores
-    session.js   two panes + active pane, preview, palette, bookmarks, dispatch
+    panel.js     command panel: operation args bound from the live context
+    session.js   two panes + active pane, preview, palette, panel, dispatch
     keymap.js    key chords -> command ids
     commands.js  command registry; commands are `run(session, payload)`
     operations.js scripting operations (copy/move/delete/erase/stat/sel/…)

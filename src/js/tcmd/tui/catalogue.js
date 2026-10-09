@@ -20,7 +20,9 @@ import { unwrap } from "select/state/cells"
 import bookmarkListXml from "../components/BookmarkList.xml" with { type: "text" }
 import bookmarkRowXml from "../components/BookmarkRow.xml" with { type: "text" }
 import commandBarXml from "../components/CommandBar.xml" with { type: "text" }
+import commandArgRowXml from "../components/CommandArgRow.xml" with { type: "text" }
 import commandItemXml from "../components/CommandItem.xml" with { type: "text" }
+import commandPanelXml from "../components/CommandPanel.xml" with { type: "text" }
 import commandPaletteXml from "../components/CommandPalette.xml" with { type: "text" }
 import confirmXml from "../components/Confirm.xml" with { type: "text" }
 import crumbXml from "../components/Crumb.xml" with { type: "text" }
@@ -42,8 +44,10 @@ import {
 	bookmarkRows,
 	breadcrumbsBehaviors,
 	commandBarBehaviors,
+	commandArgRowBehaviors,
 	commandItemBehaviors,
 	commandItemRows,
+	commandPanelBehaviors,
 	commandPaletteBehaviors,
 	confirmBehaviors,
 	crumbBehaviors,
@@ -57,6 +61,8 @@ import {
 	paneLabelBehaviors,
 	paletteRowBehaviors,
 	paletteRows,
+	panelArgRows,
+	panelOpRows,
 	summaryBehaviors,
 } from "../components/index.js"
 import { createBehaviors as helpBehaviors } from "./help.js"
@@ -172,6 +178,11 @@ function bookmarkScrollTop(self, data) {
 	return keepVisible(self.ref.list, unwrap(data.selected) ?? 0, unwrap(data.items)?.length ?? 0)
 }
 
+// Keep the command panel's argument cursor inside its viewport.
+function panelArgScrollTop(self, data) {
+	return keepVisible(self.ref.args, unwrap(data.argCursor) ?? 0, unwrap(data.rows)?.length ?? 0)
+}
+
 // Constant: BAR_COMPACT
 // The command-bar hints kept on narrow viewports. The rest stay reachable from
 // the command palette and the `?` reference.
@@ -206,6 +217,7 @@ function commandBarRows(commandItem) {
 function createComponents() {
 	const env = tuiEnv()
 	const commandItem = bind(ui, "CommandItem", commandItemXml, commandItemBehaviors(env))
+	const commandArgRow = bind(ui, "CommandArgRow", commandArgRowXml, commandArgRowBehaviors(env))
 	const crumb = bind(ui, "Crumb", crumbXml, crumbBehaviors(env))
 	const fileRow = bind(ui, "FileRow", fileRowXml, fileRowBehaviors(env))
 	const filterBar = bind(ui, "FilterBar", filterBarXml, filterBarBehaviors(env))
@@ -213,6 +225,7 @@ function createComponents() {
 	const bookmarkRow = bind(ui, "BookmarkRow", bookmarkRowXml, bookmarkRowBehaviors(env))
 	return {
 		BookmarkRow: bookmarkRow,
+		CommandArgRow: commandArgRow,
 		CommandItem: commandItem,
 		Crumb: crumb,
 		FileRow: fileRow,
@@ -229,6 +242,12 @@ function createComponents() {
 		CommandBar: bind(ui, "CommandBar", commandBarXml, commandBarBehaviors({
 			...env,
 			rows: commandBarRows(commandItem),
+		})),
+		CommandPanel: bind(ui, "CommandPanel", commandPanelXml, commandPanelBehaviors({
+			...env,
+			opRows: panelOpRows(commandArgRow),
+			argRows: panelArgRows(commandArgRow),
+			argScrollTop: panelArgScrollTop,
 		})),
 		CommandPalette: bind(ui, "CommandPalette", commandPaletteXml, commandPaletteBehaviors({
 			...env,
@@ -271,6 +290,7 @@ function registerComponents() {
 		bookmarklist: components.BookmarkList,
 		breadcrumbs: components.Breadcrumbs,
 		commandbar: components.CommandBar,
+		commandpanel: components.CommandPanel,
 		commandpalette: components.CommandPalette,
 		confirm: components.Confirm,
 		entrydetail: components.EntryDetail,

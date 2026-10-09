@@ -66,6 +66,53 @@ function commandItemRows(CommandItem) {
 		)
 }
 
+// Function: panelOpRows
+// `{ item: op, index, row, cursor, focus }` bags for the command panel's
+// operation column (`CommandArgRow`). `row` is the normalized row shape the
+// component reads — `name` is the operation title and `summary` its argument
+// list (precomputed by `session.panelItems`, the signature with the leading
+// name stripped); `risk` tints destructive/caution operations; `cursor` is the
+// column's selected index.
+function panelOpRows(CommandArgRow) {
+	return (data) =>
+		CommandArgRow.map(
+			data.items ?? [],
+			(item, index) => ({
+				item,
+				index,
+				row: {
+					type: "op",
+					key: item.id,
+					name: item.title,
+					summary: item.summary ?? "",
+					risk: item.risk ?? null,
+				},
+				cursor: data.opCursor,
+				focus: data.focus,
+			}),
+			(item) => item.id,
+		)
+}
+
+// Function: panelArgRows
+// `{ item: row, index, row, cursor, focus }` bags for the command panel's
+// argument column (`CommandArgRow`). The rows are already flattened by
+// `core/panel.panelRowList`; `cursor` is the column's selected index.
+function panelArgRows(CommandArgRow) {
+	return (data) =>
+		CommandArgRow.map(
+			data.rows ?? [],
+			(item, index) => ({
+				item,
+				index,
+				row: item,
+				cursor: data.argCursor,
+				focus: data.focus,
+			}),
+			(row) => row.key,
+		)
+}
+
 // Function: bookmarkRows
 // `{ item: { name, path }, index, selected }` bags for `BookmarkRow` rows.
 function bookmarkRows(BookmarkRow) {
@@ -77,6 +124,6 @@ function bookmarkRows(BookmarkRow) {
 		)
 }
 
-export { bookmarkRows, commandItemRows, crumbRows, fileRows, paletteRows }
+export { bookmarkRows, commandItemRows, crumbRows, fileRows, paletteRows, panelArgRows, panelOpRows }
 
 // EOF

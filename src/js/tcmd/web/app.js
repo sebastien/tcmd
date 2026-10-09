@@ -129,6 +129,14 @@ function webViewBehaviors() {
 // Builds the root App component for `session` on the web presentation.
 function createWebApp(session) {
 	registerWebComponents()
+	// The command panel is a TUI-only view; disable it so no web dispatch path
+	// (key, palette, command bar) opens an invisible modal, and drop its
+	// palette entries (`:` and `m` both fall back to the script palette).
+	session.panelEnabled?.set(false)
+	const palette = session.paletteCommands?.value
+	if (palette) {
+		session.paletteCommands.set(palette.filter((row) => row.id !== "panel.toggle" && row.id !== "panel.open"))
+	}
 	return ui(appHtml)
 		.init(appInit(session))
 		.does({

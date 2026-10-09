@@ -50,7 +50,7 @@ function createAppComponent(session, options = {}) {
 		}, 100)
 	})
 
-	const baseKeys = appBehaviors({ quit }).keys
+	const baseKeys = appBehaviors({ panel: true, quit }).keys
 	const frame = createFrameBehaviors({ theme: tuiTheme })
 
 	return ui
@@ -72,7 +72,8 @@ function createAppComponent(session, options = {}) {
 					unwrap(data.paletteOpen) ||
 					unwrap(data.confirm) ||
 					unwrap(data.filtering) ||
-					unwrap(data.bookmarkOpen)
+					unwrap(data.bookmarkOpen) ||
+					unwrap(data.panelOpen)
 
 				// Help overlay owns the keyboard while open.
 				if (unwrap(data.helpOpen)) {

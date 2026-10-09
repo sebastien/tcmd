@@ -95,6 +95,19 @@ describe("web app", () => {
 		}
 	})
 
+	test("the command panel is disabled and absent from the web bar", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			expect(session.panelEnabled.value).toBe(false)
+			expect(host.textContent).not.toContain("panel.toggle")
+			// `m` is a no-op on the web: no invisible modal opens.
+			session.dispatch("panel.toggle")
+			expect(session.panelOpen.value).toBe(false)
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
 	test("clicking a row in the other pane activates that pane", async () => {
 		const { host, instance, session } = await mountApp()
 		try {

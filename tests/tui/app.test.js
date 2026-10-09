@@ -245,7 +245,9 @@ describe("tui app", () => {
 			setup.mockInput.pressKey(" ")
 			await settle(setup)
 
-			setup.mockInput.pressKey(":")
+			// `:` now opens the command panel; scripting mode stays reachable
+			// from the palette's "Script" entry and `!`.
+			session.dispatch("palette.script")
 			await settle(setup)
 			expect(session.paletteOpen.value).toBe(true)
 			expect(session.paletteMode.value).toBe("script")
@@ -269,7 +271,7 @@ describe("tui app", () => {
 	test("scripting mode tab-completes the selected path argument", async () => {
 		const { setup, session } = await makeSetup()
 		try {
-			setup.mockInput.pressKey(":")
+			await session.dispatch("palette.script")
 			await settle(setup)
 			setup.mockInput.typeText("copy notes")
 			await settle(setup)
@@ -280,6 +282,21 @@ describe("tui app", () => {
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			expect(session.paletteQuery.value).toBe("copy notes.txt")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("`:` opens the command panel instead of the script palette", async () => {
+		const { setup, session } = await makeSetup()
+		try {
+			setup.mockInput.pressKey(":")
+			await settle(setup)
+			expect(session.panelOpen.value).toBe(true)
+			expect(session.paletteOpen.value).toBe(false)
+			const frame = setup.captureCharFrame()
+			expect(frame).toContain("Command ·")
+			expect(frame).toContain("copy FROM TO")
 		} finally {
 			setup.renderer.destroy()
 		}

@@ -75,7 +75,41 @@ events, with the renderer dimensions as a fallback):
 ## Overlays
 
 - Command palette (`^P`): centered, sectioned, with a selected-row marker and
-  its own hint footer. `:` opens it in scripting mode.
+  its own hint footer. `!` opens it in `run CMD` mode; the `:` key opens the
+  command panel instead.
+- Command panel (`:`/`m`): a Commando-style structured view over the operations.
+  A filter input at the top narrows the operation list as you type — the
+  matching command takes the cursor (`edit` highlights `edit`) — and the left
+  column shows each operation with its argument list, `delete`/`erase` in red
+  and `move` in amber to flag risk. The right column shows the selected
+  operation's arguments bound from the live context — a `FROM`/`PATH`
+  selection argument lists the SRC or active pane's marked paths (falling back
+  to the cursor entry) with a `[x]`/`[ ]` toggle each, the basename in full
+  followed by its dimmed parent directory, `TO` resolves to the DST pane's
+  directory (editable in place), and textual arguments (`BUF`, `NAME`, `CMD`)
+  are typed in the field under the columns. Under the columns a `runs` line
+  previews the full command the draft maps to, as the shell would see it (the
+  operation name plus shell-quoted arguments wrapping over as many lines as
+  needed; a `«NAME»` placeholder marks a required argument still to fill, and
+  the line reads as an error until it is runnable). The selection is transient:
+  toggling edits a draft that never mutates the pane marks, and running
+  executes the operation directly (confirms still route through the confirm
+  overlay). Type to filter, `↑↓` move within a column, `⇥`/`⇧⇥` cycle the
+  focus ring from the command through each argument (wrapping at both ends),
+  `Space` toggles, `↵` runs the highlighted command, `Esc` closes.
+
+```text
+╭─ Command · copy ─────────────────────────────────────────────────────────╮
+│ ›                                                                         │
+│  move           FROM TO             FROM           SRC · 1 selected        │
+│> copy           FROM TO             [x] documents  /home                  │
+│  delete         PATH...             TO             /tmp                    │
+│  erase          PATH...                                                   │
+│  …                                 runs                                    │
+│                                    copy /home/documents /tmp               │
+│              type to filter  ⇥ args  Spc toggle  ↵ run  Esc close          │
+╰──────────────────────────────────────────────────────────────────────────╯
+```
 - Bookmarks (`b`/`g`): centered. `b` opens a naming prompt (defaulting to the
   path's basename) for the cursor entry (or the pane directory), then `g` opens
   a fzf-style picker over bookmark names and paths. Each bookmark remembers

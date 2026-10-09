@@ -16,8 +16,10 @@
 // - `hidden`: true for internal commands that never show in the palette.
 
 import { basename, parent as parentOf } from "./path.js"
+import { PANEL_FOCUS, argvFor, bindingAt, missingArg, rowAt, withToggledItem } from "./panel.js"
 import { clampCursor, moveCursor } from "./selection.js"
 import { runLine } from "./script.js"
+import { getOperation, runOperation } from "./operations.js"
 
 const PAGE = 10
 
@@ -59,6 +61,16 @@ const BOOKMARK_NAME_KEYS = [
 const BOOKMARK_LIST_KEYS = [
 	{ id: null, title: "Navigate", keys: "↑/↓" },
 	{ id: null, title: "Jump", keys: "Enter", primary: true },
+	{ id: null, title: "Close", keys: "Esc" },
+]
+
+// Constant: PANEL_HINT_KEYS
+// Command-bar hints while the command panel is open.
+const PANEL_HINT_KEYS = [
+	{ id: null, title: "Command", keys: "↑/↓" },
+	{ id: null, title: "Arg", keys: "⇥" },
+	{ id: null, title: "Toggle", keys: "Spc" },
+	{ id: null, title: "Run", keys: "↵", primary: true },
 	{ id: null, title: "Close", keys: "Esc" },
 ]
 
@@ -364,6 +376,209 @@ const commands = [
 			return session.os.edit(entry.path).then(() => session.panes[session.active.value].refresh())
 		},
 	},
+	// Command panel (`:`/`m`): the structured Commando view over the
+	// operations. Lifecycle, then navigation, then draft editing, then run.
+	{
+		id: "panel.toggle",
+		title: "Commands",
+		keys: "m",
+		kind: "ui",
+		bar: true,
+		run(session) {
+			togglePanel(session)
+		},
+	},
+	{
+		id: "panel.open",
+		title: "Commands",
+		keys: ":",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			// `:` is the natural "command" key: open the structured panel on
+			// renderers that have it, and fall back to the flat script palette
+			// on those that do not (the web view).
+			if (!session.panelEnabled?.value) {
+				openPalette(session, "script", "")
+				return
+			}
+			openPanel(session)
+		},
+	},
+	{
+		id: "panel.up",
+		title: "Previous operation",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			const length = session.panelFiltered.value.length
+			session.panelOpIndex.set(moveCursor(session.panelOpIndex.value, -1, length))
+		},
+	},
+	{
+		id: "panel.down",
+		title: "Next operation",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			const length = session.panelFiltered.value.length
+			session.panelOpIndex.set(moveCursor(session.panelOpIndex.value, 1, length))
+		},
+	},
+	{
+		id: "panel.prevArg",
+		title: "Previous argument",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			const length = session.panelRows.value.length
+			session.panelRowIndex.set(moveCursor(session.panelRowIndex.value, -1, length))
+		},
+	},
+	{
+		id: "panel.nextArg",
+		title: "Next argument",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			const length = session.panelRows.value.length
+			session.panelRowIndex.set(moveCursor(session.panelRowIndex.value, 1, length))
+		},
+	},
+	{
+		id: "panel.tab",
+		title: "Next argument or command",
+		kind: "ui",
+		hidden: true,
+		run(session, payload) {
+			// Tab cycles the focus ring: the command (query) then each argument
+			// header, wrapping at both ends. Shift-Tab walks it backwards.
+			const delta = payload?.delta === -1 ? -1 : 1
+			const rows = session.panelRows.value
+			const headers = []
+			for (let i = 0; i < rows.length; i++) if (rows[i].type === "arg") headers.push(i)
+			if (!headers.length) return
+			if (session.panelFocus.value === PANEL_FOCUS.OPS) {
+				session.panelRowIndex.set(delta > 0 ? headers[0] : headers[headers.length - 1])
+				session.panelFocus.set(PANEL_FOCUS.ARGS)
+				return
+			}
+			const at = headers.indexOf(session.panelRowIndex.value)
+			if (delta > 0) {
+				if (at === -1 || at >= headers.length - 1) session.panelFocus.set(PANEL_FOCUS.OPS)
+				else session.panelRowIndex.set(headers[at + 1])
+			} else if (at <= 0) {
+				session.panelFocus.set(PANEL_FOCUS.OPS)
+			} else {
+				session.panelRowIndex.set(headers[at - 1])
+			}
+		},
+	},
+	{
+		id: "panel.setQuery",
+		title: "Filter commands",
+		kind: "ui",
+		hidden: true,
+		run(session, payload) {
+			session.panelQuery.set(`${payload?.query ?? ""}`)
+		},
+	},
+	{
+		id: "panel.type",
+		title: "Type into the command filter",
+		kind: "ui",
+		hidden: true,
+		run(session, payload) {
+			// A key pressed while a non-textual argument owns the cursor jumps
+			// back to the command column and edits the filter.
+			const query = `${session.panelQuery.value ?? ""}`
+			session.panelQuery.set(payload?.backspace ? query.slice(0, -1) : `${query}${payload?.char ?? ""}`)
+			session.panelFocus.set(PANEL_FOCUS.OPS)
+		},
+	},
+	{
+		id: "panel.setRow",
+		title: "Highlight argument",
+		kind: "ui",
+		hidden: true,
+		run(session, payload) {
+			if (payload?.index !== undefined) session.panelRowIndex.set(Math.max(0, payload.index))
+		},
+	},
+	{
+		id: "panel.setOp",
+		title: "Select operation",
+		kind: "ui",
+		hidden: true,
+		run(session, payload) {
+			// Selecting an operation (a click) moves the cursor without
+			// stealing focus from the command filter.
+			if (payload?.index !== undefined) session.panelOpIndex.set(Math.max(0, payload.index))
+		},
+	},
+	{
+		id: "panel.focusArg",
+		title: "Focus arguments",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			// A click on an argument focuses the argument column.
+			session.panelFocus.set(PANEL_FOCUS.ARGS)
+		},
+	},
+	{
+		id: "panel.toggleItem",
+		title: "Toggle argument item",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			const row = rowAt(session.panelRows.value, session.panelRowIndex.value)
+			if (!row) return
+			const draft = session.panelDraft.value
+			if (row.type === "item") {
+				session.panelDraft.set(withToggledItem(draft, row.argIndex, row.itemIndex))
+				return
+			}
+			// An argument header toggles its whole selection: select all when
+			// some are off, clear when all are on.
+			const binding = bindingAt(draft, row.argIndex)
+			if (!binding || binding.kind !== "selection") return
+			const all = (binding.items ?? []).length > 0 && (binding.items ?? []).every((item) => item.selected)
+			const items = (binding.items ?? []).map((item) => ({ ...item, selected: !all }))
+			session.panelDraft.set(draft.map((b) => (b.index === row.argIndex ? { ...b, items } : b)))
+		},
+	},
+	{
+		id: "panel.run",
+		title: "Run command",
+		kind: "ui",
+		hidden: true,
+		async run(session) {
+			const op = session.panelOperation.value
+			if (!op) return
+			// An unrunnable draft is refused with the missing argument's name —
+			// the `«NAME»` the preview already flags — instead of the generic
+			// usage error `runOperation` would produce.
+			const missing = missingArg(session.panelDraft.value)
+			if (missing) {
+				session.notice.set({ kind: "error", text: `${op.name}: fill in «${missing}»` })
+				return
+			}
+			const status = await runOperation(session, op, argvFor(session.panelDraft.value))
+			// A confirm keeps the panel open until the user answers; a run
+			// closes it. Errors stay open so the draft can be fixed.
+			if (status === "ran") closePanel(session)
+		},
+	},
+	{
+		id: "panel.cancel",
+		title: "Close command panel",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			closePanel(session)
+		},
+	},
 	{
 		id: "palette.toggle",
 		title: "Palette",
@@ -381,7 +596,6 @@ const commands = [
 	{
 		id: "palette.script",
 		title: "Script",
-		keys: ":",
 		kind: "ui",
 		run(session) {
 			openPalette(session, "script", "")
@@ -492,6 +706,16 @@ const commands = [
 			const pending = session.confirm.value
 			if (!pending) return
 			session.confirm.set(null)
+			if (pending.op) {
+				const op = getOperation(pending.op)
+				if (!op) return null
+				// A panel-originated confirm re-runs its draft and, on success,
+				// closes the panel that was waiting on it.
+				return runOperation(session, op, pending.args, { confirmed: true }).then((status) => {
+					if (status === "ran" && session.panelOpen?.value) closePanel(session)
+					return status
+				})
+			}
 			return runLine(session, pending.line, { confirmed: true })
 		},
 	},
@@ -531,7 +755,8 @@ function getPaletteCommands() {
 // Command-bar rows for the current context: the palette's key hints while it
 // is open (scripting mode has its own), the filter hints while a pane filter is
 // capturing input, the `bar`-flagged UI commands otherwise (keymap order).
-function getCommandBarItems(paletteOpen, paletteMode, filtering, bookmarkOpen, bookmarkMode) {
+function getCommandBarItems(paletteOpen, paletteMode, filtering, bookmarkOpen, bookmarkMode, panelOpen) {
+	if (panelOpen) return PANEL_HINT_KEYS
 	if (bookmarkOpen) return bookmarkMode === "name" ? BOOKMARK_NAME_KEYS : BOOKMARK_LIST_KEYS
 	if (paletteOpen) return paletteMode === "script" ? SCRIPT_KEYS : PALETTE_KEYS
 	if (filtering) return FILTER_KEYS
@@ -604,6 +829,30 @@ function moveBookmark(session, delta) {
 
 function closeBookmark(session) {
 	session.bookmarkOpen.set(false)
+}
+
+function openPanel(session) {
+	session.panelQuery.set("")
+	session.panelOpIndex.set(0)
+	session.panelRowIndex.set(0)
+	session.panelFocus.set(PANEL_FOCUS.OPS)
+	session.panelOpen.set(true)
+}
+
+// Function: togglePanel
+// Opens the command panel, or closes it when already open. Disabled (TUI-only)
+// renderers ignore it.
+function togglePanel(session) {
+	if (!session.panelEnabled?.value) return
+	if (session.panelOpen.value) {
+		closePanel(session)
+		return
+	}
+	openPanel(session)
+}
+
+function closePanel(session) {
+	session.panelOpen.set(false)
 }
 
 function openPalette(session, mode, query) {

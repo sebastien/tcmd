@@ -10,7 +10,7 @@
 // `run`); arguments may be filesets ($A, $B, $FILE), quoted paths, `~` or
 // paths relative to the active pane.
 
-import { getOperation, getOperations, humanSize } from "./operations.js"
+import { getOperation, getOperations, humanSize, runOperation } from "./operations.js"
 
 // Function: tokenize
 // Whitespace tokenizer with single/double quotes and backslash escapes.
@@ -82,26 +82,15 @@ function parseLine(line) {
 // Function: runLine
 // Parses and runs a script line. Returns "ran", "confirm" (the session
 // confirm cell is filled), "empty" or "error"; failures and results land on
-// the session notice.
+// the session notice. Delegates execution to `runOperation`, shared with the
+// command panel.
 async function runLine(session, line, options = {}) {
 	const parsed = parseLine(line)
 	if (parsed.status !== "ok") {
 		if (parsed.error) session.notice.set({ kind: "error", text: parsed.error })
 		return parsed.status
 	}
-	const { op, args } = parsed
-	if (op.confirmText && !options.confirmed) {
-		session.confirm.set({ text: op.confirmText(args), line })
-		return "confirm"
-	}
-	try {
-		const message = await op.run(session, args, options)
-		if (message) session.notice.set({ kind: "tip", text: message })
-		return "ran"
-	} catch (error) {
-		session.notice.set({ kind: "error", text: `${error?.message ?? error}` })
-		return "error"
-	}
+	return runOperation(session, parsed.op, parsed.args, { ...options, line })
 }
 
 // Function: scriptItems

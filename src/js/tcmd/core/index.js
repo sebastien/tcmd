@@ -25,7 +25,15 @@ export {
 } from "./bookmarks.js"
 export { DEFAULT_KEYMAP, matchKeymap } from "./keymap.js"
 export { createDispatch, getCommand, getCommands } from "./commands.js"
-export { expandAll, expandArg, getOperation, getOperations } from "./operations.js"
+export { expandAll, expandArg, decodePathToken, getOperation, getOperations, pathToken, runOperation } from "./operations.js"
+export {
+	PANEL_FOCUS,
+	argvFor,
+	bindArgs,
+	panelOperations,
+	panelRowList,
+	paneSelectionPaths,
+} from "./panel.js"
 export { parseLine, runLine, scriptItems, tokenize } from "./script.js"
 export { createSession, load } from "./session.js"
 export { SEP, basename, extname, join, normalize, parent, prefix, split } from "./path.js"

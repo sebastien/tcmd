@@ -1,0 +1,5 @@
+<box flexDirection="row" height="1" columnGap="1" out:backgroundColor="rowBg" on:click="row.key!panel:select">
+	<text out="marker" width="2" out:fg="markerFg"></text>
+	<text out="name" flexShrink="0" out:fg="rowFg" wrapMode="none"></text>
+	<text out="summary" flexGrow="1" flexShrink="1" minWidth="0" out:fg="summaryFg" wrapMode="none" truncate="true"></text>
+</box>

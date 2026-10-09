@@ -23,6 +23,15 @@ function makeData(overrides = {}) {
 			paletteMode: "ui",
 			paletteOpen: false,
 			paletteQuery: "",
+			panelCommand: "",
+			panelFocus: "ops",
+			panelOpIndex: 0,
+			panelItems: [],
+			panelOpen: false,
+			panelQuery: "",
+			panelRows: [],
+			panelRunnable: true,
+			panelTextual: false,
 			rightError: null,
 			rightFilter: null,
 			...overrides,
@@ -70,6 +79,21 @@ describe("App", () => {
 			paletteMode: "pm",
 			paletteOpen: "po",
 			paletteQuery: "pq",
+			panelCommand: "pc",
+			panelCursorRow: "pcr",
+			panelDraft: "pd",
+			panelFiltered: "pfil",
+			panelFocus: "pf",
+			panelOpIndex: "pix",
+			panelItems: "pitems",
+			panelOpen: "pop",
+			panelOperation: "poper",
+			panelQuery: "pq2",
+			panelRowIndex: "pr",
+			panelRows: "prs",
+			panelRunnable: "prun",
+			panelTextual: "pt",
+			panelValue: "pv",
 			panes: { left, right },
 			preview: "preview",
 			showPreview: "showPreview",
@@ -90,6 +114,8 @@ describe("App", () => {
 			notice: "notice",
 			paletteItems: "pit",
 			paletteMode: "pm",
+			panelItems: "pitems",
+			panelQuery: "pq2",
 			preview: "preview",
 			rightCursor: "rc",
 			rightFilter: "rf",
@@ -289,5 +315,92 @@ describe("App", () => {
 		})
 		events["palette:run"](null, data, { data: "op:copy" })
 		expect(calls).toEqual([{ id: "palette.setQuery", payload: { query: "copy " } }])
+	})
+
+	test("panel mode navigates operations and arguments by focus", () => {
+		const behaviors = createBehaviors({ panel: true, quit: () => {} })
+		const ops = makeData({ panelOpen: true, panelFocus: "ops" })
+		behaviors.keys(null, ops.data, { name: "down" })
+		behaviors.keys(null, ops.data, { name: "up" })
+		behaviors.keys(null, ops.data, { name: "tab" })
+		behaviors.keys(null, ops.data, { name: "escape" })
+		expect(ops.calls).toEqual([
+			{ id: "panel.down", payload: undefined },
+			{ id: "panel.up", payload: undefined },
+			{ id: "panel.tab", payload: { delta: 1 } },
+			{ id: "panel.cancel", payload: undefined },
+		])
+		// Shift-Tab walks the focus ring backwards.
+		behaviors.keys(null, ops.data, { name: "tab", shift: true })
+		expect(ops.calls[4]).toEqual({ id: "panel.tab", payload: { delta: -1 } })
+
+		const args = makeData({ panelFocus: "args", panelOpen: true })
+		behaviors.keys(null, args.data, { name: "down" })
+		behaviors.keys(null, args.data, { name: "up" })
+		behaviors.keys(null, args.data, { name: "space" })
+		expect(args.calls).toEqual([
+			{ id: "panel.nextArg", payload: undefined },
+			{ id: "panel.prevArg", payload: undefined },
+			{ id: "panel.toggleItem", payload: undefined },
+		])
+	})
+
+	test("panel Enter runs the highlighted command from either column", () => {
+		const behaviors = createBehaviors({ quit: () => {} })
+		const ops = makeData({ panelFocus: "ops", panelOpIndex: 2, panelOpen: true })
+		behaviors.keys(null, ops.data, { name: "return" })
+		expect(ops.calls).toEqual([{ id: "panel.run", payload: undefined }])
+
+		const args = makeData({ panelFocus: "args", panelOpen: true })
+		behaviors.keys(null, args.data, { name: "return" })
+		expect(args.calls).toEqual([{ id: "panel.run", payload: undefined }])
+	})
+
+	test("a textual argument hands typing and Enter to the field", () => {
+		const behaviors = createBehaviors({ panel: true, quit: () => {} })
+		const { calls, data } = makeData({ panelFocus: "args", panelOpen: true, panelTextual: true })
+		// Letters and Enter are left to the input (its `on:enter` runs the
+		// command); navigation still works.
+		behaviors.keys(null, data, { name: "x" })
+		behaviors.keys(null, data, { name: "return" })
+		expect(calls).toEqual([])
+		behaviors.keys(null, data, { name: "down" })
+		expect(calls).toEqual([{ id: "panel.nextArg", payload: undefined }])
+	})
+
+	test("typing on a non-textual argument returns to the command filter", () => {
+		const behaviors = createBehaviors({ panel: true, quit: () => {} })
+		const { calls, data } = makeData({ panelFocus: "args", panelOpen: true, panelTextual: false })
+		behaviors.keys(null, data, { name: "e" })
+		behaviors.keys(null, data, { name: "backspace" })
+		// Space toggles items rather than filtering while not textual.
+		behaviors.keys(null, data, { name: "space" })
+		expect(calls).toEqual([
+			{ id: "panel.type", payload: { char: "e" } },
+			{ id: "panel.type", payload: { backspace: true } },
+			{ id: "panel.toggleItem", payload: undefined },
+		])
+	})
+
+	test("panel events select operations and toggle items", () => {
+		const events = createEvents()
+		const { calls, data } = makeData({
+			panelOpen: true,
+			panelItems: [{ id: "op:copy", title: "copy" }],
+			panelRows: [
+				{ key: "arg:0", type: "arg" },
+				{ key: "item:0:/a", type: "item" },
+			],
+		})
+		events["panel:select"](null, data, { data: "op:copy" })
+		events["panel:select"](null, data, { data: "item:0:/a" })
+		events["panel:confirm"](null, data, {})
+		expect(calls).toEqual([
+			{ id: "panel.setOp", payload: { index: 0 } },
+			{ id: "panel.focusArg", payload: undefined },
+			{ id: "panel.setRow", payload: { index: 1 } },
+			{ id: "panel.toggleItem", payload: undefined },
+			{ id: "panel.run", payload: undefined },
+		])
 	})
 })

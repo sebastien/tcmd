@@ -11,10 +11,49 @@
 // return a one-line message (shown in the command bar) or undefined.
 //
 // Registry entries carry the presentation metadata the palette renders:
-// `signature`, `description`, `aliases` and an optional `confirmText`.
+// `signature`, `description`, `aliases` and an optional `confirmText`. An
+// optional `risk` ("caution" for a move, "destructive" for delete/erase) lets
+// the command panel tint the operation by how dangerous it is.
+//
+// They also carry `args`, the structured signature the command panel renders:
+// one descriptor per positional argument. A descriptor is
+// `{ name, kind, role?, optional?, variadic? }` where `kind` is:
+// - "selection": one or more paths from a pane's selection (marks, falling
+//   back to the cursor entry). `role` picks the pane: "source" (SRC), "dest"
+//   (DST) or "active" (default).
+// - "dest": a single destination directory (the DST pane's path).
+// - "buffer": a selection-buffer label (`+A`, `-B`, …).
+// - "literal": free text (a name), edited in the panel's text field.
+// - "raw": the rest of the line, unparsed (a shell command).
 
 import { basename, extname, join, normalize } from "./path.js"
 import { PANE_BUFFERS } from "./pane.js"
+
+// Constant: PATHS_PREFIX
+// The prefix of a self-contained path-list token the command panel encodes
+// (`$paths:["/a","/b"]`), which `expandArg` decodes back to paths. It keeps a
+// panel argument self-contained (no session state), so it still resolves after
+// an async confirm re-runs it.
+const PATHS_PREFIX = "$paths:"
+
+// Function: pathToken
+// Encodes a resolved path list as one `$paths:` token.
+function pathToken(paths) {
+	return `${PATHS_PREFIX}${JSON.stringify(paths ?? [])}`
+}
+
+// Function: decodePathToken
+// Decodes a `$paths:` token to normalized paths, or null when `text` is not one
+// (so `expandArg` can fall through to the named filesets).
+function decodePathToken(text) {
+	if (!`${text ?? ""}`.startsWith(PATHS_PREFIX)) return null
+	try {
+		const parsed = JSON.parse(`${text}`.slice(PATHS_PREFIX.length))
+		return Array.isArray(parsed) ? parsed.map((path) => normalize(`${path}`)) : []
+	} catch (error) {
+		return []
+	}
+}
 
 const operations = [
 	{
@@ -22,6 +61,10 @@ const operations = [
 		signature: "copy FROM TO",
 		description: "Copy files and directories",
 		arity: { min: 2, max: 2 },
+		args: [
+			{ name: "FROM", kind: "selection", role: "source" },
+			{ name: "TO", kind: "dest" },
+		],
 		async run(session, args) {
 			const sources = expandAll(session, [args[0]])
 			const targets = expandAll(session, [args[1]])
@@ -43,7 +86,12 @@ const operations = [
 		name: "move",
 		signature: "move FROM TO",
 		description: "Move files and directories",
+		risk: "caution",
 		arity: { min: 2, max: 2 },
+		args: [
+			{ name: "FROM", kind: "selection", role: "source" },
+			{ name: "TO", kind: "dest" },
+		],
 		async run(session, args) {
 			const sources = expandAll(session, [args[0]])
 			const targets = expandAll(session, [args[1]])
@@ -65,7 +113,9 @@ const operations = [
 		name: "delete",
 		signature: "delete PATH...",
 		description: "Delete paths, moving them to the trash",
+		risk: "destructive",
 		arity: { min: 1 },
+		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
 		async run(session, args) {
 			const paths = expandAll(session, args)
 			for (const path of paths) {
@@ -80,7 +130,9 @@ const operations = [
 		name: "erase",
 		signature: "erase PATH...",
 		description: "Delete paths without moving them to the trash",
+		risk: "destructive",
 		arity: { min: 1 },
+		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
 		confirmText: (args) => `erase ${args.join(" ")} without trash?`,
 		async run(session, args) {
 			const paths = expandAll(session, args)
@@ -94,6 +146,7 @@ const operations = [
 		signature: "stat PATH...",
 		description: "Show file information, including disk usage",
 		arity: { min: 1 },
+		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
 		async run(session, args) {
 			const paths = expandAll(session, args)
 			const details = []
@@ -116,6 +169,7 @@ const operations = [
 		signature: "touch PATH...",
 		description: "Create files or bump their modification time",
 		arity: { min: 1 },
+		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
 		async run(session, args) {
 			const paths = expandAll(session, args)
 			for (const path of paths) await session.fs.touch(path)
@@ -128,6 +182,10 @@ const operations = [
 		signature: "sel [+|-][BUF] PATH...",
 		description: "Add or remove paths from a selection buffer",
 		arity: { min: 1 },
+		args: [
+			{ name: "BUF", kind: "buffer", optional: true },
+			{ name: "PATH", kind: "selection", role: "active", variadic: true },
+		],
 		async run(session, args) {
 			const { sign, buffer, tokens } = parseSelection(args)
 			if (!tokens.length) throw new Error("sel needs at least one path")
@@ -150,6 +208,7 @@ const operations = [
 		signature: "edit PATH",
 		description: "Edit a file with $EDITOR",
 		arity: { min: 1, max: 1 },
+		args: [{ name: "PATH", kind: "selection", role: "active" }],
 		async run(session, args) {
 			const paths = expandAll(session, args)
 			if (paths.length !== 1) throw new Error("edit expects a single path")
@@ -164,6 +223,7 @@ const operations = [
 		signature: "view PATH",
 		description: "Preview a path",
 		arity: { min: 1, max: 1 },
+		args: [{ name: "PATH", kind: "selection", role: "active" }],
 		async run(session, args) {
 			const paths = expandAll(session, args)
 			if (paths.length !== 1) throw new Error("view expects a single path")
@@ -178,6 +238,7 @@ const operations = [
 		signature: "open PATH...",
 		description: "Open paths with the desktop opener",
 		arity: { min: 1 },
+		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
 		async run(session, args) {
 			const paths = expandAll(session, args)
 			for (const path of paths) await session.os.open(path)
@@ -189,6 +250,10 @@ const operations = [
 		signature: "bookmark [NAME] [PATH]",
 		description: "List, add or remove named bookmarks",
 		arity: { min: 0, max: 2 },
+		args: [
+			{ name: "NAME", kind: "literal", optional: true },
+			{ name: "PATH", kind: "selection", role: "active", optional: true },
+		],
 		async run(session, args) {
 			const bookmarks = session.bookmarks
 			if (args.length === 0) {
@@ -217,6 +282,7 @@ const operations = [
 		description: "Run a shell command in the active pane",
 		raw: true,
 		arity: { min: 1 },
+		args: [{ name: "CMD", kind: "raw" }],
 		async run(session, args) {
 			const command = `${args[0] ?? ""}`.trim()
 			if (!command) throw new Error("run needs a command")
@@ -245,12 +311,44 @@ function getOperation(name) {
 	return null
 }
 
+// Function: runOperation
+// Runs an operation directly with already-split argument tokens, shared by the
+// script line runner and the command panel. `options.confirmed` skips the
+// confirm prompt. Writes the result (or the failure) to the session notice and
+// returns the status: "ran", "confirm", "empty" or "error". Delegated to by
+// `runLine`; the panel passes `options.op` + `options.args` so `confirm.yes`
+// can re-run without re-parsing a line.
+async function runOperation(session, op, args, options = {}) {
+	const clean = (args ?? []).filter((arg) => `${arg ?? ""}` !== "")
+	if (op.arity) {
+		if (clean.length < op.arity.min || (op.arity.max !== undefined && clean.length > op.arity.max)) {
+			session.notice.set({ kind: "error", text: `usage: ${op.signature}` })
+			return "error"
+		}
+	}
+	if (op.confirmText && !options.confirmed) {
+		session.confirm.set({ text: op.confirmText(clean), line: options.line, op: op.name, args: clean })
+		return "confirm"
+	}
+	try {
+		const message = await op.run(session, clean, options)
+		if (message) session.notice.set({ kind: "tip", text: message })
+		return "ran"
+	} catch (error) {
+		session.notice.set({ kind: "error", text: `${error?.message ?? error}` })
+		return "error"
+	}
+}
+
 // Function: expandArg
-// Expands one argument token to paths: filesets ($A, $FILE), `~` and paths
-// relative to the active pane.
+// Expands one argument token to paths: the command panel's self-contained
+// `$paths:` lists, filesets ($A, $FILE), `~` and paths relative to the active
+// pane.
 function expandArg(session, token) {
 	const text = `${token ?? ""}`
 	if (text.startsWith("$")) {
+		const encoded = decodePathToken(text)
+		if (encoded) return encoded
 		const set = (session.filesets?.value ?? []).find(
 			(candidate) => candidate.id.toLowerCase() === text.toLowerCase(),
 		)
@@ -341,6 +439,15 @@ function humanSize(bytes) {
 	return `${size >= 100 ? Math.round(size) : size.toFixed(1)}${units[unit]}`
 }
 
-export { expandAll, expandArg, getOperation, getOperations, humanSize }
+export {
+	expandAll,
+	expandArg,
+	decodePathToken,
+	getOperation,
+	getOperations,
+	humanSize,
+	pathToken,
+	runOperation,
+}
 
 // EOF

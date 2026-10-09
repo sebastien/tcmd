@@ -144,6 +144,99 @@ describe("golden frames", () => {
 		}
 	})
 
+	test("command panel lists operations and bound arguments", async () => {
+		const { setup, session } = await makeSetup(120, 30)
+		try {
+			setup.mockInput.pressKey("m")
+			await settle(setup)
+			const frame = setup.captureCharFrame()
+			expect(frame).toContain(" Command · copy ")
+			expect(frame).toContain("copy FROM TO")
+			expect(frame).toContain("FROM")
+			expect(frame).toContain("SRC")
+			// An item row shows its basename in full and its parent directory.
+			expect(frame).toContain("[x] documents")
+			expect(frame).toContain("/home")
+			expect(frame).toContain("TO")
+			// Each operation row advertises the arguments it takes.
+			expect(frame).toContain("[NAME] [PATH]")
+			// The preview maps the draft to a full assembled command line.
+			expect(frame).toContain("runs")
+			expect(frame).toContain("copy /home/documents /")
+			// The filter prompt is the header row.
+			expect(frame).toContain("›")
+			// The panel keys are advertised in its own footer.
+			expect(frame).toContain("filter")
+			// The command bar underneath switches to the panel hints.
+			expect(frame).toContain("Toggle")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("typing in the panel filters operations and Tab cycles to the arguments", async () => {
+		const { setup, session } = await makeSetup(120, 30)
+		try {
+			setup.mockInput.pressKey(":")
+			await settle(setup)
+			await setup.mockInput.typeText("edit")
+			await settle(setup)
+			// The matching command takes the cursor; the list narrows to it.
+			expect(session.panelOperation.value.name).toBe("edit")
+			expect(session.panelQuery.value).toBe("edit")
+			const frame = setup.captureCharFrame()
+			expect(frame).toContain(" Command · edit ")
+			expect(frame).not.toContain("bookmark [NAME]")
+			expect(frame).toContain("runs")
+			expect(frame).toContain("edit /home/documents")
+			// Tab walks to the first argument and wraps back to the command.
+			setup.mockInput.pressKey("\t")
+			await settle(setup)
+			expect(session.panelFocus.value).toBe("args")
+			setup.mockInput.pressKey("\t")
+			await settle(setup)
+			expect(session.panelFocus.value).toBe("ops")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("toggling an argument item is transient and flips the marker", async () => {
+		const { setup, session } = await makeSetup(120, 30)
+		try {
+			setup.mockInput.pressKey("m")
+			await settle(setup)
+			setup.mockInput.pressKey("\t")
+			await settle(setup)
+			setup.mockInput.pressKey(" ")
+			await settle(setup)
+			const frame = setup.captureCharFrame()
+			expect(frame).toContain("[ ] documents")
+			expect(frame).toContain("SRC · 0 selected")
+			// The real pane marks are untouched.
+			expect(session.panes.left.marked.value.size).toBe(0)
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("running the default copy from the panel closes it and reports", async () => {
+		const { setup, session } = await makeSetup(120, 30)
+		try {
+			setup.mockInput.pressKey("m")
+			await settle(setup)
+			setup.mockInput.pressKey("\t")
+			await settle(setup)
+			setup.mockInput.pressKey("\r")
+			await settle(setup)
+			await new Promise((resolve) => setTimeout(resolve, 20))
+			expect(session.panelOpen.value).toBe(false)
+			expect(session.notice.value?.text).toContain("copied")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
 	test("a resize collapses the inline inspector and compacts the status bar", async () => {
 		const { setup, size } = await makeSetup(120, 30)
 		try {
