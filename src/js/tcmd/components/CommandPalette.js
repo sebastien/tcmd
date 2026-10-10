@@ -45,7 +45,7 @@ function createBehaviors(env) {
 		titleColor: () => env.textHeadingFg,
 	}
 	if (env?.rows) {
-		behaviors.rows = (_self, data) => env.rows(data)
+		behaviors.rows = (_self, data) => env.rows(self, data)
 	}
 	if (env?.scrollTop) {
 		behaviors.scrollTop = (self, data) => env.scrollTop(self, data)

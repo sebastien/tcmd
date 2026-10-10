@@ -65,8 +65,8 @@ describe("CommandPanel", () => {
 		expect(behaviors.argRows).toBeUndefined()
 		const withRows = createBehaviors({
 			...behaviorEnv,
-			opRows: (data) => data.items,
-			argRows: (data) => data.rows,
+			opRows: (self, data) => data.items,
+			argRows: (self, data) => data.rows,
 		})
 		expect(withRows.opRows(null, { items: [1] })).toEqual([1])
 		expect(withRows.argRows(null, { rows: [2] })).toEqual([2])

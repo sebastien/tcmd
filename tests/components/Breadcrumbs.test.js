@@ -4,7 +4,7 @@ import { behaviorEnv } from "../helpers/behavior-env.js"
 
 describe("Breadcrumbs", () => {
 	test("maps segments to rows and exposes the web root class", () => {
-		const rows = (data) => data.segments
+		const rows = (self, data) => data.segments
 		const behaviors = createBehaviors({ ...behaviorEnv, listClass: "breadcrumbs", rows })
 		expect(behaviors.listClass()).toBe("breadcrumbs")
 		expect(behaviors.rows(null, { segments: ["/"] })).toEqual(["/"])

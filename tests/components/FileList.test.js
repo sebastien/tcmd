@@ -4,7 +4,7 @@ import { behaviorEnv } from "../helpers/behavior-env.js"
 
 describe("FileList", () => {
 	test("forwards rows and scrollTop to the renderer hooks", () => {
-		const rows = (data) => data.entries
+		const rows = (self, data) => data.entries
 		const scrollTop = (self, data) => data.cursor
 		const behaviors = createBehaviors({ ...behaviorEnv, rows, scrollTop })
 		expect(behaviors.rows(null, { entries: ["a"] })).toEqual(["a"])

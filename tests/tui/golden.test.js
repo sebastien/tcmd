@@ -262,4 +262,40 @@ describe("golden frames", () => {
 			setup.renderer.destroy()
 		}
 	})
+
+	test("the listing fills the pane: chrome takes ten rows, not one more", async () => {
+		// A tall listing makes the visible row count readable off the frame:
+		// the fixed chrome (frame border, pane border, header, rule, detail,
+		// summary, command bar) consumes exactly ten rows, which is what the
+		// windowed viewport (`frame.paneListHeight`) is derived from.
+		const tall = {
+			"/": [{ name: "home", isDir: true }],
+			"/home": Array.from({ length: 40 }, (_, i) => ({
+				name: `f${String(i).padStart(2, "0")}.txt`,
+				text: "x",
+				size: i,
+			})),
+		}
+		// 120x40 → 30 listing rows: the last visible row is f29, f30 is not.
+		const { setup: big } = await makeSetupTui(tall, 120, 40)
+		try {
+			await settle(big)
+			const frame = big.captureCharFrame()
+			expect(frame).toContain("f29.txt")
+			expect(frame).not.toContain("f30.txt")
+		} finally {
+			big.renderer.destroy()
+		}
+
+		// 120x30 → 20 listing rows: f19 in, f20 out.
+		const { setup: small } = await makeSetupTui(tall, 120, 30)
+		try {
+			await settle(small)
+			const frame = small.captureCharFrame()
+			expect(frame).toContain("f19.txt")
+			expect(frame).not.toContain("f20.txt")
+		} finally {
+			small.renderer.destroy()
+		}
+	})
 })

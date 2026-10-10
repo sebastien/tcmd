@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { components, keepVisible } from "../../src/js/tcmd/tui/catalogue.js"
+import { components, fileListScrollTop, keepVisible } from "../../src/js/tcmd/tui/catalogue.js"
 
 describe("tui components", () => {
 	test("Summary renders the shared summary logic", async () => {
@@ -98,5 +98,39 @@ describe("keepVisible", () => {
 	test("returns the current scrollTop before layout resolves the height", () => {
 		expect(keepVisible({ height: 0, scrollTop: 7 }, 3, 100)).toBe(7)
 		expect(keepVisible(undefined, 3, 100)).toBe(0)
+	})
+})
+
+describe("fileListScrollTop", () => {
+	const entries = Array.from({ length: 100 }, (_, i) => ({ path: `/f${i}` }))
+	const box = (extra = {}) => ({ height: 10, scrollTop: 0, ...extra })
+
+	test("scrolls to the cursor's index inside the window", () => {
+		// Cursor 40 over a 20-row viewport: the window starts at 32 (40 - 8
+		// margin), so the scrollbox holds rows 32..67 and the cursor sits at
+		// local index 8. The returned top must keep that row on screen.
+		const self = { ref: { list: box() } }
+		const data = { entries, cursor: 40, viewport: 20, marked: new Set() }
+		const top = fileListScrollTop(self, data)
+		expect(top).toBeGreaterThan(0)
+		expect(top).toBeLessThanOrEqual(8)
+		expect(8).toBeGreaterThanOrEqual(top)
+		expect(8).toBeLessThan(top + 10)
+	})
+
+	test("without a viewport it scrolls the full listing by absolute index", () => {
+		const self = { ref: { list: box() } }
+		const data = { entries, cursor: 40, marked: new Set() }
+		const top = fileListScrollTop(self, data)
+		expect(top).toBeGreaterThan(0)
+		// The absolute cursor index stays visible: top <= 40 < top + 10.
+		expect(top).toBeLessThanOrEqual(40)
+		expect(40).toBeLessThan(top + 10)
+	})
+
+	test("degenerates to the current scrollTop before layout", () => {
+		const self = { ref: { list: { height: 0, scrollTop: 6 } } }
+		const data = { entries, cursor: 40, viewport: 20, marked: new Set() }
+		expect(fileListScrollTop(self, data)).toBe(6)
 	})
 })

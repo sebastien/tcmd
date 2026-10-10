@@ -4,9 +4,11 @@
 // Created: 2026-09-26
 
 // Module: tcmd/components/FileRow
-// File listing row behaviors. Read `{ item: entry, index, cursor, marked,
-// paneId }`, the same bag shape in both engines. `cursor` and `marked` are
-// reactive cells, read with `unwrap` at the point of use.
+// File listing row behaviors. Read `{ item: entry, index, currentRow,
+// markedRow, active, paneId }`, the same bag shape in both engines.
+// `currentRow`/`markedRow` are plain per-row booleans snapshotted by the
+// `fileRows` builder (see `rows.js`); `active` is the pane-focus cell, read
+// with `unwrap` at the point of use.
 //
 // Environment: `cursorBg`, `cursorInactiveBg`, `currentClass`,
 // `accentSecondaryFg`, `accentFg`, `linkFg`, `dirFg`, `devFg`, `fileFg`,
@@ -38,9 +40,28 @@ function isMarked(entry, marked) {
 }
 
 // Function: rowMarker
-function rowMarker(entry, index, cursor, marked) {
-	if (isMarked(entry, marked)) return "* "
-	return isCurrent(index, cursor) ? "> " : "  "
+// The 2-char row marker: "*" for a marked row, ">" for the cursor row — marks
+// win, so a marked-and-current row still reads as marked.
+function rowMarker(data) {
+	return rowIsMarked(data) ? "* " : rowCurrent(data) ? "> " : "  "
+}
+
+// Function: rowCurrent
+// Whether the row is the pane cursor. The plain `currentRow` flag (snapshotted
+// by the row builder) wins; otherwise fall back to comparing the row index
+// against the shared cursor cell. Because the flag is plain, a cursor move
+// rewrites only the two changed row bags instead of re-rendering every row.
+function rowCurrent(data) {
+	if (data.currentRow !== undefined) return data.currentRow === true
+	return isCurrent(data.index, unwrap(data.cursor))
+}
+
+// Function: rowIsMarked
+// Whether the row's entry is marked. `bag.markedRow` (a plain per-row boolean)
+// wins; otherwise compare against the shared marked set.
+function rowIsMarked(data) {
+	if (data.markedRow !== undefined) return data.markedRow === true
+	return isMarked(data.item, unwrap(data.marked))
 }
 
 // Function: nameFg
@@ -60,22 +81,19 @@ function nameFg(item, env) {
 function createBehaviors(env) {
 	return {
 		rowBg: (_self, data) => {
-			if (isCurrent(data.index, unwrap(data.cursor))) {
+			if (rowCurrent(data)) {
 				// The active pane's cursor is the strong accent; the inactive
 				// pane keeps a muted cursor so focus is visible from the row
 				// alone. A missing `active` (web, single-pane hosts) reads as
 				// active.
 				return unwrap(data.active) === false ? env.cursorInactiveBg : env.cursorBg
 			}
-			if (isMarked(data.item, unwrap(data.marked))) return env.accentSecondaryBg
+			if (rowIsMarked(data)) return env.accentSecondaryBg
 			return undefined
 		},
-		rowClass: (_self, data) =>
-			isCurrent(data.index, unwrap(data.cursor)) ? env.currentClass : null,
-		rowMarker: (_self, data) =>
-			rowMarker(data.item, data.index, unwrap(data.cursor), unwrap(data.marked)),
-		rowMarkerFg: (_self, data) =>
-			isMarked(data.item, unwrap(data.marked)) ? env.accentSecondaryFg : env.accentFg,
+		rowClass: (_self, data) => (rowCurrent(data) ? env.currentClass : null),
+		rowMarker: (_self, data) => rowMarker(data),
+		rowMarkerFg: (_self, data) => (rowIsMarked(data) ? env.accentSecondaryFg : env.accentFg),
 		rowName: (_self, data) => rowName(data.item),
 		rowNameClass: (_self, data) => (data.item?.isDir ? env.dirClass : null),
 		rowNameFg: (_self, data) => nameFg(data.item, env),
@@ -84,6 +102,6 @@ function createBehaviors(env) {
 	}
 }
 
-export { createBehaviors, isMarked, nameFg, rowMarker, rowName, rowSize }
+export { createBehaviors, isMarked, nameFg, rowName, rowSize }
 
 // EOF

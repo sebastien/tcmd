@@ -4,7 +4,7 @@ import { behaviorEnv } from "../helpers/behavior-env.js"
 
 describe("CommandBar", () => {
 	test("maps items to rows and exposes the web root class", () => {
-		const rows = (data) => data.items
+		const rows = (self, data) => data.items
 		const behaviors = createBehaviors({ ...behaviorEnv, listClass: "command-bar-keys", rows })
 		expect(behaviors.listClass()).toBe("command-bar-keys")
 		expect(behaviors.rows(null, { items: ["pane.enter"] })).toEqual(["pane.enter"])

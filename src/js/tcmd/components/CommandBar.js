@@ -93,7 +93,7 @@ function createBehaviors(env) {
 		},
 	}
 	if (env?.rows) {
-		behaviors.rows = (_self, data) => env.rows(data)
+		behaviors.rows = (_self, data) => env.rows(self, data)
 	}
 	return behaviors
 }

@@ -15,8 +15,9 @@
 //
 // Environment: `overlayBg`, `borderPrimaryActiveFg`, `textSecondaryFg`
 // (footer), `textHeadingFg` (title/sign), `accentFg` (preview),
-// `errorFg` (unrunnable preview), `opRows(data)` / `argRows(data)` returning
-// the keyed row lists, and `argScrollTop(self, data)` (TUI viewport tracking).
+// `errorFg` (unrunnable preview), `opRows(self, data)` / `argRows(self, data)`
+// returning the keyed row lists, and `argScrollTop(self, data)` (TUI viewport
+// tracking).
 
 import { unwrap } from "select/state/cells"
 import { PANEL_FOCUS } from "../core/panel.js"
@@ -75,8 +76,8 @@ function createBehaviors(env) {
 		title: (_self, data) => panelTitle(data.operation),
 		titleColor: () => env.textHeadingFg,
 	}
-	if (env?.opRows) behaviors.opRows = (_self, data) => env.opRows(data)
-	if (env?.argRows) behaviors.argRows = (_self, data) => env.argRows(data)
+	if (env?.opRows) behaviors.opRows = (_self, data) => env.opRows(self, data)
+	if (env?.argRows) behaviors.argRows = (_self, data) => env.argRows(self, data)
 	if (env?.argScrollTop) behaviors.argScrollTop = (self, data) => env.argScrollTop(self, data)
 	return behaviors
 }

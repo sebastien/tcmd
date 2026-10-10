@@ -28,7 +28,7 @@ function createBehaviors(env) {
 		showLoading: (_self, data) => Boolean(unwrap(data.loading)),
 	}
 	if (env?.rows) {
-		behaviors.rows = (_self, data) => env.rows(data)
+		behaviors.rows = (self, data) => env.rows(self, data)
 	}
 	if (env?.scrollTop) {
 		behaviors.scrollTop = (self, data) => env.scrollTop(self, data)

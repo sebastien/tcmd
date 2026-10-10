@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { cell } from "select/state/cells"
-import { createBehaviors, isMarked, rowMarker, rowName, rowSize } from "../../src/js/tcmd/components/FileRow.js"
+import { createBehaviors, isMarked, rowName, rowSize } from "../../src/js/tcmd/components/FileRow.js"
 import { behaviorEnv } from "../helpers/behavior-env.js"
 
 const DIR = { isDir: true, name: "sub", path: "/sub", size: 0 }
@@ -14,9 +14,6 @@ describe("FileRow", () => {
 		expect(rowSize(DIR)).toBe("<dir>")
 		expect(rowName(FILE)).toBe("a.txt")
 		expect(rowSize(FILE)).toBe("10B")
-		expect(rowMarker(FILE, 0, 0, new Set())).toBe("> ")
-		expect(rowMarker(FILE, 0, 1, new Set())).toBe("  ")
-		expect(rowMarker(FILE, 1, 0, new Set(["/a.txt"]))).toBe("* ")
 		expect(isMarked(FILE, new Set(["/a.txt"]))).toBe(true)
 	})
 
@@ -40,6 +37,23 @@ describe("FileRow", () => {
 		expect(behaviors.rowMarkerFg(null, { item: FILE, marked: new Set() })).toBe("accent")
 		expect(behaviors.rowSizeFg()).toBe("dim")
 		expect(behaviors.rowMarker(null, { item: FILE, index: 0, cursor: 0, marked: new Set() })).toBe("> ")
+		// The marker reads flags first, marks winning over the cursor.
+		expect(behaviors.rowMarker(null, { item: FILE, currentRow: true, markedRow: false })).toBe("> ")
+		expect(behaviors.rowMarker(null, { item: FILE, currentRow: false, markedRow: false })).toBe("  ")
+		expect(behaviors.rowMarker(null, { item: FILE, currentRow: true, markedRow: true })).toBe("* ")
+	})
+
+	test("plain flags win over the shared cursor and marked sources", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		// A `cursor` cell (or plain value) saying "current" loses to the
+		// `currentRow: false` flag snapshotted by the row builder.
+		expect(behaviors.rowClass(null, { index: 1, currentRow: false, cursor: 1 })).toBeNull()
+		expect(behaviors.rowBg(null, { index: 1, currentRow: false, cursor: 1 })).toBeUndefined()
+		expect(behaviors.rowClass(null, { index: 0, currentRow: true, cursor: 9 })).toBe("is-current")
+		expect(behaviors.rowBg(null, { index: 0, currentRow: true, cursor: 9 })).toBe("cursor")
+		// Same precedence for the mark flag.
+		expect(behaviors.rowMarkerFg(null, { item: FILE, markedRow: false, marked: new Set(["/a.txt"]) })).toBe("accent")
+		expect(behaviors.rowMarkerFg(null, { item: FILE, markedRow: true, marked: new Set() })).toBe("mark")
 	})
 
 	test("spaces kind badges are non-blank and dirs pair a slash with a size label", () => {

@@ -45,6 +45,20 @@ function isNarrow(data, self) {
 	return Boolean(size && (size.width ?? 0) > 0 && size.width < INSPECTOR_INLINE_WIDTH)
 }
 
+// Function: paneListHeight
+// Rows available to a pane's listing: the viewport height minus the frame
+// border (2), the pane's own border (2), the pane header + rule (2), the entry
+// detail (2) and the summary + command bar (1 each) — ten chrome rows in all,
+// matching the App layout. Fed to the windowed `filelist` so a large directory
+// mounts only the visible slice. `0` means "unknown — render everything to
+// measure". Pinned by the golden frame tests (visible rows = height - 10).
+function paneListHeight(data, self) {
+	const size = sizeOf(data, self)
+	const height = Math.floor(size?.height ?? 0)
+	if (height <= 0) return 0
+	return Math.max(1, height - 10)
+}
+
 // Function: createFrameBehaviors
 // Behaviors for the App root and its chrome.
 function createFrameBehaviors(env) {
@@ -97,6 +111,9 @@ function createFrameBehaviors(env) {
 		// Help overlay visibility; the content lives in `tui/Help.js` so the
 		// overlay has a single source of truth.
 		helpOpen: (_self, data) => Boolean(unwrap(data.helpOpen)),
+
+		// The windowed listing height for both panes (they share the row).
+		listViewport: (self, data) => paneListHeight(data, self),
 	}
 }
 

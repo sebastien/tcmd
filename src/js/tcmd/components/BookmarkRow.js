@@ -5,18 +5,19 @@
 
 // Module: tcmd/components/BookmarkRow
 // One row of the bookmark picker. Reads `{ item: { name, path }, index,
-// selected }`, the same bag shape in both engines. `selected` is a reactive
-// cell, read with `unwrap` at the point of use.
+// selected }`, the same bag shape in both engines. Selection is snapshotted by
+// the row builder into a plain `selectedRow` boolean and read through the
+// shared `isSelected` predicate, with the `selected` cell as fallback for
+// hand-built bags.
 //
 // Environment: `accentFg`, `textFg`, `textSecondaryFg`, `selectionBg` (TUI row
 // background), `selectedClass` (web).
 
-import { unwrap } from "select/state/cells"
+import { isSelected } from "./rows.js"
 
 // Function: createBehaviors
 // Builds the BookmarkRow behavior map for the given renderer environment.
 function createBehaviors(env) {
-	const isSelected = (data) => data.index === unwrap(data.selected)
 	return {
 		rowBg: (_self, data) => (isSelected(data) ? env.selectionBg : undefined),
 		rowClass: (_self, data) => (isSelected(data) ? env.selectedClass : null),

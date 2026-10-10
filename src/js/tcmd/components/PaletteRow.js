@@ -5,14 +5,16 @@
 
 // Module: tcmd/components/PaletteRow
 // Command-palette row behaviors. Read `{ item: command, index, selected }`, the
-// same bag shape in both engines. `selected` is a reactive cell, read with
-// `unwrap` at the point of use. Script rows carry a `detail` (operation
-// signature, fileset count) appended to the label.
+// same bag shape in both engines. Selection is snapshotted by the row builder
+// into a plain `selectedRow` boolean and read through the shared `isSelected`
+// predicate, with the `selected` cell as fallback for hand-built bags. Script
+// rows carry a `detail` (operation signature, fileset count) appended to the
+// label.
 //
 // Environment: `accentFg`, `textFg`, `selectionBg` (TUI row background),
 // `selectedClass` (web).
 
-import { unwrap } from "select/state/cells"
+import { isSelected } from "./rows.js"
 
 // Function: paletteLabel
 // "Switch [Tab]" for commands; script rows append their detail.
@@ -28,13 +30,11 @@ function paletteLabel(command) {
 function createBehaviors(env) {
 	return {
 		paletteLabel: (_self, data) => paletteLabel(data.item),
-		rowBg: (_self, data) => (data.index === unwrap(data.selected) ? env.selectionBg : undefined),
-		rowClass: (_self, data) =>
-			data.index === unwrap(data.selected) ? env.selectedClass : null,
-		rowFg: (_self, data) =>
-			data.index === unwrap(data.selected) ? env.accentFg : env.textFg,
+		rowBg: (_self, data) => (isSelected(data) ? env.selectionBg : undefined),
+		rowClass: (_self, data) => (isSelected(data) ? env.selectedClass : null),
+		rowFg: (_self, data) => (isSelected(data) ? env.accentFg : env.textFg),
 		// TUI: a marker so the selection is not color-only.
-		rowMarker: (_self, data) => (data.index === unwrap(data.selected) ? ">" : " "),
+		rowMarker: (_self, data) => (isSelected(data) ? ">" : " "),
 	}
 }
 

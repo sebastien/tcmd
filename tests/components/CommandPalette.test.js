@@ -20,7 +20,7 @@ describe("CommandPalette", () => {
 	})
 
 	test("rows are wired only when the renderer provides them", () => {
-		const rows = (data) => data.items
+		const rows = (self, data) => data.items
 		expect(createBehaviors({ ...behaviorEnv, rows }).rows(null, { items: [1] })).toEqual([1])
 		expect(createBehaviors(behaviorEnv).rows).toBeUndefined()
 	})

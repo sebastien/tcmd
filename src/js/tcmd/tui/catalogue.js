@@ -57,6 +57,7 @@ import {
 	filePreviewBehaviors,
 	fileRowBehaviors,
 	fileRows,
+	fileWindow,
 	filterBarBehaviors,
 	paneLabelBehaviors,
 	paletteRowBehaviors,
@@ -163,12 +164,18 @@ function keepVisible(box, index, total) {
 	return top
 }
 
-// Keep the scrollbox cursor row inside the viewport.
+// Keep the file-list cursor row inside the viewport. When the list is windowed
+// (a `viewport` height is threaded down) the scrollbox holds only the window,
+// so it scrolls to the cursor's index inside that window against the window
+// length; otherwise it scrolls the full listing.
 function fileListScrollTop(self, data) {
+	const viewport = unwrap(data.viewport)
+	if (viewport > 0) {
+		const { local, len } = fileWindow(data, viewport)
+		return keepVisible(self.ref.list, local, len)
+	}
 	return keepVisible(self.ref.list, unwrap(data.cursor) ?? 0, unwrap(data.entries)?.length ?? 0)
-}
-
-// Keep the palette selection inside its viewport.
+}// Keep the palette selection inside its viewport.
 function paletteScrollTop(self, data) {
 	return keepVisible(self.ref.list, unwrap(data.selected) ?? 0, unwrap(data.items)?.length ?? 0)
 }
@@ -201,14 +208,14 @@ const BAR_COMPACT = new Set([
 // Trims the command bar to its essential hints when the viewport is narrow.
 function commandBarRows(commandItem) {
 	const base = commandItemRows(commandItem)
-	return (data) => {
+	return (self, data) => {
 		const items = unwrap(data.items) ?? []
 		const compact = Boolean(unwrap(data.compact))
 		// Context hint sets (palette/filter) carry no command id; never trim
 		// those, only the command set.
 		const isHintSet = items.some((item) => item?.id === null || item?.id === undefined)
 		const kept = compact && !isHintSet ? items.filter((item) => BAR_COMPACT.has(item.id)) : items
-		return base({ ...data, items: kept })
+		return base(self, { ...data, items: kept })
 	}
 }
 
@@ -304,6 +311,6 @@ function registerComponents() {
 	return components
 }
 
-export { components, keepVisible, registerComponents }
+export { components, fileListScrollTop, keepVisible, registerComponents }
 
 // EOF

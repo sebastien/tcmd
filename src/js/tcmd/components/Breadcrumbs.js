@@ -17,7 +17,7 @@
 function createBehaviors(env) {
 	const behaviors = { listClass: () => env?.listClass }
 	if (env?.rows) {
-		behaviors.rows = (_self, data) => env.rows(data)
+		behaviors.rows = (_self, data) => env.rows(self, data)
 	}
 	return behaviors
 }

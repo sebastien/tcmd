@@ -35,6 +35,6 @@ export { createBehaviors as summaryBehaviors } from "./Summary.js"
 
 // Helpers
 export { formatCounts, formatDisk, formatMode, formatSize, formatTime } from "./format.js"
-export { bookmarkRows, commandItemRows, crumbRows, fileRows, paletteRows, panelArgRows, panelOpRows } from "./rows.js"
+export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, paletteRows, panelArgRows, panelOpRows } from "./rows.js"
 
 // EOF
