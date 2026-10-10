@@ -72,14 +72,18 @@ function fileWindow(data, viewport) {
 }
 
 // Function: crumbRows
-// `{ item: segment, index, paneId }` bags for `Crumb` rows.
+// `{ item: segment, index, last, paneId }` bags for `Crumb` rows; `last`
+// marks the basename, which carries no separator.
 function crumbRows(Crumb) {
-	return (self, data) =>
-		Crumb.map(
-			data.segments ?? [],
-			(item, index) => ({ item, index, paneId: data.paneId }),
-			(segment) => segment.path,
+	return (self, data) => {
+		const segments = data.segments ?? []
+		const last = segments.length - 1
+		return Crumb.map(
+			segments,
+			(item, index) => ({ item, index, last: index === last, paneId: data.paneId }),
+			(segment) => segment.path ?? "…",
 		)
+	}
 }
 
 // Function: fileRows

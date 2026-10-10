@@ -4,16 +4,16 @@
 // Created: 2026-10-02
 
 // Module: tcmd/tui/frame
-// TUI-only presentation behaviors for the workspace chrome: the frame border
-// (identity + host), the responsive breakpoints driven by the `uiSize` cell,
-// the pane borders, header rules and the help overlay state. Everything here
-// is injected into the App binding; none of it lives in the shared
+// TUI-only presentation behaviors for the workspace chrome: the responsive
+// breakpoints driven by the `uiSize` cell, the pane borders, header rules,
+// the command-bar geometry and the help overlay state. Everything here is
+// injected into the App binding; none of it lives in the shared
 // `components/` logic.
 
 import { unwrap } from "select/state/cells"
 import { DEFAULT_KEYMAP } from "../core/keymap.js"
 import { getCommands } from "../core/commands.js"
-import { formatTitle } from "../components/format.js"
+import { commandBarMarksItem, commandBarRowCount, commandBarStatus } from "../components/CommandBar.js"
 
 // Below this the two-pane workspace is replaced by a resize hint.
 const MIN_WIDTH = 64
@@ -21,9 +21,6 @@ const MIN_HEIGHT = 16
 // At or above this the inspector can sit beside the panes; below it becomes a
 // fullscreen overlay.
 const INSPECTOR_INLINE_WIDTH = 100
-// Below this the command bar keeps only its essential hints; the rest stay
-// reachable from the palette and the `?` reference.
-const BAR_COMPACT_WIDTH = 110
 
 // Function: sizeOf
 // Reads the viewport size from the App data, falling back to the renderer's
@@ -45,32 +42,50 @@ function isNarrow(data, self) {
 	return Boolean(size && (size.width ?? 0) > 0 && size.width < INSPECTOR_INLINE_WIDTH)
 }
 
+// Function: commandBarRowsFor
+// The entries the bar currently shows: the context hints or the `bar`
+// commands, plus the active pane's marked count as a trailing entry.
+function commandBarRowsFor(data) {
+	const items = unwrap(data?.commandBarItems) ?? []
+	const marks = commandBarMarksItem(data)
+	return marks ? [...items, marks] : items
+}
+
+// Function: commandBarLines
+// Rows the wrapped command bar occupies at the current viewport (the bar
+// is inset one column from the viewport edge).
+function commandBarLines(data, self) {
+	const width = Math.floor(sizeOf(data, self)?.width ?? 0)
+	if (width <= 0) return 1
+	return commandBarRowCount(commandBarRowsFor(data), width - 1)
+}
+
 // Function: paneListHeight
-// Rows available to a pane's listing: the viewport height minus the frame
-// border (2), the pane's own border (2), the pane header + rule (2), the entry
-// detail (2) and the summary + command bar (1 each) — ten chrome rows in all,
-// matching the App layout. Fed to the windowed `filelist` so a large directory
-// mounts only the visible slice. `0` means "unknown — render everything to
-// measure". Pinned by the golden frame tests (visible rows = height - 10).
+// Rows available to a pane's listing: the viewport height minus the identity
+// bar (1), the pane's own border (2), the pane header + rule (2), the entry
+// detail (2), the summary (1) and the wrapped command bar — eight chrome rows
+// plus the bar. Fed to the windowed `filelist` so a large directory mounts
+// only the visible slice. `0` means "unknown — render everything to measure".
 function paneListHeight(data, self) {
-	const size = sizeOf(data, self)
-	const height = Math.floor(size?.height ?? 0)
+	const height = Math.floor(sizeOf(data, self)?.height ?? 0)
 	if (height <= 0) return 0
-	return Math.max(1, height - 10)
+	// A notice or error swaps the keys for a one-line status.
+	const bar = commandBarStatus(data) ? 1 : commandBarLines(data, self)
+	return Math.max(1, height - 8 - bar)
 }
 
 // Function: createFrameBehaviors
 // Behaviors for the App root and its chrome.
 function createFrameBehaviors(env) {
 	return {
-		// Identity line in the top border: "TinyCmd - host /path", compressed
-		// to the viewport width.
-		frameTitle: (self, data) => {
-			const width = sizeOf(data, self)?.width ?? 0
-			return ` ${formatTitle(unwrap(data.appHost), unwrap(data.appPath), Math.max(0, width - 4))} `
+		// Identity bar: "TinyCmd - host", or just "TinyCmd" without a host.
+		// Everything else on screen belongs to the user's files; this one row
+		// is the app's own.
+		topBar: (_self, data) => {
+			const host = `${unwrap(data.appHost) ?? ""}`.trim()
+			return host ? ` TinyCmd - ${host} ` : " TinyCmd "
 		},
-		frameBorderFg: () => env.theme.borderPrimaryFg,
-		frameTitleFg: () => env.theme.textHeadingFg,
+		topBarFg: () => env.theme.textHeadingFg,
 
 		// Responsive gates. `uiSize` is absent in tests and the web, so the
 		// workspace renders normally there.
@@ -114,6 +129,10 @@ function createFrameBehaviors(env) {
 
 		// The windowed listing height for both panes (they share the row).
 		listViewport: (self, data) => paneListHeight(data, self),
+
+		// The command bar's height: one line for a status, otherwise as many
+		// rows as the wrapped bracket shorthands need.
+		barHeight: (self, data) => (commandBarStatus(data) ? 1 : commandBarLines(data, self)),
 	}
 }
 
@@ -194,6 +213,13 @@ function helpLines() {
 	return lines
 }
 
-export { BAR_COMPACT_WIDTH, createFrameBehaviors, helpLines, INSPECTOR_INLINE_WIDTH, isNarrow, keyGlyph }
-
+export {
+	commandBarLines,
+	createFrameBehaviors,
+	helpLines,
+	INSPECTOR_INLINE_WIDTH,
+	isNarrow,
+	keyGlyph,
+	sizeOf,
+}
 // EOF

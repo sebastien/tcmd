@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { BAR_COMPACT_WIDTH, createFrameBehaviors, helpLines, INSPECTOR_INLINE_WIDTH, keyGlyph } from "../../src/js/tcmd/tui/frame.js"
+import { createFrameBehaviors, helpLines, INSPECTOR_INLINE_WIDTH, keyGlyph } from "../../src/js/tcmd/tui/frame.js"
 
 const theme = {
-	borderPrimaryFg: "frame",
 	textHeadingFg: "title",
 }
 
@@ -10,16 +9,6 @@ const theme = {
 const selfAt = (width, height) => ({ ctx: { width, height } })
 
 describe("tui frame", () => {
-	test("frame title carries identity, host and path", () => {
-		const behaviors = createFrameBehaviors({ theme })
-		const data = { appHost: "devbox", appPath: "/home/tester" }
-		expect(behaviors.frameTitle(selfAt(80, 24), data)).toBe(" TinyCmd - devbox /home/tester ")
-		// No host: just the path.
-		expect(behaviors.frameTitle(selfAt(80, 24), { appHost: "", appPath: "/etc" })).toBe(
-			" TinyCmd - /etc ",
-		)
-	})
-
 	test("the minimum-size gate fires below the breakpoint", () => {
 		const behaviors = createFrameBehaviors({ theme })
 		expect(behaviors.tooSmall(selfAt(50, 12), {})).toBe(true)
@@ -42,8 +31,24 @@ describe("tui frame", () => {
 		expect(behaviors.showViewer(narrow, { showPreview: false, viewerOpen: true })).toBe(true)
 	})
 
-	test("the compact-bar breakpoint is above the inspector one", () => {
-		expect(BAR_COMPACT_WIDTH).toBeGreaterThan(INSPECTOR_INLINE_WIDTH)
+	test("the command bar wraps and the listing windows around it", () => {
+		const behaviors = createFrameBehaviors({ theme })
+		const items = [
+			{ id: "pane.enter", title: "Open", keys: "Enter" },
+			{ id: "pane.up", title: "Parent", keys: "←" },
+		]
+		const data = { commandBarItems: items, active: "left", leftMarked: new Set(), rightMarked: new Set() }
+		// Two entries share one row on a wide viewport.
+		expect(behaviors.barHeight(selfAt(120, 30), data)).toBe(1)
+		// A 20-column bar only holds "[Open ⏎] " (9 columns) per row.
+		expect(behaviors.barHeight(selfAt(20, 30), data)).toBe(2)
+		// A notice or error swaps the keys for a one-line status.
+		expect(behaviors.barHeight(selfAt(20, 30), { ...data, notice: { kind: "tip", text: "hi" } })).toBe(1)
+		// The listing windows around the chrome: eight fixed rows plus the
+		// bar. 30 - 8 - 1 = 21 listing rows with a one-row bar.
+		expect(behaviors.listViewport(selfAt(120, 30), { ...data, commandBarItems: [] })).toBe(21)
+		// Unknown size: render everything to measure.
+		expect(behaviors.listViewport(selfAt(0, 0), data)).toBe(0)
 	})
 
 	test("pane boxes tile with a full border each and a header rule", () => {

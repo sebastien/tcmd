@@ -1,7 +1,5 @@
-<box flexDirection="row" height="1" on:click="item.id!commandbar:run">
-	<text out="opLeft" out:fg="opLeftFg" out:bg="opLeftBg" wrapMode="none"></text>
-	<text out="op" out:fg="opFg" out:bg="opBg" wrapMode="none"></text>
-	<text out="mid" out:fg="midFg" out:bg="midBg" wrapMode="none"></text>
-	<text out="key" out:fg="keyFg" out:bg="keyBg" wrapMode="none"></text>
-	<text out="end" out:fg="endFg" out:bg="endBg" wrapMode="none"></text>
+<box flexDirection="row" height="1" flexShrink="0" on:click="item.id!commandbar:run">
+	<text out="itemHead" out:fg="itemFg" wrapMode="none"></text>
+	<text out="keyText" out:fg="keyFg" wrapMode="none"></text>
+	<text out="endText" out:fg="itemFg" wrapMode="none"></text>
 </box>

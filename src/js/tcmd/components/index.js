@@ -11,6 +11,7 @@
 
 // Binding
 export { bind } from "./bind.js"
+export { commandBarMarks, commandBarMarksItem, commandBarRowCount, commandBarStatus } from "./CommandBar.js"
 
 // Behaviors
 export { createBehaviors as appBehaviors, createEvents as appEvents, createInit as appInit } from "./App.js"

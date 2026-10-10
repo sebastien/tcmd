@@ -29,7 +29,7 @@ describe("FilePreview", () => {
 		expect(behaviors.textFg()).toBe("text")
 		expect(behaviors.dimFg()).toBe("dim")
 		expect(behaviors.previewTitleColor()).toBe("title")
-		expect(behaviors.actions()).toBe("[O]pen [E]dit")
+		expect(behaviors.actions()).toBe(" [Open O] [Edit E]")
 	})
 
 	test("titles show a kind badge when there is no extension", () => {

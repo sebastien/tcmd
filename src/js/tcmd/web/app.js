@@ -146,7 +146,7 @@ function createWebApp(session) {
 			}),
 			...webViewBehaviors(),
 		})
-		.sub(appEvents())
+		.sub(appEvents({ quit: (self) => self.unmount?.() }))
 }
 
 export { createWebApp, normalizeKey }

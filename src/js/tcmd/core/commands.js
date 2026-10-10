@@ -155,6 +155,7 @@ const commands = [
 		title: "Reload",
 		keys: "^R",
 		kind: "ui",
+		bar: true,
 		run(session) {
 			return pane(session).refresh()
 		},
@@ -727,6 +728,19 @@ const commands = [
 		run(session) {
 			session.confirm.set(null)
 		},
+	},
+	// Quit: presentation-only. The key path intercepts `app.quit` before
+	// dispatch, and the command-bar click does the same (the renderer owns
+	// exiting); the registry entry exists so the bar and the `?` reference
+	// can advertise it. Hidden from the palette, where it could only no-op.
+	{
+		id: "app.quit",
+		title: "Quit",
+		keys: "q",
+		kind: "ui",
+		bar: true,
+		hidden: true,
+		run() {},
 	},
 ]
 

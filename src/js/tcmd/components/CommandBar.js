@@ -7,20 +7,21 @@
 // CommandBar: the bottom bar. By default it shows the keys available in the
 // current context (the command registry's `bar` commands, or the palette
 // hints while the palette is open); a pane error or a session notice takes
-// its place. The row logic lives in `CommandItem.js`; this parent maps its
-// `items` to rows.
+// its place. Entries are bracket shorthands (see `CommandItem.js`) that wrap
+// onto as many rows as the width demands; the active pane's marked count
+// joins the list as a dimmed, non-clickable entry. The row logic lives in
+// `CommandItem.js`; this parent maps its `items` to rows.
 //
 // The web presentation swaps the key list for a single status line
-// (`showKeys`/`showStatus`/`status`/`statusClass`); the TUI presentation keeps
-// the key list and appends the status and the active pane's marked count as
-// right-aligned zones (`statusPad`, `marksPad`, `marksFg`).
+// (`showKeys`/`showStatus`/`status`/`statusClass`); the TUI presentation
+// keeps the wrapped key list and swaps it for the status when there is one.
 //
 // Environment: `rows(data)` returning the keyed row list, `listClass` (web
-// root class), `errorClass` (web), and the TUI colors `accentFg`,
-// `accentSecondaryFg`, plus the error/warning/tip foreground/background pairs
-// for the status badge.
+// root class), `errorClass` (web), and the TUI colors plus the
+// error/warning/tip foreground/background pairs for the status badge.
 
 import { unwrap } from "select/state/cells"
+import { commandWidth } from "./CommandItem.js"
 
 // Function: commandBarStatus
 // The one-line status the bar shows when something needs attention: the
@@ -44,6 +45,31 @@ function commandBarMarks(data) {
 	return count > 0 ? `${count} marked` : ""
 }
 
+// Function: commandBarMarksItem
+// The marked count as a trailing, non-clickable bar entry (null when none).
+function commandBarMarksItem(data) {
+	const marks = commandBarMarks(data)
+	return marks ? { id: null, title: marks, dim: true } : null
+}
+
+// Function: commandBarRowCount
+// How many rows the wrapped entries occupy at `width` columns (greedy fill,
+// matching the flex layout). `width <= 0` (unknown) assumes a single row.
+function commandBarRowCount(items, width) {
+	if (!width || width <= 0) return 1
+	let rows = 1
+	let cols = 0
+	for (const item of items ?? []) {
+		const w = commandWidth(item)
+		if (cols > 0 && cols + w > width) {
+			rows++
+			cols = 0
+		}
+		cols += w
+	}
+	return rows
+}
+
 // Function: isInfo
 // True when the bar status comes from a non-error notice.
 function isInfo(data) {
@@ -62,12 +88,6 @@ function statusKind(data) {
 function createBehaviors(env) {
 	const behaviors = {
 		listClass: () => env?.listClass,
-		marksFg: () => env?.accentSecondaryFg ?? env?.accentFg,
-		// TUI: the active pane's marked count, or empty.
-		marksPad: (_self, data) => {
-			const text = commandBarMarks(data)
-			return text ? ` ${text} ` : ""
-		},
 		showKeys: (_self, data) => !commandBarStatus(data),
 		showStatus: (_self, data) => Boolean(commandBarStatus(data)),
 		status: (_self, data) => commandBarStatus(data),
@@ -98,6 +118,6 @@ function createBehaviors(env) {
 	return behaviors
 }
 
-export { commandBarMarks, commandBarStatus, createBehaviors }
+export { commandBarMarks, commandBarMarksItem, commandBarRowCount, commandBarStatus, createBehaviors }
 
 // EOF

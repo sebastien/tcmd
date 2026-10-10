@@ -1,5 +1,4 @@
-<box flexDirection="row" height="1" overflow="hidden">
-	<box out="rows" flexDirection="row" flexGrow="1" flexShrink="0" overflow="hidden"></box>
-	<text out="marksPad" out:fg="marksFg" flexShrink="0"></text>
-	<text out="statusPad" out:fg="statusFg" out:bg="statusBg" flexShrink="0"></text>
+<box flexDirection="column" overflow="hidden">
+	<box when="showKeys" out="rows" flexDirection="row" flexWrap="wrap" flexGrow="1" overflow="hidden"></box>
+	<text when="showStatus" out="status" out:fg="statusFg" out:bg="statusBg" flexShrink="0"></text>
 </box>

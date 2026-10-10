@@ -44,12 +44,12 @@ describe("BookmarkRow", () => {
 
 describe("PaneLabel", () => {
 	test("maps pane ids to SRC/DST and highlights the active pane", () => {
-		expect(paneLabel("left")).toBe("SRC")
-		expect(paneLabel("right")).toBe("DST")
+		expect(paneLabel("left")).toBe("SRC ")
+		expect(paneLabel("right")).toBe("DST ")
 		expect(PANE_LABELS).toEqual({ left: "SRC", right: "DST" })
 		const behaviors = paneLabelBehaviors(behaviorEnv)
 		const active = cell("left")
-		expect(behaviors.label(null, { paneId: "left" })).toBe("SRC")
+		expect(behaviors.label(null, { paneId: "left" })).toBe("SRC ")
 		expect(behaviors.labelFg(null, { paneId: "left", active })).toBe("accent")
 		expect(behaviors.labelFg(null, { paneId: "right", active })).toBe("dim")
 		active.set("right")

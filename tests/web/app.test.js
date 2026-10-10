@@ -58,7 +58,7 @@ describe("web app", () => {
 		const { host, instance } = await mountApp()
 		try {
 			// CommandBar/FileList/Breadcrumbs all come from reactive session cells.
-			expect(host.textContent).toContain("Switch[Tab]")
+			expect(host.textContent).toContain("[Switch ⇥]")
 			expect(host.textContent).toContain("notes.txt")
 			expect(host.textContent).toContain("tester/")
 			expect(host.querySelectorAll(".file-row.is-current").length).toBeGreaterThan(0)
@@ -70,8 +70,8 @@ describe("web app", () => {
 			// Cursor starts on the `tester/` directory.
 			expect(detail.textContent).toContain("drwxr-xr-x")
 			// The pane header carries the SRC/DST role label.
-			expect(host.querySelector(".pane-left .pane-label").textContent).toBe("SRC")
-			expect(host.querySelector(".pane-right .pane-label").textContent).toBe("DST")
+			expect(host.querySelector(".pane-left .pane-label").textContent).toBe("SRC ")
+			expect(host.querySelector(".pane-right .pane-label").textContent).toBe("DST ")
 			// App.html wrappers are neutral containers: no duplicated child roots.
 			expect(host.querySelector(".file-list .file-list")).toBeNull()
 			expect(host.querySelector("ul > ul")).toBeNull()

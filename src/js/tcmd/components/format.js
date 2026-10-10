@@ -34,6 +34,50 @@ function formatTitle(host, path, width) {
 	return `${text.slice(0, Math.max(0, width - 1))}…`
 }
 
+// Function: crumbSpan
+// Columns a breadcrumb segment occupies: the root "/" is one column; a name
+// is its width plus one for the "/" separator, except the basename (the last
+// segment) which carries no separator.
+function crumbSpan(segment, isLast) {
+	if (isRootish(segment)) return 1
+	return `${segment.name}`.length + (isLast ? 0 : 1)
+}
+
+// Function: isRootish
+// True for the leading "/" segment.
+function isRootish(segment) {
+	return segment?.path === "/"
+}
+
+// Function: elideCrumbs
+// Width-aware breadcrumb segments. Full names while they fit `width`
+// columns; then the leftmost middle segments collapse to their first letter
+// (original case, e.g. Workspace -> W) one at a time, basename last; then —
+// only when even one letter per segment cannot fit — leading segments are
+// dropped behind a "…" marker. Every remaining segment keeps at least one
+// letter and every "/" survives, so the strip stays clickable end to end.
+// `width <= 0` (unknown, web) returns the segments untouched.
+function elideCrumbs(segments, width) {
+	const list = segments ?? []
+	if (width <= 0 || list.length === 0) return list
+	const measure = (segs) =>
+		segs.reduce((cols, segment, i) => cols + crumbSpan(segment, i === segs.length - 1), 0)
+	if (measure(list) <= width) return list
+	// Collapse leftmost non-root segments to one letter; the basename stays.
+	const collapsed = list.map((segment) => ({ ...segment }))
+	for (let i = 1; i < collapsed.length - 1; i++) {
+		collapsed[i] = { ...collapsed[i], name: `${collapsed[i].name}`.slice(0, 1) }
+		if (measure(collapsed) <= width) return collapsed
+	}
+	// Even one letter each cannot fit: drop leading segments behind a "…".
+	const marker = { name: "…", path: null }
+	let rest = collapsed.slice(1)
+	while (rest.length > 1 && measure([marker, ...rest]) > width) {
+		rest = rest.slice(1)
+	}
+	return [marker, ...rest]
+}
+
 // Function: formatSize
 // Human-readable byte size; directories pass through their own label.
 function formatSize(bytes) {
@@ -106,6 +150,6 @@ function formatCounts(entries) {
 	return `${dirs} dirs, ${files} files, ${formatSize(bytes)}`
 }
 
-export { formatCounts, formatDisk, formatMode, formatSize, formatTime, formatTitle }
+export { elideCrumbs, formatCounts, formatDisk, formatMode, formatSize, formatTime, formatTitle }
 
 // EOF

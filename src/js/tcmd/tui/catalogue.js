@@ -47,6 +47,7 @@ import {
 	commandArgRowBehaviors,
 	commandItemBehaviors,
 	commandItemRows,
+	commandBarMarksItem,
 	commandPanelBehaviors,
 	commandPaletteBehaviors,
 	confirmBehaviors,
@@ -190,32 +191,16 @@ function panelArgScrollTop(self, data) {
 	return keepVisible(self.ref.args, unwrap(data.argCursor) ?? 0, unwrap(data.rows)?.length ?? 0)
 }
 
-// Constant: BAR_COMPACT
-// The command-bar hints kept on narrow viewports. The rest stay reachable from
-// the command palette and the `?` reference.
-const BAR_COMPACT = new Set([
-	"pane.enter",
-	"pane.up",
-	"pane.toggle",
-	"list.mark",
-	"view.togglePreview",
-	"palette.toggle",
-	"filter.start",
-	"bookmark.jump",
-])
-
 // Function: commandBarRows
-// Trims the command bar to its essential hints when the viewport is narrow.
+// Appends the active pane's marked count as a trailing dimmed entry, then
+// maps the items to rows. The entries wrap onto as many rows as the width
+// demands; nothing is trimmed.
 function commandBarRows(commandItem) {
 	const base = commandItemRows(commandItem)
 	return (self, data) => {
 		const items = unwrap(data.items) ?? []
-		const compact = Boolean(unwrap(data.compact))
-		// Context hint sets (palette/filter) carry no command id; never trim
-		// those, only the command set.
-		const isHintSet = items.some((item) => item?.id === null || item?.id === undefined)
-		const kept = compact && !isHintSet ? items.filter((item) => BAR_COMPACT.has(item.id)) : items
-		return base(self, { ...data, items: kept })
+		const marks = commandBarMarksItem(data)
+		return base(self, { ...data, items: marks ? [...items, marks] : items })
 	}
 }
 

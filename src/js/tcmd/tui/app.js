@@ -15,9 +15,10 @@
 import { cell, derived, unwrap } from "select/state/cells"
 import { ui } from "select.tui"
 import appXml from "../components/App.xml" with { type: "text" }
+import { elideCrumbs } from "../components/format.js"
 import { appBehaviors, appEvents, appInit } from "../components/index.js"
 import { registerComponents } from "./catalogue.js"
-import { createFrameBehaviors, isNarrow, BAR_COMPACT_WIDTH } from "./frame.js"
+import { createFrameBehaviors, INSPECTOR_INLINE_WIDTH, isNarrow } from "./frame.js"
 import { tuiTheme } from "./theme.js"
 
 // Function: createAppComponent
@@ -38,8 +39,24 @@ function createAppComponent(session, options = {}) {
 	const help = options.help ?? cell(false)
 	const viewer = options.viewer ?? cell(false)
 
-	// The command bar drops to its essential hints on narrower viewports.
-	const barCompact = derived([size], ([value]) => Boolean(value?.width > 0 && value.width < BAR_COMPACT_WIDTH))
+	// Columns available to a pane's breadcrumb strip: the viewport shared by
+	// the panes (plus the inline inspector), minus the pane border, the
+	// header inset, the SRC/DST slot and a safety column. `0` (unknown, web)
+	// disables the collapse.
+	const crumbWidth = derived([size, session.showPreview], ([value, showPreview]) => {
+		const width = Math.floor(value?.width ?? 0)
+		if (width <= 0) return 0
+		const columns = showPreview && width >= INSPECTOR_INLINE_WIDTH ? 3 : 2
+		return Math.max(8, Math.floor(width / columns) - 8)
+	})
+	// The elided breadcrumb segments for each pane (presentation-only view of
+	// the pane's own segment list; paths stay intact for clicks).
+	const leftCrumbs = derived([session.panes.left.segments, crumbWidth], ([segments, width]) =>
+		elideCrumbs(segments, width),
+	)
+	const rightCrumbs = derived([session.panes.right.segments, crumbWidth], ([segments, width]) =>
+		elideCrumbs(segments, width),
+	)
 
 	const quit = options.quit ?? ((self) => {
 		// Destroying the renderer from within a keypress deadlocks the native
@@ -60,7 +77,8 @@ function createAppComponent(session, options = {}) {
 			uiSize: size,
 			helpOpen: help,
 			viewerOpen: viewer,
-			barCompact,
+			leftSegments: leftCrumbs,
+			rightSegments: rightCrumbs,
 		}))
 		.does({
 			...frame,
@@ -113,7 +131,7 @@ function createAppComponent(session, options = {}) {
 			rightHeadRuleFg: (_self, data) =>
 				unwrap(data.active) === "right" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
 		})
-		.sub(appEvents())
+		.sub(appEvents({ quit }))
 		.using(appXml)
 }
 

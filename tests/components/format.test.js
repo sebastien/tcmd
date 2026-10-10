@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { formatCounts, formatDisk, formatMode, formatSize, formatTime, formatTitle } from "../../src/js/tcmd/components/format.js"
+import { elideCrumbs, formatCounts, formatDisk, formatMode, formatSize, formatTime, formatTitle } from "../../src/js/tcmd/components/format.js"
+
+// Names of a crumb segment list, for compact assertions.
+function names(segments) {
+	return segments.map((segment) => segment.name)
+}
 
 describe("format", () => {
 	test("formats sizes, disk and counts", () => {
@@ -37,5 +42,48 @@ describe("format", () => {
 		// No host, root path, and a width too small for anything but a stub.
 		expect(formatTitle("", "/", 40)).toBe("TinyCmd - /")
 		expect(formatTitle("box", "/home/seb/app", 12)).toBe("TinyCmd - b…")
+	})
+})
+
+describe("elideCrumbs", () => {
+	const path = (name, parent) => ({ name, path: `${parent}/${name}` })
+	const HOME = [
+		{ name: "/", path: "/" },
+		path("home", ""),
+		path("sebastien", "/home"),
+		path("Workspace", "/home/sebastien"),
+		path("Perso", "/home/sebastien/Workspace"),
+	]
+	HOME.push({ name: "tcmd", path: "/home/sebastien/Workspace/Perso/tcmd" })
+
+	test("keeps full names while they fit", () => {
+		expect(elideCrumbs(HOME, 40)).toEqual(HOME)
+		// Unknown width (web) never collapses.
+		expect(elideCrumbs(HOME, 0)).toEqual(HOME)
+		expect(elideCrumbs([], 20)).toEqual([])
+	})
+
+	test("collapses leftmost segments to first letters, basename last", () => {
+		// 17 columns fit exactly "/h/s/W/Perso/tcmd".
+		expect(names(elideCrumbs(HOME, 17))).toEqual(["/", "h", "s", "W", "Perso", "tcmd"])
+		// One column less collapses Perso too.
+		expect(names(elideCrumbs(HOME, 16))).toEqual(["/", "h", "s", "W", "P", "tcmd"])
+		// Paths survive the collapse for clicks.
+		const elided = elideCrumbs(HOME, 17)
+		expect(elided[1].path).toBe("/home")
+		expect(elided[4].path).toBe("/home/sebastien/Workspace/Perso")
+	})
+
+	test("drops leading segments behind a marker when letters cannot fit", () => {
+		// "/h/s/W/P/tcmd" needs 13 columns; 10 cannot hold every segment.
+		expect(names(elideCrumbs(HOME, 10))).toEqual(["…", "W", "P", "tcmd"])
+		// The marker is not clickable; the survivors keep their paths.
+		const elided = elideCrumbs(HOME, 10)
+		expect(elided[0].path).toBeNull()
+		expect(elided[1].path).toBe("/home/sebastien/Workspace")
+	})
+
+	test("always keeps the basename whole", () => {
+		expect(elideCrumbs(HOME, 6).at(-1)).toEqual({ name: "tcmd", path: "/home/sebastien/Workspace/Perso/tcmd" })
 	})
 })

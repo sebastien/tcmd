@@ -23,19 +23,16 @@ describe("tui app", () => {
 		try {
 			const frame = setup.captureCharFrame()
 			const lines = frame.split("\n")
+			// The identity bar names the app; the panes tile below it.
 			expect(lines[0]).toContain("TinyCmd")
+			expect(lines[1]).toStartWith("┌")
 			expect(frame).toContain("tester")
 			expect(frame).toContain("notes.txt")
 			expect(frame).toContain("home")
 			expect(frame).toContain("etc")
 			// Command bar key hints from the command registry.
-			expect(frame).toContain("Open")
-			expect(frame).toContain("Open")
-			expect(frame).toContain("Enter")
-			expect(frame).toContain("Switch")
-			expect(frame).toContain("Tab")
-			expect(frame).toContain("")
-			expect(frame).toContain("")
+			expect(frame).toContain("[Open ⏎]")
+			expect(frame).toContain("[Switch ⇥]")
 			// Summary counts.
 			expect(frame).toContain("files")
 			expect(session.panes.left.entries.value.length).toBe(3)
@@ -62,20 +59,6 @@ describe("tui app", () => {
 			expect(detailIndex).toBeGreaterThan(-1)
 			expect(countsIndex).toBeGreaterThan(detailIndex)
 			expect(lines.length).toBeGreaterThan(0)
-		} finally {
-			setup.renderer.destroy()
-		}
-	})
-
-	test("frame title shows the active path, compressed to fit", async () => {
-		// Above the minimum gate, but too narrow for the full path.
-		const { setup, session } = await makeSetup(70, 16)
-		try {
-			await session.panes.left.navigate("/home/tester")
-			await setup.renderOnce()
-			// Identity now lives in the frame's top border, not a header row.
-			expect(setup.captureCharFrame().split("\n")[0]).toContain("TinyCmd")
-			expect(setup.captureCharFrame().split("\n")[0]).toContain("/home/tester")
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -125,7 +108,7 @@ describe("tui app", () => {
 			await new Promise((resolve) => setTimeout(resolve, 0))
 			await setup.renderOnce()
 			expect(session.panes.left.path.value).toBe("/home/tester")
-			expect(setup.captureCharFrame()).toContain("tester /")
+			expect(setup.captureCharFrame()).toContain("/home/tester")
 		} finally {
 			setup.renderer.destroy()
 		}

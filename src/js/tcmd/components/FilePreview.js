@@ -84,7 +84,7 @@ function headerTitle(preview, entry) {
 // Builds the FilePreview behavior map for the given renderer environment.
 function createBehaviors(env) {
 	return {
-		actions: () => "[O]pen [E]dit",
+		actions: () => " [Open O] [Edit E]",
 		actionsFg: () => env.textSecondaryFg,
 		cardText: (_self, data) => cardText(unwrap(data.preview)),
 		dimFg: () => env.textSecondaryFg,

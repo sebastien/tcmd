@@ -1,11 +1,17 @@
-<!-- Root wrapper: the framed workspace, plus overlays positioned against the
-     whole viewport (not the frame's content box, which is pushed down by the
-     flex workspace). -->
+<!-- Root wrapper: the workspace, plus overlays positioned against the whole
+     viewport. The overlays stay INSIDE this root box so keypress routing (which
+     binds to it once) sees them as its focused subtree. -->
 <box flexDirection="column" width="100%" height="100%" on:keypress="keys">
 
-	<box flexGrow="1" border borderStyle="rounded"
-	     out:title="frameTitle" out:titleColor="frameTitleFg" out:borderColor="frameBorderFg"
-	     titleAlignment="left" flexDirection="column" overflow="hidden">
+	<!-- Workspace wrapper: always mounted, so the root box has one stable
+	     child whether the workspace or the min-size gate shows. -->
+	<box flexGrow="1" flexDirection="column" overflow="hidden">
+
+		<!-- Identity bar: the one visible trace of TinyCmd itself (the host
+		     aside, everything else on screen is the user's files). -->
+		<box flexDirection="row" height="1" paddingLeft="1" overflow="hidden">
+			<text out="topBar" out:fg="topBarFg" wrapMode="none"></text>
+		</box>
 
 		<!-- Minimum-size gate: below the breakpoint the workspace is unusable. -->
 		<box when="tooSmall" flexGrow="1" alignItems="center" justifyContent="center" flexDirection="column" rowGap="1">
@@ -13,13 +19,13 @@
 			<text out="minSizeHint" out:fg="dimFg"></text>
 		</box>
 
-		<!-- Workspace: two boxed panes plus the inline inspector. -->
+		<!-- Two boxed panes plus the inline inspector. -->
 		<box when="!tooSmall" flexDirection="column" flexGrow="1" overflow="hidden">
 			<box flexDirection="row" flexGrow="1" overflow="hidden">
 				<box flexDirection="column" flexGrow="1" border borderStyle="single"
 				     out:border="leftBorder" out:borderColor="leftBorderFg"
 				     on:click="leftId!pane:activate">
-					<box flexDirection="row" height="1" overflow="hidden">
+					<box flexDirection="row" height="1" paddingLeft="1" overflow="hidden">
 						<paneLabel in:paneId="leftId" in:active="active" height="1"></paneLabel>
 						<box when="!leftFilterOn" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
 							<breadcrumbs in:segments="leftSegments" in:paneId="leftId" height="1"></breadcrumbs>
@@ -36,7 +42,7 @@
 				<box flexDirection="column" flexGrow="1" border borderStyle="single"
 				     out:border="rightBorder" out:borderColor="rightBorderFg"
 				     on:click="rightId!pane:activate">
-					<box flexDirection="row" height="1" overflow="hidden">
+					<box flexDirection="row" height="1" paddingLeft="1" overflow="hidden">
 						<paneLabel in:paneId="rightId" in:active="active" height="1"></paneLabel>
 						<box when="!rightFilterOn" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
 							<breadcrumbs in:segments="rightSegments" in:paneId="rightId" height="1"></breadcrumbs>
@@ -54,8 +60,8 @@
 				             in:entry="appEntry" flexGrow="1"></filepreview>
 			</box>
 			<commandbar in:items="commandBarItems" in:notice="notice" in:leftError="leftError"
-			            in:rightError="rightError" in:compact="barCompact" in:active="active"
-			            in:leftMarked="leftMarked" in:rightMarked="rightMarked" height="1"></commandbar>
+			            in:rightError="rightError" in:active="active"
+			            in:leftMarked="leftMarked" in:rightMarked="rightMarked" out:height="barHeight"></commandbar>
 		</box>
 	</box>
 

@@ -44,10 +44,11 @@ resolved command), `v` preview (fullscreen viewer when the terminal is narrow),
 keeps it, `Esc` clears), `^P` command palette, `!` run a shell command, `^R`
 reload, `?` key reference, `q` quit.
 
-The workspace is a single rounded frame. The frame title carries the active
-path; each pane is its own single-line box (the two middle edges sit side by
+The workspace opens with a slim identity bar (`TinyCmd - HOST`) over an
+unframed tiling of pane boxes (the two middle edges sit side by
 side) labelled **SRC** (left, source) / **DST** (right, destination), with a
-header row (label + breadcrumbs + the inline filter) separated by a
+header row (label + clickable breadcrumbs — collapsed to first letters like
+`/h/s/W/Perso/tcmd` when the width demands — + the inline filter) separated by a
 rule from the listing, an entry-detail line for the selected entry, and one
 summary row, so the two panes stay aligned. The detail line shows
 `date · type · size · rights` with the rights right-aligned, the date and size
@@ -56,8 +57,10 @@ summary row is indented to match. The active pane's border and header
 rule are highlighted and its cursor row uses the strong cursor colour, while
 the inactive pane stays dim with a muted cursor. A context-aware inspector sits
 on the right when the terminal is at least 100 columns wide, and becomes a
-fullscreen viewer below that. The status bar keeps the key hints on the left
-and notices/errors on the right, so an error never hides the hints. Below 64×16
+fullscreen viewer below that. The status bar lists every binding as a bracket
+shorthand (`[Open ⏎]`) wrapping over as many rows as the width demands — the
+marked count trails the list, and a notice or error swaps the keys for a
+one-line status. Below 64×16
 the app shows a resize hint instead of the workspace.
 
 ### Web version

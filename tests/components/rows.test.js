@@ -17,16 +17,21 @@ function fakeRow() {
 describe("rows", () => {
 	test("crumbRows keeps paneId and keys by segment path", () => {
 		const Row = fakeRow()
-		const data = { segments: [{ path: "/a" }], paneId: "left" }
+		const data = { segments: [{ path: "/a" }, { path: "/a/b" }], paneId: "left" }
 		expect(crumbRows(Row)(null, data)).toBe("MAPPED")
 		const [call] = Row.calls
 		expect(call.data).toBe(data.segments)
 		expect(call.processor({ path: "/a" }, 0)).toEqual({
 			item: { path: "/a" },
 			index: 0,
+			last: false,
 			paneId: "left",
 		})
+		// The last segment is the basename: no separator after it.
+		expect(call.processor({ path: "/a/b" }, 1)).toMatchObject({ index: 1, last: true })
 		expect(call.key({ path: "/a" })).toBe("/a")
+		// The truncation marker has no path; it keys as "…".
+		expect(call.key({ name: "…", path: null })).toBe("…")
 	})
 
 	test("fileRows snapshots cursor and marks into plain per-row flags", () => {

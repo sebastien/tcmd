@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { commandBarStatus, createBehaviors } from "../../src/js/tcmd/components/CommandBar.js"
+import {
+	commandBarMarks,
+	commandBarMarksItem,
+	commandBarRowCount,
+	commandBarStatus,
+	createBehaviors,
+} from "../../src/js/tcmd/components/CommandBar.js"
 import { behaviorEnv } from "../helpers/behavior-env.js"
 
 describe("CommandBar", () => {
@@ -48,5 +54,34 @@ describe("CommandBar", () => {
 				rightError: null,
 			}),
 		).toBe("error: erase failed")
+	})
+
+	test("turns the marked count into a trailing bar entry", () => {
+		expect(commandBarMarksItem({ active: "left", leftMarked: new Set(["a"]), rightMarked: new Set() })).toEqual({
+			id: null,
+			title: "1 marked",
+			dim: true,
+		})
+		expect(commandBarMarksItem({ active: "left", leftMarked: new Set(), rightMarked: new Set() })).toBeNull()
+	})
+
+	test("counts the rows the wrapped entries occupy", () => {
+		const items = [
+			{ id: "a", title: "Open", keys: "Enter" },
+			{ id: "b", title: "Parent", keys: "←" },
+			{ id: "c", title: "Bookmark", keys: "b" },
+		]
+		// Everything fits on one row when the width allows it.
+		expect(commandBarRowCount(items, 80)).toBe(1)
+		// "[Open ⏎] " is 9 columns, "[Parent ←] " 11, "[Bookmark b] " 13: a
+		// 30-column bar holds the first two only.
+		expect(commandBarRowCount(items, 30)).toBe(2)
+		// At 20 columns Open and Parent exactly fill the first row.
+		expect(commandBarRowCount(items, 20)).toBe(2)
+		// At 12 columns every entry needs its own row.
+		expect(commandBarRowCount(items, 12)).toBe(3)
+		// Unknown width assumes a single row.
+		expect(commandBarRowCount(items, 0)).toBe(1)
+		expect(commandBarRowCount(null, 40)).toBe(1)
 	})
 })

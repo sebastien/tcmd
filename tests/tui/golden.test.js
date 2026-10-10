@@ -31,17 +31,19 @@ function widths(frame) {
 }
 
 describe("golden frames", () => {
-	test("120x30: framed workspace, two panes, inline inspector, status bar", async () => {
+	test("120x30: two panes, inline inspector, wrapped status bar", async () => {
 		const { setup } = await makeSetup(120, 30)
 		try {
 			const frame = setup.captureCharFrame()
-			// A single rounded frame with the identity in its title.
-			expect(frame.split("\n")[0]).toStartWith("╭")
-			expect(frame.split("\n")[0]).toContain("TinyCmd")
-			expect(frame.split("\n")[0]).toContain("/home")
+			// The identity bar names the app; the pane boxes tile below it.
+			const lines = frame.split("\n")
+			expect(lines[0]).toContain("TinyCmd")
+			const lineWidths = widths(frame).filter((w) => w > 0)
+			expect(Math.max(...lineWidths)).toBe(120)
+			for (const width of lineWidths) expect(width).toBeLessThanOrEqual(120)
 			// Each pane is a single-line box (square corners) tiled inside the
-			// frame, with a header rule under the SRC/DST header row.
-			expect(frame).toContain("┌")
+			// workspace, with a header rule under the SRC/DST header row.
+			expect(lines[1]).toStartWith("┌")
 			expect(frame).toContain("└")
 			expect(frame).toContain("│")
 			// The pane headers carry the source/destination labels.
@@ -50,35 +52,33 @@ describe("golden frames", () => {
 			// The inline inspector holds the first entry (a directory) as a card.
 			expect(frame).toContain("documents/")
 			expect(frame).toContain("directory: documents/")
-			expect(frame).toContain("[O]pen [E]dit")
-			// The status bar shows hints on the left, inside the frame.
-			const bar = frame.split("\n").find((line) => line.includes("Open") && line.includes("Enter"))
+			expect(frame).toContain(" [Open O] [Edit E]")
+			// The status bar shows bracket shorthands on the left, inside the
+			// frame — no Powerline pill caps.
+			const bar = frame.split("\n").find((line) => line.includes("[Open ⏎]"))
 			expect(bar).toBeDefined()
-			expect(bar).toContain("")
-			expect(bar).toContain("")
+			expect(bar).toContain("[Open ⏎]")
+			// The pane headers keep a leading space before the label.
+			expect(frame).toContain("SRC /home")
 			// No scrollbar chrome: the content is tracked by keepVisible.
 			expect(frame).not.toContain("█")
-			for (const width of widths(frame)) {
-				if (width > 0) expect(width).toBe(120)
-			}
 		} finally {
 			setup.renderer.destroy()
 		}
 	})
 
-	test("70x16: compact status bar, inline inspector collapses", async () => {
+	test("70x16: wrapped status bar, inline inspector collapses", async () => {
 		const { setup } = await makeSetup(70, 16)
 		try {
 			const frame = setup.captureCharFrame()
-			expect(frame.split("\n")[0]).toContain("TinyCmd")
 			// Two panes remain; the inspector is gone (width < 100).
 			expect(frame).toContain("/home")
-			expect(frame).not.toContain("[O]pen [E]dit")
+			expect(frame).not.toContain(" [Open O] [Edit E]")
 			// Long names no longer collide with the size column.
 			expect(frame).toContain("archive.tar.gz")
 			expect(frame).toContain("10.0M")
 			for (const width of widths(frame)) {
-				if (width > 0) expect(width).toBe(70)
+				expect(width).toBeLessThanOrEqual(70)
 			}
 		} finally {
 			setup.renderer.destroy()
@@ -241,23 +241,22 @@ describe("golden frames", () => {
 		const { setup, size } = await makeSetup(120, 30)
 		try {
 			await setup.renderOnce()
-			expect(setup.captureCharFrame()).toContain("[O]pen [E]dit")
+			expect(setup.captureCharFrame()).toContain(" [Open O] [Edit E]")
 
 			// Shrink the viewport: the inline inspector collapses and the bar
-			// drops to its essential hints.
+			// wraps its shorthands onto more rows.
 			size.set({ width: 70, height: 20 })
 			await settle(setup)
 			const narrow = setup.captureCharFrame()
-			expect(narrow).not.toContain("[O]pen [E]dit")
-			expect(narrow).toContain("Switch")
-			expect(narrow).toContain("Tab")
-			// The essential bookmark hint stays in the compact bar.
+			expect(narrow).not.toContain(" [Open O] [Edit E]")
+			expect(narrow).toContain("[Switch ⇥]")
+			// The bookmark hint stays visible; the bar wraps instead of trimming.
 			expect(narrow).toContain("Bookmarks")
 
 			// Grow again: the inspector returns.
 			size.set({ width: 120, height: 30 })
 			await settle(setup)
-			expect(setup.captureCharFrame()).toContain("[O]pen [E]dit")
+			expect(setup.captureCharFrame()).toContain(" [Open O] [Edit E]")
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -265,9 +264,10 @@ describe("golden frames", () => {
 
 	test("the listing fills the pane: chrome takes ten rows, not one more", async () => {
 		// A tall listing makes the visible row count readable off the frame:
-		// the fixed chrome (frame border, pane border, header, rule, detail,
-		// summary, command bar) consumes exactly ten rows, which is what the
-		// windowed viewport (`frame.paneListHeight`) is derived from.
+		// the fixed chrome (identity bar, pane border, header, rule, detail,
+		// summary, command bar) consumes eight rows plus the wrapped bar, which is
+		// what the windowed viewport (`frame.paneListHeight`) is derived
+		// from.
 		const tall = {
 			"/": [{ name: "home", isDir: true }],
 			"/home": Array.from({ length: 40 }, (_, i) => ({
@@ -276,7 +276,8 @@ describe("golden frames", () => {
 				size: i,
 			})),
 		}
-		// 120x40 → 30 listing rows: the last visible row is f29, f30 is not.
+		// 120x40 → 30 listing rows (eight chrome rows + the two-row wrapped
+		// bar): the last visible row is f29, f30 is not.
 		const { setup: big } = await makeSetupTui(tall, 120, 40)
 		try {
 			await settle(big)

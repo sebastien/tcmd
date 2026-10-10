@@ -2,13 +2,16 @@
 
 ## Layout
 
-The TUI is a single rounded frame. The frame title carries the active path
-(`TinyCmd - HOST DIR/BASE`, compressed to fit). Inside:
+The TUI is an unframed workspace: a slim identity bar on top, the panes and
+inspector, and the command bar — nothing boxed around them. The identity bar
+reads `TinyCmd - HOST` (just `TinyCmd` without a host); the active paths live
+in the pane crumbs. Inside:
 
-- Top bar (inside the frame): the active path, advertised by the frame title.
+- Top bar: the TinyCmd identity (and host).
 - Two panes, each its own single-line box, plus an optional inspector.
-- Status bar: context key hints on the left, notices/errors and marks on the
-  right.
+- Status bar: bracket key shorthands (`[Open ⏎]`) wrapping onto as many rows
+  as the width demands; the active pane's marked count trails the list, and a
+  notice or error replaces the keys with a one-line status.
 - Below the breakpoint the workspace is replaced by a resize hint.
 
 Each pane draws all four edges (the two middle edges sit side by side), so each
@@ -19,9 +22,12 @@ muted cursor, so focus reads from the border, the rule and the cursor alike.
 
 Each pane is a single-line box containing:
 
-- one header row: the **SRC**/**DST** role label (active panes accented),
-  breadcrumbs, and the inline filter (`/ query`), so a filter never shifts the
-  listing or the other pane;
+- one header row (inset one column from the pane border, like the listing
+  rows): the **SRC**/**DST** role label (active panes accented,
+  followed by a space), the breadcrumbs — `/`-separated and clickable, each
+  segment collapsed to its first letter (`/h/s/W/Perso/tcmd`) only when the
+  width demands it, the basename always in full — and the inline filter
+  (`/ query`), so a filter never shifts the listing or the other pane;
 - one header rule, separating the header row from the listing;
 - contents (scrollable, cursorable);
 - one entry-detail line (a separator rule on top): the selected entry's
@@ -39,19 +45,24 @@ an empty box. It sits beside the panes at ≥100 columns and becomes a fullscree
 viewer (`v`) below that.
 
 ```text
-╭─ TinyCmd · devbox ───────────────────────────────────────────────────────────────╮
-│┌──────────────────────────────────┐┌──────────────────────────┐╭─notes.txt <TXT>─╮│
-││SRC  / home /                    ││DST  / etc               ││                 ││
-││──────────────────────────────────││──────────────────────────││                 ││
-││>  documents/            <dir>    ││>  hosts          19B     ││hello            ││
-││   notes.txt              26B     ││                          ││world            ││
-││   archive.tar.gz         10.0M   ││                          ││third line       ││
-││   tiny.txt                4B     ││                          ││                 ││
-││──────────────────────────────────││──────────────────────────││                 ││
-││2026-10-06 07:55 · file ·… -rw-r--││  dir ·        drwxr-xr-x ││                 ││
-││  2 dirs · 3 files · 10.0M        ││  1 file · 19B            ││[O]pen [E]dit    ││
-│└──────────────────────────────────┘└──────────────────────────┘╰─────────────────╯│
-╰─ ↵open  ←parent  ⇥pane  ␣mark  b bookmark  g bookmarks  / filter  ? help ────────╯
+  TinyCmd - devbox
+┌───────────────────────────────────┐┌──────────────────────────────────┐╭─notes.txt  <TXT>──────────────────╮
+│ SRC /home                         ││ DST /etc                         ││hello                              │
+│───────────────────────────────────││──────────────────────────────────││world                              │
+│   documents/             <dir>    ││>  hosts                  19B     ││third line                         │
+│   archive.tar.gz         10.0M    ││                                  ││                                   │
+│>  notes.txt              26B      ││                                  ││                                   │
+│   tiny.txt               4B       ││                                  ││                                   │
+│                                   ││                                  ││                                   │
+│                                   ││                                  ││                                   │
+│                                   ││                                  ││                                   │
+│                                   ││                                  ││                                   │
+│───────────────────────────────────││──────────────────────────────────││                                   │
+│  file · 26B          · -rw-r--r-- ││  file · 19B          · -rw-r--r--││                                   │
+│  1 dirs, 3 files, 10.0M           ││  0 dirs, 1 files, 19B            ││ [Open O] [Edit E]                 │
+└───────────────────────────────────┘└──────────────────────────────────┘╰───────────────────────────────────╯
+[Open ⏎] [Parent ←] [Reload ^R] [Switch ⇥] [Mark Spc] [Bookmark b] [Bookmarks g] [Preview v] [Commands m]
+[Palette ^P] [Filter /] [Quit q]
 ```
 
 ## Responsive behavior
@@ -61,8 +72,9 @@ events, with the renderer dimensions as a fallback):
 
 - `< 64×16`: minimum-size hint replaces the workspace.
 - `< 100 cols`: the inline inspector collapses; `v` opens the fullscreen viewer.
-- `< 110 cols`: the status bar keeps only its essential hints; the rest stay in
-  the palette and the `?` reference.
+- The status bar wraps its shorthands onto as many rows as the width demands
+  (up to three at the minimum width); nothing is trimmed — the palette and the
+  `?` reference carry the same bindings.
 
 ## Pane filter
 
@@ -164,12 +176,12 @@ The token set is grouped (see `tui/theme.js` for the palette values):
   warning and tip;
 - content: `fileFg`, `linkFg` (symlinks), `devFg` (device nodes) and `dirFg`.
 
-Each command-bar action renders as a Yazi-style Powerline pill: the action
-name (`OP`) is the accent block with dark text on it, and the shortcut
-(`KEY`) is the accent drawn on a neutral grey. Powerline caps bound the two
-segments — the accent cap on the grey, then the grey cap on the terminal
-default — so the accent tapers into the grey and the grey back into the
-default. The most important action uses the primary accent, the rest the
-secondary.
+Each command-bar action renders as a plain bracket shorthand — `[Open ⏎]`:
+the bracket and title in the text colour, the shortcut glyph in the accent
+(primary for the context's main action, secondary for the rest), and a
+trailing space before the next entry. Entries without a shortcut (the marked
+count) render as a dimmed plain word. The shorthands wrap onto as many rows
+as the width demands, and every registered `bar` command stays visible at
+every width.
 
 Only the TUI consumes this theme; the web view keeps its CSS state classes.

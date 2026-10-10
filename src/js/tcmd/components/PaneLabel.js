@@ -15,9 +15,11 @@ import { PANE_LABELS } from "../core/pane.js"
 import { unwrap } from "select/state/cells"
 
 // Function: paneLabel
-// "SRC" / "DST" for a pane id (see core/pane for the pane identity maps).
+// "SRC" / "DST" for a pane id (see core/pane for the pane identity maps),
+// followed by an explicit space so the label never touches the path that
+// follows it in the header row.
 function paneLabel(paneId) {
-	return PANE_LABELS[`${paneId ?? ""}`] ?? `${paneId ?? ""}`.toUpperCase()
+	return `${PANE_LABELS[`${paneId ?? ""}`] ?? `${paneId ?? ""}`.toUpperCase()} `
 }
 
 // Function: createBehaviors

@@ -1,3 +1,4 @@
-<box flexDirection="row" height="1" on:click="path:item.path,paneId:paneId!crumbs:go">
-	<text out="crumbLabel" out:fg="crumbFg"></text>
+<box flexDirection="row" height="1" flexShrink="0" on:click="path:item.path,paneId:paneId!crumbs:go">
+	<text out="crumbLabel" out:fg="crumbFg" wrapMode="none"></text>
+	<text when="crumbSep" out="crumbSep" out:fg="crumbSepFg" wrapMode="none"></text>
 </box>

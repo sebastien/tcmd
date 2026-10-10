@@ -262,10 +262,16 @@ function createBehaviors(env) {
 
 // Function: createEvents
 // App event subscriptions, registered with `.sub(...)`. Handlers receive
-// `(self, data, event)` with the published payload in `event.data`.
-function createEvents() {
+// `(self, data, event)` with the published payload in `event.data`. The
+// environment carries the renderer's `quit` hook, so the command bar's Quit
+// entry takes the same path as the `q` key.
+function createEvents(env = {}) {
 	return {
 		"commandbar:run": (_self, data, event) => {
+			if (event.data === "app.quit") {
+				env.quit?.(_self)
+				return
+			}
 			if (event.data) data.dispatch(event.data)
 		},
 		"panel:select": (_self, data, event) => {
@@ -289,7 +295,11 @@ function createEvents() {
 			if (!unwrap(data.panelOpen)) return
 			data.dispatch("panel.run")
 		},
-		"crumbs:go": (_self, data, event) => data.dispatch("pane.setPath", event.data),
+		"crumbs:go": (_self, data, event) => {
+			// The "…" truncation marker carries no path.
+			if (!event.data?.path) return
+			data.dispatch("pane.setPath", event.data)
+		},
 		"list:select": (_self, data, event) => data.dispatch("list.cursor", event.data),
 		"pane:activate": (_self, data, event) => data.dispatch("pane.activate", { paneId: event.data }),
 		"bookmark:select": (_self, data, event) => {
