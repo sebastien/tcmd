@@ -16,9 +16,10 @@ describe("CommandPanel", () => {
 	})
 
 	test("shows a prompt before the command filter input", () => {
-		expect(panelSign()).toBe("›")
+		// The sign carries a trailing space so typed text doesn't crowd it.
+		expect(panelSign()).toBe("› ")
 		const behaviors = createBehaviors(behaviorEnv)
-		expect(behaviors.sign()).toBe("›")
+		expect(behaviors.sign()).toBe("› ")
 	})
 
 	test("exposes the overlay tokens and the footer", () => {
@@ -29,6 +30,15 @@ describe("CommandPanel", () => {
 		expect(behaviors.open(null, { open: false })).toBe(false)
 	})
 
+	test("draws a rule between the columns and above the runs preview", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		// The vertical divider owns its box's left edge; the horizontal one
+		// sits at the top of its rule row, in the secondary border colour.
+		expect(behaviors.sideRule()).toEqual(["left"])
+		expect(behaviors.headRule()).toEqual(["top"])
+		expect(behaviors.ruleFg()).toBe("border")
+	})
+
 	test("previews the assembled command and flags an unrunnable draft", () => {
 		const behaviors = createBehaviors(behaviorEnv)
 		expect(behaviors.previewLabel()).toBe("runs")
@@ -36,6 +46,9 @@ describe("CommandPanel", () => {
 		expect(behaviors.previewFg(null, { runnable: true })).toBe("accent")
 		// An unfilled required argument renders the preview as an error.
 		expect(behaviors.previewFg(null, { runnable: false })).toBe("error")
+		// The "runs" label wears the same colour as the command line.
+		expect(behaviors.previewLabelFg(null, { runnable: true })).toBe("accent")
+		expect(behaviors.previewLabelFg(null, { runnable: false })).toBe("error")
 	})
 
 	test("the text field appears only for a focused textual argument", () => {

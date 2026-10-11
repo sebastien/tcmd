@@ -26,7 +26,6 @@ import filePreviewHtml from "../components/FilePreview.html" with { type: "text"
 import fileRowHtml from "../components/FileRow.html" with { type: "text" }
 import filterBarHtml from "../components/FilterBar.html" with { type: "text" }
 import headerHtml from "./header.html" with { type: "text" }
-import paneLabelHtml from "../components/PaneLabel.html" with { type: "text" }
 import paletteRowHtml from "../components/PaletteRow.html" with { type: "text" }
 import rowListHtml from "../components/RowList.html" with { type: "text" }
 import summaryHtml from "../components/Summary.html" with { type: "text" }
@@ -50,7 +49,6 @@ import {
 	fileRowBehaviors,
 	fileRows,
 	filterBarBehaviors,
-	paneLabelBehaviors,
 	paletteRowBehaviors,
 	paletteRows,
 	summaryBehaviors,
@@ -130,7 +128,6 @@ function createComponents() {
 			...webTheme,
 			width: (self) => columnWidth(self.ref.box),
 		})),
-		PaneLabel: bind(ui, "PaneLabel", paneLabelHtml, paneLabelBehaviors(webTheme)),
 		Summary: bind(ui, "Summary", summaryHtml, summaryBehaviors(webTheme)),
 	}
 }
@@ -153,7 +150,6 @@ function registerWebComponents() {
 	ui.format("FilePreview", components.FilePreview)
 	ui.format("FilterBar", components.FilterBar)
 	ui.format("Header", components.Header)
-	ui.format("PaneLabel", components.PaneLabel)
 	ui.format("Summary", components.Summary)
 	return components
 }

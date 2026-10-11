@@ -53,13 +53,19 @@ describe("panel", () => {
 		for (const op of panelOperations()) expect(op.args.length).toBeGreaterThan(0)
 	})
 
-	test("filterPanelOperations narrows by name, alias and signature", () => {
+	test("filterPanelOperations orders alphabetically and ranks matches by importance", () => {
 		const ops = panelOperations()
-		expect(filterPanelOperations(ops, "").length).toBe(ops.length)
+		// No query: every operation, alphabetically by name.
+		expect(filterPanelOperations(ops, "").map((op) => op.name)).toEqual(
+			ops.map((op) => op.name).sort((a, b) => a.localeCompare(b)),
+		)
+		// A query ranks by match importance: `open` (prefix) outranks `copy`
+		// (a subsequence match).
+		expect(filterPanelOperations(ops, "op").map((op) => op.name)).toEqual(["open", "copy"])
 		expect(filterPanelOperations(ops, "edit").map((op) => op.name)).toEqual(["edit"])
 		// An alias matches (`!` -> run).
 		expect(filterPanelOperations(ops, "!").map((op) => op.name)).toEqual(["run"])
-		// A signature fragment matches (SEL's `[+|-][BUF]`).
+		// A signature fragment matches (SEL's `[+|-][BUF]`), ranked last.
 		expect(filterPanelOperations(ops, "buf").map((op) => op.name)).toEqual(["sel"])
 		expect(filterPanelOperations(ops, "zzz")).toEqual([])
 	})
@@ -212,10 +218,13 @@ describe("panel", () => {
 	test("panelCommand and panelRunnable track the draft through the session", async () => {
 		const { session } = await makeSession()
 		session.dispatch("panel.toggle")
-		// The default copy binds SRC cursor -> DST dir; it is runnable, and the
-		// preview is the full command line (operation name + arguments).
-		expect(session.panelCommand.value).toBe("copy /home/docs /tmp")
-		expect(session.panelRunnable.value).toBe(true)
+		// The first operation (alphabetically) is `bookmark`; its PATH binds
+		// the SRC cursor, and the preview is the full command line. Its NAME —
+		// an optional literal before the filled PATH — leaves a positional
+		// gap, so the draft is not runnable until the name is filled.
+		expect(session.panelOperation.value.name).toBe("bookmark")
+		expect(session.panelCommand.value).toBe("bookmark /home/docs")
+		expect(session.panelRunnable.value).toBe(false)
 		// The panel's operation rows advertise their signatures.
 		expect(session.panelItems.value.find((item) => item.title === "copy").summary).toBe("FROM TO")
 	})
@@ -224,9 +233,10 @@ describe("panel", () => {
 		const { fs, session } = await makeSession()
 		session.dispatch("panel.toggle")
 		expect(session.panelOpen.value).toBe(true)
-		expect(session.panelOperation.value.name).toBe("copy")
+		// The list opens alphabetically, on `bookmark`.
+		expect(session.panelOperation.value.name).toBe("bookmark")
 		// Toggle the destination op to `delete` and run against the cursor.
-		const deleteIndex = session.panelOps.value.findIndex((op) => op.name === "delete")
+		const deleteIndex = session.panelFiltered.value.findIndex((op) => op.name === "delete")
 		session.dispatch("panel.setOp", { index: deleteIndex })
 		await session.dispatch("panel.run")
 		expect(session.panelOpen.value).toBe(false)
@@ -239,7 +249,7 @@ describe("panel", () => {
 		const { session } = await makeSession()
 		session.dispatch("panel.toggle")
 		// A `run` (raw CMD) draft with no command typed is not runnable.
-		const runIndex = session.panelOps.value.findIndex((op) => op.name === "run")
+		const runIndex = session.panelFiltered.value.findIndex((op) => op.name === "run")
 		session.dispatch("panel.setOp", { index: runIndex })
 		await session.dispatch("panel.run")
 		expect(session.panelOpen.value).toBe(true)
@@ -292,8 +302,11 @@ describe("panel", () => {
 	test("panel.tab cycles the focus ring from the command through the arguments", async () => {
 		const { session } = await makeSession()
 		session.dispatch("panel.open")
-		// The default operation is `copy`; two argument headers: FROM (row 0,
-		// then its item at row 1), then TO (row 2).
+		// The list opens alphabetically; select `copy` explicitly to keep the
+		// ring walk independent of the ordering: two argument headers, FROM
+		// (row 0, then its item at row 1), then TO (row 2).
+		expect(session.panelOperation.value.name).toBe("bookmark")
+		session.dispatch("panel.setOp", { index: session.panelFiltered.value.findIndex((op) => op.name === "copy") })
 		expect(session.panelOperation.value.name).toBe("copy")
 		expect(session.panelFocus.value).toBe("ops")
 		session.dispatch("panel.tab", { delta: 1 })

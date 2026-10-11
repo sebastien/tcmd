@@ -16,15 +16,21 @@ describe("CommandItem", () => {
 		expect(keyGlyph("Enter")).toBe("⏎")
 		expect(keyGlyph("Tab")).toBe("⇥")
 		expect(keyGlyph("^P")).toBe("^P")
-		expect(commandWidth({ title: "Open", keys: "Enter" })).toBe("[Open ⏎] ".length)
+		expect(commandWidth({ title: "Open", keys: "Enter" }, 0)).toBe("[Open ⏎] ".length)
+		// Later entries carry the leading pipe divider.
+		expect(commandWidth({ title: "Open", keys: "Enter" }, 1)).toBe("[Open ⏎] | ".length)
 		expect(isPrimary({ primary: true })).toBe(true)
 		expect(isPrimary({})).toBe(false)
 	})
 
-	test("renders the head, the accent key and the closer", () => {
+	test("renders the divider, the head, the accent key and the closer", () => {
 		const behaviors = createBehaviors(behaviorEnv)
-		const primary = { item: { id: "pane.enter", title: "Open", keys: "Enter", primary: true } }
-		const secondary = { item: { id: "pane.up", title: "Parent", keys: "←" } }
+		const primary = { item: { id: "pane.enter", title: "Open", keys: "Enter", primary: true }, index: 0 }
+		const secondary = { item: { id: "pane.up", title: "Parent", keys: "←" }, index: 1 }
+		// The first entry leads with the button; later ones a dim pipe.
+		expect(behaviors.itemSep(null, primary)).toBe("")
+		expect(behaviors.itemSep(null, secondary)).toBe("| ")
+		expect(behaviors.itemSepFg()).toBe("dim")
 		expect(behaviors.itemHead(null, primary)).toBe("[Open ")
 		expect(behaviors.keyText(null, primary)).toBe("⏎")
 		expect(behaviors.endText(null, primary)).toBe("] ")

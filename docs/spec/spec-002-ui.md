@@ -23,11 +23,12 @@ muted cursor, so focus reads from the border, the rule and the cursor alike.
 Each pane is a single-line box containing:
 
 - one header row (inset one column from the pane border, like the listing
-  rows): the **SRC**/**DST** role label (active panes accented,
-  followed by a space), the breadcrumbs — `/`-separated and clickable, each
+  rows): the breadcrumbs — `/`-separated and clickable, each
   segment collapsed to its first letter (`/h/s/W/Perso/tcmd`) only when the
   width demands it, the basename always in full — and the inline filter
-  (`/ query`), so a filter never shifts the listing or the other pane;
+  (`/ query`), so a filter never shifts the listing or the other pane. The
+  left pane is the source, the right the destination (the command panel's
+  argument summaries name them `SRC`/`DST`);
 - one header rule, separating the header row from the listing;
 - contents (scrollable, cursorable);
 - one entry-detail line (a separator rule on top): the selected entry's
@@ -47,7 +48,7 @@ viewer (`v`) below that.
 ```text
   TinyCmd - devbox
 ┌───────────────────────────────────┐┌──────────────────────────────────┐╭─notes.txt  <TXT>──────────────────╮
-│ SRC /home                         ││ DST /etc                         ││hello                              │
+│ /home                              ││ /etc                              ││hello                              │
 │───────────────────────────────────││──────────────────────────────────││world                              │
 │   documents/             <dir>    ││>  hosts                  19B     ││third line                         │
 │   archive.tar.gz         10.0M    ││                                  ││                                   │
@@ -92,15 +93,20 @@ events, with the renderer dimensions as a fallback):
 - Command panel (`:`/`m`): a Commando-style structured view over the operations.
   A filter input at the top narrows the operation list as you type — the
   matching command takes the cursor (`edit` highlights `edit`) — and the left
-  column shows each operation with its argument list, `delete`/`erase` in red
-  and `move` in amber to flag risk. The right column shows the selected
+  column lists the operations alphabetically, ranked by match importance while
+  filtering (a prefix match outranks a subsequence, signature-only matches
+  rank last). Each operation shows its argument list, `delete`/`erase` in red
+  and `move` in amber to flag risk. A vertical rule divides the left column
+  from the right one, which shows the selected
   operation's arguments bound from the live context — a `FROM`/`PATH`
   selection argument lists the SRC or active pane's marked paths (falling back
   to the cursor entry) with a `[x]`/`[ ]` toggle each, the basename in full
   followed by its dimmed parent directory, `TO` resolves to the DST pane's
   directory (editable in place), and textual arguments (`BUF`, `NAME`, `CMD`)
-  are typed in the field under the columns. Under the columns a `runs` line
-  previews the full command the draft maps to, as the shell would see it (the
+  are typed in the field under the columns. A horizontal rule separates the
+  columns from the `runs` line
+  below, which previews the full command the draft maps to, as the shell
+  would see it (the
   operation name plus shell-quoted arguments wrapping over as many lines as
   needed; a `«NAME»` placeholder marks a required argument still to fill, and
   the line reads as an error until it is runnable). The selection is transient:
@@ -111,16 +117,19 @@ events, with the renderer dimensions as a fallback):
   `Space` toggles, `↵` runs the highlighted command, `Esc` closes.
 
 ```text
-╭─ Command · copy ─────────────────────────────────────────────────────────╮
-│ ›                                                                         │
-│  move           FROM TO             FROM           SRC · 1 selected        │
-│> copy           FROM TO             [x] documents  /home                  │
-│  delete         PATH...             TO             /tmp                    │
-│  erase          PATH...                                                   │
-│  …                                 runs                                    │
-│                                    copy /home/documents /tmp               │
-│              type to filter  ⇥ args  Spc toggle  ↵ run  Esc close          │
-╰──────────────────────────────────────────────────────────────────────────╯
+╭─ Command · bookmark ────────────────────────────────────────────────────╮
+│ ›                                                                       │
+│  bookmark [NAME] [PATH]    │ >  NAME                                    │
+│  copy FROM TO              │    PATH  SRC · 1 selected                  │
+│  delete PATH...            │    [x] documents  /home                    │
+│  edit PATH                 │                                            │
+│  erase PATH...             │                                            │
+│  …                         │                                            │
+│─────────────────────────────────────────────────────────────────────────│
+│ runs                                                                    │
+│ bookmark /home/documents                                                │
+│             type to filter  ⇥ args  Spc toggle  ↵ run  Esc close        │
+╰─────────────────────────────────────────────────────────────────────────╯
 ```
 - Bookmarks (`b`/`g`): centered. `b` opens a naming prompt (defaulting to the
   path's basename) for the cursor entry (or the pane directory), then `g` opens
@@ -158,8 +167,8 @@ events, with the renderer dimensions as a fallback):
 Mono uses terminal defaults throughout and relies on markers (`>`, `*`,
 `[`/`]`) and layout, never colour alone. The same applies at every level: the
 active pane, selected row and current file all have a non-colour carrier — the
-active pane is identified by the `>` cursor marker in its list (and its SRC/DST
-label position).
+active pane is identified by the `>` cursor marker in its list, its highlighted
+border and its bright header rule.
 
 The token set is grouped (see `tui/theme.js` for the palette values):
 

@@ -8,7 +8,8 @@
 // top narrows the left operation list as you type (the matching command takes
 // the cursor); a right column shows the selected operation's arguments: one
 // header row per argument (its name and binding summary) and, for a selection,
-// one row per path with a `[x]`/`[ ]` toggle. A "runs" line under the columns
+// one row per path with a `[x]`/`[ ]` toggle. A vertical rule divides the two
+// columns, a horizontal one separates them from the "runs" line below, which
 // shows the assembled command the draft maps to. The footer advertises the
 // panel keys. The row logic lives in `CommandArgRow.js`; this parent maps both
 // the operation list and the flattened argument rows.
@@ -34,14 +35,19 @@ function panelTitle(op) {
 const PANEL_FOOTER = "type to filter   ⇥ args   Spc toggle   ↵ run   Esc close"
 
 // Function: panelSign
-// The prompt before the command filter input (overridable per renderer).
+// The prompt before the command filter input (a trailing space so the typed
+// text doesn't crowd the arrow; overridable per renderer).
 function panelSign() {
-	return "›"
+	return "› "
 }
 
 // Function: createBehaviors
 // Builds the CommandPanel behavior map for the given renderer environment.
 function createBehaviors(env) {
+	// The assembled command line's colour, shared by the line and its "runs"
+	// label: the preview reads as an error until every required argument is
+	// filled.
+	const previewColor = (data) => (unwrap(data.runnable) === false ? env.errorFg ?? env.accentFg : env.accentFg)
 	const behaviors = {
 		bg: () => env.overlayBg,
 		borderFg: () => env.borderPrimaryActiveFg,
@@ -58,16 +64,23 @@ function createBehaviors(env) {
 		},
 		footer: () => PANEL_FOOTER,
 		footerFg: () => env.textSecondaryFg,
+		// Dividers: a vertical rule between the operation list and the argument
+		// sidebar, a horizontal one above the "runs" preview — both in the
+		// secondary border colour, like the pane header rules.
+		ruleFg: () => env.borderSecondaryFg,
+		sideRule: () => ["left"],
+		headRule: () => ["top"],
 		labelFg: () => env.textSecondaryFg,
 		focusArgs: (_self, data) => unwrap(data.focus) === PANEL_FOCUS.ARGS,
 		focusOps: (_self, data) => unwrap(data.focus) !== PANEL_FOCUS.ARGS,
 		open: (_self, data) => Boolean(unwrap(data.open)),
-		// The assembled command line the draft maps to, and its colour: the
-		// preview reads as an error until every required argument is filled.
+		// The assembled command line the draft maps to, and its colour (see
+		// `previewColor`); the "runs" label wears the same colour so the two
+		// read as one block.
 		preview: (_self, data) => unwrap(data.command) ?? "",
-		previewFg: (_self, data) =>
-			unwrap(data.runnable) === false ? env.errorFg ?? env.accentFg : env.accentFg,
+		previewFg: (_self, data) => previewColor(data),
 		previewLabel: () => "runs",
+		previewLabelFg: (_self, data) => previewColor(data),
 		// The filter input owns the keyboard while the panel is open and the
 		// command column is focused; typing narrows the operation list.
 		queryFocused: (_self, data) => Boolean(unwrap(data.open)) && unwrap(data.focus) !== PANEL_FOCUS.ARGS,

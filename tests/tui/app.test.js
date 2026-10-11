@@ -196,13 +196,15 @@ describe("tui app", () => {
 		}
 	})
 
-	test("the header shows SRC/DST labels and b/g manage bookmarks", async () => {
+	test("the header shows the pane path and b/g manage bookmarks", async () => {
 		const { setup, session } = await makeSetup()
 		try {
-			// The pane header (label + path) sits below the pane's top border.
+			// The pane header (the path breadcrumb) sits below the pane's top
+			// border — no role label.
 			const first = setup.captureCharFrame().split("\n")[2]
-			expect(first).toContain("SRC")
-			expect(first).toContain("DST")
+			expect(first).toContain("/home")
+			expect(first).not.toContain("SRC")
+			expect(first).not.toContain("DST")
 			expect(first).not.toContain("+")
 
 			// b records the cursor entry: the name prompt opens, pre-filled

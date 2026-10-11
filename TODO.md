@@ -30,7 +30,6 @@ Fix:
 - Highlight should be much clearer
 - Command panel should preview with selection based in source/target, can interactively toggle selection items on/off
   when multiple items in the selection
-- Use icons
 - Preview should use nview for rendering
 - Themes
 - ESC to go back

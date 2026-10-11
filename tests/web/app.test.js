@@ -69,9 +69,9 @@ describe("web app", () => {
 			expect(detail).not.toBeNull()
 			// Cursor starts on the `tester/` directory.
 			expect(detail.textContent).toContain("drwxr-xr-x")
-			// The pane header carries the SRC/DST role label.
-			expect(host.querySelector(".pane-left .pane-label").textContent).toBe("SRC ")
-			expect(host.querySelector(".pane-right .pane-label").textContent).toBe("DST ")
+			// The pane header carries no role label: the path leads it.
+			expect(host.querySelector(".pane-left .pane-label")).toBeNull()
+			expect(host.querySelector(".pane-right .pane-label")).toBeNull()
 			// App.html wrappers are neutral containers: no duplicated child roots.
 			expect(host.querySelector(".file-list .file-list")).toBeNull()
 			expect(host.querySelector("ul > ul")).toBeNull()

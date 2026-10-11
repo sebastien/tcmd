@@ -42,13 +42,13 @@ describe("golden frames", () => {
 			expect(Math.max(...lineWidths)).toBe(120)
 			for (const width of lineWidths) expect(width).toBeLessThanOrEqual(120)
 			// Each pane is a single-line box (square corners) tiled inside the
-			// workspace, with a header rule under the SRC/DST header row.
+			// workspace, with a header rule under the breadcrumb header row.
 			expect(lines[1]).toStartWith("┌")
 			expect(frame).toContain("└")
 			expect(frame).toContain("│")
-			// The pane headers carry the source/destination labels.
-			expect(frame).toContain("SRC")
-			expect(frame).toContain("DST")
+			// The pane headers lead with the path — no role label.
+			expect(frame).not.toContain("SRC")
+			expect(frame).not.toContain("DST")
 			// The inline inspector holds the first entry (a directory) as a card.
 			expect(frame).toContain("documents/")
 			expect(frame).toContain("directory: documents/")
@@ -58,8 +58,8 @@ describe("golden frames", () => {
 			const bar = frame.split("\n").find((line) => line.includes("[Open ⏎]"))
 			expect(bar).toBeDefined()
 			expect(bar).toContain("[Open ⏎]")
-			// The pane headers keep a leading space before the label.
-			expect(frame).toContain("SRC /home")
+			// The pane headers keep a leading space before the path.
+			expect(frame).toContain(" /home")
 			// No scrollbar chrome: the content is tracked by keepVisible.
 			expect(frame).not.toContain("█")
 		} finally {
@@ -150,19 +150,28 @@ describe("golden frames", () => {
 			setup.mockInput.pressKey("m")
 			await settle(setup)
 			const frame = setup.captureCharFrame()
-			expect(frame).toContain(" Command · copy ")
+			// The operations list opens alphabetically, on `bookmark`.
+			expect(frame).toContain(" Command · bookmark ")
 			expect(frame).toContain("copy FROM TO")
 			expect(frame).toContain("FROM")
+			// The selection summary names the pane the paths come from.
 			expect(frame).toContain("SRC")
 			// An item row shows its basename in full and its parent directory.
 			expect(frame).toContain("[x] documents")
 			expect(frame).toContain("/home")
-			expect(frame).toContain("TO")
 			// Each operation row advertises the arguments it takes.
 			expect(frame).toContain("[NAME] [PATH]")
+			// A vertical rule divides the operation list from the argument
+			// sidebar: the rows carry a "│" between the two columns.
+			expect(frame).toMatch(/bookmark[^\n]*│/)
+			// A horizontal rule separates the columns from the preview, whose
+			// line sits right below it.
+			const lines = frame.split("\n")
+			const runs = lines.findIndex((line) => line.includes("runs"))
+			expect(runs).toBeGreaterThan(0)
+			expect(lines[runs - 1]).toContain("─")
 			// The preview maps the draft to a full assembled command line.
-			expect(frame).toContain("runs")
-			expect(frame).toContain("copy /home/documents /")
+			expect(frame).toContain("bookmark /home/documents")
 			// The filter prompt is the header row.
 			expect(frame).toContain("›")
 			// The panel keys are advertised in its own footer.
@@ -206,6 +215,9 @@ describe("golden frames", () => {
 		try {
 			setup.mockInput.pressKey("m")
 			await settle(setup)
+			// Filter to `copy` so its FROM selection owns the argument rows.
+			await setup.mockInput.typeText("copy")
+			await settle(setup)
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			setup.mockInput.pressKey(" ")
@@ -224,6 +236,10 @@ describe("golden frames", () => {
 		const { setup, session } = await makeSetup(120, 30)
 		try {
 			setup.mockInput.pressKey("m")
+			await settle(setup)
+			// The list opens on `bookmark` (alphabetical); filter to the
+			// runnable `copy` draft.
+			await setup.mockInput.typeText("copy")
 			await settle(setup)
 			setup.mockInput.pressKey("\t")
 			await settle(setup)

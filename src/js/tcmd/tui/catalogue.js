@@ -32,7 +32,6 @@ import filePreviewXml from "../components/FilePreview.xml" with { type: "text" }
 import fileRowXml from "../components/FileRow.xml" with { type: "text" }
 import filterBarXml from "../components/FilterBar.xml" with { type: "text" }
 import helpXml from "../components/Help.xml" with { type: "text" }
-import paneLabelXml from "../components/PaneLabel.xml" with { type: "text" }
 import paletteRowXml from "../components/PaletteRow.xml" with { type: "text" }
 import rowListXml from "../components/RowList.xml" with { type: "text" }
 import summaryXml from "../components/Summary.xml" with { type: "text" }
@@ -60,7 +59,7 @@ import {
 	fileRows,
 	fileWindow,
 	filterBarBehaviors,
-	paneLabelBehaviors,
+	iconsEnabled,
 	paletteRowBehaviors,
 	paletteRows,
 	panelArgRows,
@@ -92,6 +91,8 @@ function tuiEnv() {
 		errorBg: tuiTheme.errorBg,
 		errorFg: tuiTheme.errorFg,
 		fileFg: tuiTheme.fileFg,
+		// Nerd Font icons in rows, on unless `TCMD_ICONS` opts out.
+		icons: iconsEnabled(process.env),
 		lineFg: tuiTheme.textSecondaryFg,
 		linkFg: tuiTheme.linkFg,
 		mutedBg: tuiTheme.mutedBg,
@@ -261,7 +262,6 @@ function createComponents() {
 		FilePreview: bind(ui, "FilePreview", filePreviewXml, filePreviewBehaviors(env)),
 		FilterBar: filterBar,
 		Help: bind(ui, "Help", helpXml, helpBehaviors({ theme: tuiTheme })),
-		PaneLabel: bind(ui, "PaneLabel", paneLabelXml, paneLabelBehaviors(env)),
 		Summary: bind(ui, "Summary", summaryXml, summaryBehaviors({
 			...env,
 			width: paneWidth,
@@ -290,7 +290,6 @@ function registerComponents() {
 		filepreview: components.FilePreview,
 		filterbar: components.FilterBar,
 		help: components.Help,
-		panelabel: components.PaneLabel,
 		summary: components.Summary,
 	})
 	return components

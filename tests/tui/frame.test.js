@@ -3,12 +3,42 @@ import { createFrameBehaviors, helpLines, INSPECTOR_INLINE_WIDTH, keyGlyph } fro
 
 const theme = {
 	textHeadingFg: "title",
+	brandTinyFrom: "#7aa2f7",
+	brandTinyTo: "#7dcfff",
+	brandCmdFrom: "#ff9e64",
+	brandCmdTo: "#ffc777",
 }
 
 // A fake instance whose renderer dimensions stand in for the viewport.
 const selfAt = (width, height) => ({ ctx: { width, height } })
 
 describe("tui frame", () => {
+	test("the brand shimmers: Tiny along the blues, Cmd along brighter oranges", () => {
+		const behaviors = createFrameBehaviors({ theme })
+		// Each word reads back letter by letter, gradients at their endpoints
+		// (behaviors name each letter capitalized: brandI, brandM, …).
+		const word = (letters) =>
+			letters.map((letter) => {
+				const key = `brand${letter.toUpperCase()}`
+				expect(behaviors[key]()).toBe(letter)
+				return behaviors[`${key}Fg`]()
+			})
+		const tiny = word(["T", "i", "n", "y"])
+		expect(tiny[0]).toBe(theme.brandTinyFrom)
+		expect(tiny[3]).toBe(theme.brandTinyTo)
+		expect(new Set(tiny).size).toBe(4)
+		const cmd = word(["C", "m", "d"])
+		expect(cmd[0]).toBe(theme.brandCmdFrom)
+		expect(cmd[2]).toBe(theme.brandCmdTo)
+		expect(new Set(cmd).size).toBe(3)
+		// The host trail follows the brand in the heading colour.
+		expect(behaviors.topBar(null, { appHost: "devbox" })).toBe(" - devbox ")
+		expect(behaviors.topBarFg()).toBe("title")
+		// Mono (no brand colours): every letter falls back to the default.
+		const mono = createFrameBehaviors({ theme: { textHeadingFg: undefined } })
+		for (const letter of ["T", "C"]) expect(mono[`brand${letter}Fg`]()).toBeUndefined()
+	})
+
 	test("the minimum-size gate fires below the breakpoint", () => {
 		const behaviors = createFrameBehaviors({ theme })
 		expect(behaviors.tooSmall(selfAt(50, 12), {})).toBe(true)

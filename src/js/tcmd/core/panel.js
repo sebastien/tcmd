@@ -5,7 +5,9 @@
 
 // Module: tcmd/core/panel
 // The command panel (Commando): a structured view over the operation registry.
-// It lists the operations and, for the selected one, its arguments bound from
+// It lists the operations alphabetically — ranked by match importance once a
+// query filters them (see `filterPanelOperations`) — and, for the selected
+// one, its arguments bound from
 // the live context — a selection argument shows the SRC/DST pane's marked paths
 // (falling back to the cursor entry) and lets the user toggle individual items;
 // a destination argument resolves to the DST pane's directory; textual
@@ -20,6 +22,7 @@
 // Everything here is pure: the caller owns the cells; the panel commands in
 // `core/commands` assemble and run.
 
+import { hasMatch, score } from "../vendor/fzy.js"
 import { PANE_BUFFERS, PANE_LABELS } from "./pane.js"
 import { basename, parent } from "./path.js"
 import { getOperations, pathToken } from "./operations.js"
@@ -37,17 +40,45 @@ function panelOperations() {
 	return getOperations().filter((op) => !op.hidden && Array.isArray(op.args))
 }
 
+// Function: compareOperations
+// Alphabetical order by name, the panel's default ordering.
+function compareOperations(a, b) {
+	return `${a?.name ?? ""}`.localeCompare(`${b?.name ?? ""}`)
+}
+
+// Function: operationScore
+// The match importance of an operation for a query: the best fzy score across
+// its name and aliases, or `-Infinity` when neither matches (only the
+// signature does). Signature hits stay listable but rank below any name
+// match.
+function operationScore(op, query) {
+	let best = -Infinity
+	for (const name of [op.name, ...(op.aliases ?? [])]) {
+		if (hasMatch(query, name)) best = Math.max(best, score(query, name))
+	}
+	return best
+}
+
 // Function: filterPanelOperations
-// Narrows the operation list by a typed query: a case-insensitive match on the
-// operation name, its alias(es), or its signature — so `edit` and `e` both find
-// `edit PATH`. An empty query keeps every operation.
+// Narrows the operation list by a typed query and orders it: no query lists
+// every operation alphabetically; a query ranks the matches by importance
+// (the fzy score of the best name/alias match, so `open` outranks `copy` for
+// `op`), ties broken alphabetically. A query that only matches an operation's
+// signature (`buf` -> `sel [+|-][BUF] PATH...`) keeps it listable, at the
+// bottom.
 function filterPanelOperations(operations, query) {
+	const list = operations ?? []
 	const q = `${query ?? ""}`.trim().toLowerCase()
-	if (!q) return operations ?? []
-	return (operations ?? []).filter((op) => {
-		const names = [op.name, ...(op.aliases ?? [])]
-		return names.some((name) => name.toLowerCase().includes(q)) || `${op.signature ?? ""}`.toLowerCase().includes(q)
-	})
+	if (!q) return [...list].sort(compareOperations)
+	const ranked = []
+	for (const op of list) {
+		const rank = operationScore(op, q)
+		const signatureMatch = `${op.signature ?? ""}`.toLowerCase().includes(q)
+		if (rank === -Infinity && !signatureMatch) continue
+		ranked.push({ op, score: rank })
+	}
+	ranked.sort((a, b) => (a.score !== b.score ? b.score - a.score : compareOperations(a.op, b.op)))
+	return ranked.map((match) => match.op)
 }
 
 // Function: resolvePaneId

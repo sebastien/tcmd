@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { cell } from "select/state/cells"
-import { PANE_LABELS } from "../../src/js/tcmd/core/pane.js"
 import { createBehaviors as bookmarkListBehaviors, bookmarkTitle } from "../../src/js/tcmd/components/BookmarkList.js"
 import { createBehaviors as bookmarkRowBehaviors } from "../../src/js/tcmd/components/BookmarkRow.js"
-import { createBehaviors as paneLabelBehaviors, paneLabel } from "../../src/js/tcmd/components/PaneLabel.js"
+import { DIR_ICON } from "../../src/js/tcmd/components/icons.js"
 import { behaviorEnv } from "../helpers/behavior-env.js"
 
 describe("BookmarkList", () => {
@@ -40,20 +39,16 @@ describe("BookmarkRow", () => {
 		expect(behaviors.rowMarker(null, other)).toBe(" ")
 		expect(behaviors.rowBg(null, other)).toBeUndefined()
 	})
-})
 
-describe("PaneLabel", () => {
-	test("maps pane ids to SRC/DST and highlights the active pane", () => {
-		expect(paneLabel("left")).toBe("SRC ")
-		expect(paneLabel("right")).toBe("DST ")
-		expect(PANE_LABELS).toEqual({ left: "SRC", right: "DST" })
-		const behaviors = paneLabelBehaviors(behaviorEnv)
-		const active = cell("left")
-		expect(behaviors.label(null, { paneId: "left" })).toBe("SRC ")
-		expect(behaviors.labelFg(null, { paneId: "left", active })).toBe("accent")
-		expect(behaviors.labelFg(null, { paneId: "right", active })).toBe("dim")
-		active.set("right")
-		expect(behaviors.labelClass(null, { paneId: "right", active })).toBe("is-active")
-		expect(behaviors.labelClass(null, { paneId: "left", active })).toBeNull()
+	test("rows show the Nerd Font icon in its own dim slot when enabled", () => {
+		const behaviors = bookmarkRowBehaviors({ ...behaviorEnv, icons: true })
+		const selected = cell(0)
+		const row = { item: { name: "home", path: "/home", isDir: true }, index: 0, selected }
+		expect(behaviors.hasIcon()).toBe(true)
+		expect(behaviors.rowIcon(null, row)).toBe(DIR_ICON)
+		expect(behaviors.rowIconFg()).toBe("dim")
+		expect(behaviors.rowName(null, row)).toBe("home/")
+		// Without the flag (web) the slot collapses.
+		expect(bookmarkRowBehaviors(behaviorEnv).hasIcon()).toBe(false)
 	})
 })

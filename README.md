@@ -10,7 +10,7 @@
 
 TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
 
-- Browse files in two panes (the left **SRC** source, the right **DST**
+- Browse files in two panes (the left is the source, the right the
   destination)
 - Named bookmarks: `b` records the cursor entry (or the pane directory) under
   a name defaulting to its basename, remembering whether it is a file or a
@@ -56,7 +56,11 @@ summary row, so the two panes stay aligned. The detail line shows
 bright, and the size/rights dropping out when the pane is too narrow; the
 summary row is indented to match. The active pane's border and header
 rule are highlighted and its cursor row uses the strong cursor colour, while
-the inactive pane stays dim with a muted cursor. A context-aware inspector sits
+the inactive pane stays dim with a muted cursor. Rows lead with a yazi-style
+Nerd Font icon (folder/link kind icons plus a per-extension icon, `Makefile`,
+`Dockerfile` and dotfiles included), on unless `TCMD_ICONS=0` — it needs a
+Nerd-Font-patched terminal font, and the web view never shows icons. A
+context-aware inspector sits
 on the right when the terminal is at least 100 columns wide, and becomes a
 fullscreen viewer below that. The status bar lists every binding as a bracket
 shorthand (`[Open ⏎]`) wrapping over as many rows as the width demands — the

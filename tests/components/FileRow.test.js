@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { cell } from "select/state/cells"
-import { createBehaviors, isMarked, rowName, rowSize } from "../../src/js/tcmd/components/FileRow.js"
+import { createBehaviors, isMarked, rowIcon, rowName, rowSize } from "../../src/js/tcmd/components/FileRow.js"
+import { DIR_ICON, SYMLINK_ICON } from "../../src/js/tcmd/components/icons.js"
 import { behaviorEnv } from "../helpers/behavior-env.js"
 
 const DIR = { isDir: true, name: "sub", path: "/sub", size: 0 }
@@ -15,6 +16,9 @@ describe("FileRow", () => {
 		expect(rowName(FILE)).toBe("a.txt")
 		expect(rowSize(FILE)).toBe("10B")
 		expect(isMarked(FILE, new Set(["/a.txt"]))).toBe(true)
+		// Icons live in their own slot, gated by the environment flag.
+		expect(rowIcon(DIR, true)).toBe(DIR_ICON)
+		expect(rowIcon(DIR, false)).toBe("")
 	})
 
 	test("behaviors read plain cursor and marks", () => {
@@ -61,6 +65,33 @@ describe("FileRow", () => {
 		expect(rowName(DIR)).toBe("sub/")
 		expect(rowSize(DIR)).toBe("<dir>")
 		expect(rowSize(FILE)).toBe("10B")
+	})
+
+	test("rows lead with the Nerd Font icon when the env enables them", () => {
+		const behaviors = createBehaviors({ ...behaviorEnv, icons: true })
+		// The icon is its own dim slot; the name stays plain.
+		expect(behaviors.hasIcon()).toBe(true)
+		expect(behaviors.rowIcon(null, { item: DIR })).toBe(DIR_ICON)
+		expect(behaviors.rowIconFg()).toBe("dim")
+		expect(behaviors.rowName(null, { item: DIR })).toBe("sub/")
+		expect(behaviors.rowIcon(null, { item: LINK })).toBe(SYMLINK_ICON)
+		// Without the flag (web, non-Nerd-Font hosts) the slot collapses.
+		expect(createBehaviors(behaviorEnv).hasIcon()).toBe(false)
+		expect(createBehaviors(behaviorEnv).rowIcon(null, { item: DIR })).toBe("")
+	})
+
+	test("marked rows read orange and the cursor row brighter", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		// A marked row takes the selection orange over its kind colour.
+		expect(behaviors.rowNameFg(null, { item: FILE, markedRow: true })).toBe("mark")
+		expect(behaviors.rowNameFg(null, { item: DIR, markedRow: true })).toBe("mark")
+		// The cursor row reads the bright heading colour.
+		expect(behaviors.rowNameFg(null, { item: FILE, currentRow: true })).toBe("title")
+		// Marks win over the cursor, like the row marker.
+		expect(behaviors.rowNameFg(null, { item: FILE, currentRow: true, markedRow: true })).toBe("mark")
+		// Untouched rows keep the kind colours.
+		expect(behaviors.rowNameFg(null, { item: FILE, currentRow: false })).toBe("file")
+		expect(behaviors.rowNameFg(null, { item: LINK, currentRow: false })).toBe("link")
 	})
 
 	test("behaviors read reactive cursor and marks at use", () => {

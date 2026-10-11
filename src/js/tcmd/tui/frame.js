@@ -74,16 +74,60 @@ function paneListHeight(data, self) {
 	return Math.max(1, height - 8 - bar)
 }
 
+// Function: mixHex
+// Linear interpolation between two `#rrggbb` colours at `t` in [0, 1]. A
+// missing colour (the mono theme) yields `undefined` so the whole run falls
+// back to the terminal default.
+function mixHex(from, to, t) {
+	if (!from || !to) return undefined
+	const channel = (index) => {
+		const a = Number.parseInt(from.slice(index, index + 2), 16)
+		const b = Number.parseInt(to.slice(index, index + 2), 16)
+		return Math.round(a + (b - a) * t)
+			.toString(16)
+			.padStart(2, "0")
+	}
+	return `#${channel(1)}${channel(3)}${channel(5)}`
+}
+
+// Function: shineOf
+// One `{ letter, fg }` per letter of a brand word, interpolating `from` → `to`
+// across it so the word reads as a gradient; a missing colour (mono theme)
+// leaves every `fg` undefined and the run falls back to the terminal default.
+function shineOf(letters, from, to) {
+	return `${letters}`.split("").map((letter, index, all) => ({
+		letter,
+		fg: mixHex(from, to, index / (all.length - 1)),
+	}))
+}
+
 // Function: createFrameBehaviors
 // Behaviors for the App root and its chrome.
 function createFrameBehaviors(env) {
+	const tiny = shineOf("Tiny", env.theme.brandTinyFrom, env.theme.brandTinyTo)
+	const cmd = shineOf("Cmd", env.theme.brandCmdFrom, env.theme.brandCmdTo)
 	return {
-		// Identity bar: "TinyCmd - host", or just "TinyCmd" without a host.
-		// Everything else on screen belongs to the user's files; this one row
-		// is the app's own.
+		// Identity bar: "Tiny" shimmers along the brand blues, "Cmd" along a
+		// brighter orange than the mark accent, and the host trail follows in
+		// the heading colour. Everything else on screen belongs to the user's
+		// files; this one row is the app's own.
+		brandT: () => tiny[0].letter,
+		brandTFg: () => tiny[0].fg,
+		brandI: () => tiny[1].letter,
+		brandIFg: () => tiny[1].fg,
+		brandN: () => tiny[2].letter,
+		brandNFg: () => tiny[2].fg,
+		brandY: () => tiny[3].letter,
+		brandYFg: () => tiny[3].fg,
+		brandC: () => cmd[0].letter,
+		brandCFg: () => cmd[0].fg,
+		brandM: () => cmd[1].letter,
+		brandMFg: () => cmd[1].fg,
+		brandD: () => cmd[2].letter,
+		brandDFg: () => cmd[2].fg,
 		topBar: (_self, data) => {
 			const host = `${unwrap(data.appHost) ?? ""}`.trim()
-			return host ? ` TinyCmd - ${host} ` : " TinyCmd "
+			return host ? ` - ${host} ` : " "
 		},
 		topBarFg: () => env.theme.textHeadingFg,
 

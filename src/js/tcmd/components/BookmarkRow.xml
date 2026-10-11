@@ -1,5 +1,6 @@
 <box flexDirection="row" height="1" columnGap="1" out:backgroundColor="rowBg" on:click="item.name!bookmark:select">
 	<text out="rowMarker" width="2" out:fg="rowFg"></text>
+	<text out="rowIcon" out:fg="rowIconFg" wrapMode="none" when="hasIcon"></text>
 	<box minWidth="12" flexShrink="0">
 		<text out="rowName" out:fg="rowFg" wrapMode="none" truncate="true"></text>
 	</box>

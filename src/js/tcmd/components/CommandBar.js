@@ -54,18 +54,21 @@ function commandBarMarksItem(data) {
 
 // Function: commandBarRowCount
 // How many rows the wrapped entries occupy at `width` columns (greedy fill,
-// matching the flex layout). `width <= 0` (unknown) assumes a single row.
+// matching the flex layout, separators included). `width <= 0` (unknown)
+// assumes a single row.
 function commandBarRowCount(items, width) {
 	if (!width || width <= 0) return 1
 	let rows = 1
 	let cols = 0
+	let index = 0
 	for (const item of items ?? []) {
-		const w = commandWidth(item)
+		const w = commandWidth(item, index)
 		if (cols > 0 && cols + w > width) {
 			rows++
 			cols = 0
 		}
 		cols += w
+		index++
 	}
 	return rows
 }

@@ -30,12 +30,12 @@ export { createBehaviors as fileListBehaviors } from "./FileList.js"
 export { createBehaviors as filePreviewBehaviors } from "./FilePreview.js"
 export { createBehaviors as fileRowBehaviors } from "./FileRow.js"
 export { createBehaviors as filterBarBehaviors } from "./FilterBar.js"
-export { createBehaviors as paneLabelBehaviors } from "./PaneLabel.js"
 export { createBehaviors as paletteRowBehaviors } from "./PaletteRow.js"
 export { createBehaviors as summaryBehaviors } from "./Summary.js"
 
 // Helpers
 export { formatCounts, formatDisk, formatMode, formatSize, formatTime } from "./format.js"
+export { iconFor, iconsEnabled } from "./icons.js"
 export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, paletteRows, panelArgRows, panelOpRows } from "./rows.js"
 
 // EOF

@@ -6,16 +6,22 @@
 			<text out="sign" out:fg="signFg" wrapMode="none"></text>
 			<input ref="query" inout="query" flexGrow="1" height="1" out:focused="queryFocused" on:enter="confirm"></input>
 		</box>
+		<!-- Horizontal rule under the filter input. -->
+		<box height="1" out:border="headRule" out:borderColor="ruleFg"></box>
 		<box flexDirection="row" flexGrow="1" overflow="hidden" columnGap="1">
 			<scrollbox flexGrow="2">
 				<box out="opRows" flexDirection="column"></box>
 			</scrollbox>
-			<scrollbox ref="args" flexGrow="3" paddingLeft="1" out:scrollTop="argScrollTop">
+			<!-- Vertical rule between the operation list and the argument sidebar. -->
+			<box width="1" out:border="sideRule" out:borderColor="ruleFg"></box>
+			<scrollbox ref="args" flexGrow="3" out:scrollTop="argScrollTop">
 				<box out="argRows" flexDirection="column"></box>
 			</scrollbox>
 		</box>
+		<!-- Horizontal rule above the assembled command preview. -->
+		<box height="1" out:border="headRule" out:borderColor="ruleFg"></box>
 		<box flexDirection="column" paddingLeft="1" paddingRight="1" flexShrink="0" overflow="hidden">
-			<text out="previewLabel" out:fg="labelFg" wrapMode="none"></text>
+			<text out="previewLabel" out:fg="previewLabelFg" wrapMode="none"></text>
 			<text out="preview" out:fg="previewFg" wrapMode="word"></text>
 		</box>
 		<box when="fieldVisible" flexDirection="row" height="1" paddingLeft="1" overflow="hidden">

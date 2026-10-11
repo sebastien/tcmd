@@ -11,9 +11,10 @@
 // hand-built bags.
 //
 // Environment: `accentFg`, `textFg`, `textSecondaryFg`, `selectionBg` (TUI row
-// background), `selectedClass` (web).
+// background), `selectedClass` (web), `icons` (show Nerd Font icons).
 
 import { isSelected } from "./rows.js"
+import { iconFor } from "./icons.js"
 
 // Function: createBehaviors
 // Builds the BookmarkRow behavior map for the given renderer environment.
@@ -22,6 +23,11 @@ function createBehaviors(env) {
 		rowBg: (_self, data) => (isSelected(data) ? env.selectionBg : undefined),
 		rowClass: (_self, data) => (isSelected(data) ? env.selectedClass : null),
 		rowFg: (_self, data) => (isSelected(data) ? env.accentFg : env.textFg),
+		// The icon is its own slot, dimmer than the name; it collapses when
+		// the environment keeps rows icon-free.
+		hasIcon: () => Boolean(env.icons),
+		rowIcon: (_self, data) => (env.icons ? iconFor(data.item) : ""),
+		rowIconFg: () => env.textSecondaryFg,
 		rowMarker: (_self, data) => (isSelected(data) ? ">" : " "),
 		// A directory bookmark reads as `name/`, mirroring the listing.
 		rowName: (_self, data) =>

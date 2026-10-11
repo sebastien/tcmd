@@ -8,19 +8,27 @@
  * component logic never reads styles.
  */
 
+/* Palette mirrors tui/theme.js DARK: night-blue surfaces, gold accents,
+   saturated orange marks. */
 :root {
-	--bg: #16161e;
-	--bg-panel: #1a1b26;
-	--bg-raised: #1f2335;
-	--bg-cursor: #283457;
-	--border: #2f334d;
-	--text: #c0caf5;
-	--text-dim: #565f89;
-	--accent: #7aa2f7;
-	--accent-soft: #3d59a1;
-	--dir: #7dcfff;
-	--mark: #e0af68;
-	--error: #f7768e;
+	--bg: #0d1526;
+	--bg-panel: #111b31;
+	--bg-raised: #18233d;
+	--bg-cursor: #274a9e;
+	--border: #2c3f70;
+	--text: #e6ecff;
+	--text-dim: #8fa3d9;
+	--accent: #ffc233;
+	--accent-soft: #2b3f78;
+	--dir: #5c8cff;
+	--mark: #ff7a1a;
+	--error: #ff4d5e;
+	/* Brand identity bar gradients (kept in sync with tui/theme.js):
+	   Tiny stays blue, Cmd gold→saturated orange. */
+	--brand-tiny-from: #4088ff;
+	--brand-tiny-to: #7cd0ff;
+	--brand-cmd-from: #ffc233;
+	--brand-cmd-to: #ff7a1a;
 }
 
 * {
@@ -54,11 +62,27 @@ body {
 	padding: 0.45rem 0.75rem;
 	border-bottom: 1px solid var(--border);
 	background: var(--bg-panel);
-	color: var(--accent);
+	color: var(--text);
 	font-weight: 600;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+/* Brand: "Tiny" shimmers along a blue gradient, "Cmd" along a brighter
+   orange than the mark accent. */
+.app-header .brand-tiny {
+	background: linear-gradient(90deg, var(--brand-tiny-from), var(--brand-tiny-to));
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+}
+
+.app-header .brand-cmd {
+	background: linear-gradient(90deg, var(--brand-cmd-from), var(--brand-cmd-to));
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
 }
 
 /* Panes ---------------------------------------------------------------- */
@@ -94,12 +118,6 @@ body {
 	overflow: hidden;
 	white-space: nowrap;
 	font-size: 12px;
-}
-
-.pane-label {
-	flex: none;
-	color: var(--text-dim);
-	font-weight: 600;
 }
 
 /* Tabs ----------------------------------------------------------------- */
