@@ -29,8 +29,19 @@ for the minimalist take.
 
 ## Running
 
+Install [Bun](https://bun.sh), then run without installing tcmd globally:
+
 ```sh
-bun install          # links deps/select.js and deps/select.tui
+npm x @ssebastien/tcmd
+npm x @ssebastien/tcmd -- /tmp ~
+```
+
+Or install it globally with `npm install -g @ssebastien/tcmd` and run `tcmd`.
+
+For development:
+
+```sh
+bun install          # installs @ssebastien/select and @ssebastien/select-tui
 bun run tcmd         # open cwd (left) and ~ (right)
 bun run tcmd /tmp ~  # open specific directories
 ```

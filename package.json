@@ -1,14 +1,14 @@
 {
-	"name": "tcmd",
-	"version": "0.1.0",
+	"name": "@ssebastien/tcmd",
+	"version": "0.1.1",
 	"description": "TinyCommand: a midnight-commander-like CLI and desktop tool",
 	"type": "module",
 	"main": "./src/js/tcmd/index.js",
+	"files": ["bin/", "src/js/tcmd/", "README.md"],
 	"bin": {
 		"tcmd": "./bin/tcmd"
 	},
 	"scripts": {
-		"postinstall": "bash scripts/link-deps.sh",
 		"test": "bun test tests",
 		"tcmd": "bun src/js/tcmd/tui/index.js",
 		"web": "bun run web:build && bun run web:serve",
@@ -17,12 +17,22 @@
 	},
 	"dependencies": {
 		"@opentui/core": "0.5.9",
-		"select": "file:./deps/select.js",
-		"select.tui": "file:./deps/select.tui"
+		"@ssebastien/select": "^1.2.1",
+		"@ssebastien/select-tui": "^0.1.0"
 	},
 	"devDependencies": {
 		"happy-dom": "^20.10.6"
 	},
 	"author": "Sébastien Pierre",
-	"license": "BSD"
+	"license": "BSD",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/sebastien/tcmd.git"
+	},
+	"engines": {
+		"bun": ">=1.1.0"
+	},
+	"publishConfig": {
+		"access": "public"
+	}
 }

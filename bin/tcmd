@@ -1,4 +1,17 @@
-#!/usr/bin/env bun
-// TinyCommand `tcmd` entry point.
-const paths = process.argv.slice(2).filter((arg) => arg !== "-")
-await import("../src/js/tcmd/tui/index.js").then((tui) => tui.main(paths))
+#!/bin/sh
+# TinyCommand `tcmd` entry point.
+if ! command -v bun >/dev/null 2>&1; then
+	printf '%s\n' 'tcmd requires Bun (https://bun.sh). Install Bun, then run `bun x @ssebastien/tcmd` again.' >&2
+	exit 1
+fi
+script=$0
+while [ -L "$script" ]; do
+	dir=$(CDPATH= cd -- "$(dirname -- "$script")" && pwd)
+	link=$(readlink "$script")
+	case "$link" in
+		/*) script=$link ;;
+		*) script=$dir/$link ;;
+	esac
+done
+dir=$(CDPATH= cd -- "$(dirname -- "$script")" && pwd)
+exec bun "$dir/../src/js/tcmd/tui/index.js" "$@"

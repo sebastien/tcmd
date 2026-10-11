@@ -8,4 +8,9 @@ run-local: ## Serves the Web UI on http://localhost:$(TCMD_WEB_PORT)
 	$(call shell_try,PORT=$(TCMD_WEB_PORT) $(BUN) run web,Unable to start the Web UI server)
 	@$(call rule_post_cmd,$@)
 
+.PHONY: release
+release: ## Tests and publishes the npm package
+	$(BUN) test tests
+	npm publish
+
 # EOF
