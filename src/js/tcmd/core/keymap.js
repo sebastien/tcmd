@@ -10,6 +10,8 @@
 const DEFAULT_KEYMAP = [
 	{ key: "up", command: "nav.up" },
 	{ key: "down", command: "nav.down" },
+	{ key: "up", ctrl: true, command: "nav.jumpUp" },
+	{ key: "down", ctrl: true, command: "nav.jumpDown" },
 	{ key: "pageup", command: "nav.pageUp" },
 	{ key: "pagedown", command: "nav.pageDown" },
 	{ key: "home", command: "nav.home" },
@@ -19,6 +21,8 @@ const DEFAULT_KEYMAP = [
 	{ key: "enter", command: "pane.enter" },
 	{ key: "left", command: "pane.up" },
 	{ key: "backspace", command: "pane.up" },
+	{ key: "escape", command: "pane.back" },
+	{ key: "escape", shift: true, command: "pane.forward" },
 	{ key: "tab", command: "pane.toggle" },
 	{ key: "tab", shift: true, command: "pane.toggle" },
 	{ key: "space", command: "list.mark" },

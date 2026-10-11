@@ -36,7 +36,7 @@
 					<filelist in:entries="leftEntries" in:cursor="leftCursor" in:marked="leftMarked"
 					          in:active="leftActive" in:paneId="leftId" in:loading="leftLoading"
 					          in:viewport="listViewport"></filelist>
-					<entrydetail in:entry="leftEntry" height="2"></entrydetail>
+					<entrydetail in:entry="leftEntry" in:marked="leftMarked" height="2"></entrydetail>
 					<summary in:entries="leftEntries" in:disk="leftDisk" height="1"></summary>
 				</box>
 				<box flexDirection="column" flexGrow="1" border borderStyle="single"
@@ -53,7 +53,7 @@
 					<filelist in:entries="rightEntries" in:cursor="rightCursor" in:marked="rightMarked"
 					          in:active="rightActive" in:paneId="rightId" in:loading="rightLoading"
 					          in:viewport="listViewport"></filelist>
-					<entrydetail in:entry="rightEntry" height="2"></entrydetail>
+					<entrydetail in:entry="rightEntry" in:marked="rightMarked" height="2"></entrydetail>
 					<summary in:entries="rightEntries" in:disk="rightDisk" height="1"></summary>
 				</box>
 				<filepreview when="showInspectorInline" in:preview="preview" in:show="showInspectorInline"

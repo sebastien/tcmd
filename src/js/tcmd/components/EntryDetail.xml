@@ -2,6 +2,8 @@
      borderStyle="single" overflow="hidden">
 	<box flexDirection="row" height="1" overflow="hidden">
 		<text when="detailHasIndent" out="detailIndent" out:fg="dimFg" wrapMode="none"></text>
+		<text when="detailHasMarked" out="detailMarked" out:fg="detailMarkedFg" wrapMode="none"></text>
+		<text when="detailSepTime" out="detailSep" out:fg="dimFg" wrapMode="none"></text>
 		<text when="detailHasTime" out="detailTime" out:fg="brightFg" wrapMode="none"></text>
 		<text when="detailSepType" out="detailSep" out:fg="dimFg" wrapMode="none"></text>
 		<text when="detailHasType" out="detailType" out:fg="detailTypeFg" wrapMode="none"></text>

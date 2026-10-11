@@ -35,7 +35,8 @@ bun run tcmd         # open cwd (left) and ~ (right)
 bun run tcmd /tmp ~  # open specific directories
 ```
 
-Keys: `↑/↓` move, `Enter/→` open, `←/Bksp` parent, `Tab`/`⇧Tab` switch panes
+Keys: `↑/↓` move (`^↑/^↓` jump a few lines), `Enter/→` open, `←/Bksp` parent,
+`Esc`/`⇧Esc` history back/forward, `Tab`/`⇧Tab` switch panes
 (`⇧Tab` goes back), `Space` mark, `b` bookmark the cursor entry (or the pane
 directory) under a basename-defaulted name, `g` jump to a bookmark, `:` or `m`
 open the command panel (Commando: operations, their arguments, and the live
@@ -216,3 +217,4 @@ tests run the shared logic through select.js on a happy-dom document.
 - [ ] Quick find, grep
 - [ ] Image/PDF/audio/video previews
 - [x] Web view on the same core (shared components rendered by select.js)
+- [x] Pane navigation history (`Esc`/`⇧Esc` back/forward)

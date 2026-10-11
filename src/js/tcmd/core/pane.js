@@ -55,12 +55,14 @@ function createPane({ fs, path: initialPath } = {}) {
 	// The pane's directory.
 	pane.current = () => pane.directory
 
-	// Function: refresh / navigate / up / open / currentEntry / toggleMark /
-	// clearFilter — delegate to the directory.
+	// Function: refresh / navigate / up / open / back / forward /
+	// currentEntry / toggleMark / clearFilter — delegate to the directory.
 	pane.refresh = () => pane.directory.refresh()
 	pane.navigate = (path) => pane.directory.navigate(path)
 	pane.up = () => pane.directory.up()
 	pane.open = () => pane.directory.open()
+	pane.back = () => pane.directory.back()
+	pane.forward = () => pane.directory.forward()
 	pane.currentEntry = () => pane.directory.currentEntry()
 	pane.toggleMark = () => pane.directory.toggleMark()
 	pane.clearFilter = () => pane.directory.clearFilter()

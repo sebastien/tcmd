@@ -240,11 +240,15 @@ function createBehaviors(env) {
 				// Let the focused filter input handle typing.
 				return
 			}
-			// Esc clears an accepted filter on the active pane.
-			if (key?.name === "escape") {
+			// Esc clears an accepted filter on the active pane; without a
+			// filter (or on Shift-Esc) the keymap decides — Esc steps back
+			// through the pane's directory history.
+			if (key?.name === "escape" && !key.shift) {
 				const filter = active === "left" ? unwrap(data.leftFilter) : unwrap(data.rightFilter)
-				if (filter) data.dispatch("filter.clear")
-				return
+				if (filter) {
+					data.dispatch("filter.clear")
+					return
+				}
 			}
 			const id = matchKeymap(DEFAULT_KEYMAP, key)
 			if (!id) return

@@ -33,9 +33,18 @@ describe("EntryDetail", () => {
 		expect(detailBlocks(null)).toEqual([])
 	})
 
+	test("more than one mark leads with the selected count", () => {
+		const file = { isDir: false, size: 26, mtimeMs: STAMP, mode: 0o100644 }
+		expect(detailBlocks(file, 3).map((b) => b.key)).toEqual(["marked", "time", "type", "size", "mode"])
+		// A single mark is not worth a counter.
+		expect(detailBlocks(file, 1).map((b) => b.key)).toEqual(["time", "type", "size", "mode"])
+		expect(detailBlocks(null, 2)).toEqual([{ key: "marked", text: "2 selected" }])
+	})
+
 	test("detailLine joins the fields with a middle dot", () => {
 		const file = { isDir: false, size: 26, mtimeMs: STAMP, mode: 0o100644 }
 		expect(detailLine(file)).toBe("  2026-10-06 07:55 · file · 26B · -rw-r--r--")
+		expect(detailLine(file, 3)).toBe("  3 selected · 2026-10-06 07:55 · file · 26B · -rw-r--r--")
 		expect(detailLine({ isDir: true, mtimeMs: STAMP, mode: 0o040755 })).toBe(
 			"  2026-10-06 07:55 · dir · drwxr-xr-x",
 		)
@@ -54,6 +63,7 @@ describe("EntryDetail", () => {
 		const entry = cell(null)
 		const data = { entry }
 		expect(behaviors.detailHasIndent(null, data)).toBe(false)
+		expect(behaviors.detailHasMarked(null, data)).toBe(false)
 		expect(behaviors.detailHasTime(null, data)).toBe(false)
 
 		entry.set({ isDir: false, size: 26, mtimeMs: STAMP, mode: 0o100644 })
@@ -76,6 +86,23 @@ describe("EntryDetail", () => {
 		expect(behaviors.detailSepSize(null, data)).toBe(true)
 		expect(behaviors.detailSepMode(null, data)).toBe(true)
 		expect(behaviors.detailSep()).toBe(" · ")
+	})
+
+	test("the selected count is gated and drawn in the mark colour", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		const entry = cell({ isDir: false, size: 26, mtimeMs: STAMP, mode: 0o100644 })
+		const marked = cell(new Set(["/home/a", "/home/b", "/home/c"]))
+		const data = { entry, marked }
+		expect(behaviors.detailHasMarked(null, data)).toBe(true)
+		expect(behaviors.detailMarked(null, data)).toBe("3 selected")
+		expect(behaviors.detailMarkedFg()).toBe(behaviorEnv.accentSecondaryFg)
+		expect(behaviors.detailSepTime(null, data)).toBe(true)
+		// One mark: no counter, and the date no longer needs a leading sep.
+		marked.set(new Set(["/home/a"]))
+		expect(behaviors.detailHasMarked(null, data)).toBe(false)
+		expect(behaviors.detailSepTime(null, data)).toBe(false)
+		// Views that do not wire the marked slot stay count-free.
+		expect(behaviors.detailHasMarked(null, { entry })).toBe(false)
 	})
 
 	test("a dir has no size block, so the size separator is hidden", () => {

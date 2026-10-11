@@ -64,6 +64,23 @@ describe("tui app", () => {
 		}
 	})
 
+	test("marks show a selected count in the entry detail", async () => {
+		const { setup } = await makeSetup()
+		try {
+			// Space marks the cursor entry; two marks surface the count.
+			setup.mockInput.pressKey(" ")
+			await settle(setup)
+			setup.mockInput.pressArrow("down")
+			await settle(setup)
+			setup.mockInput.pressKey(" ")
+			await settle(setup)
+			const frame = setup.captureCharFrame()
+			expect(frame).toContain("2 selected")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
 	test("shows a minimum-size hint below the workspace breakpoint", async () => {
 		const { setup } = await makeSetup(50, 12)
 		try {

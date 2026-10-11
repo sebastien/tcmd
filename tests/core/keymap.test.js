@@ -14,8 +14,18 @@ describe("keymap", () => {
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "tab", shift: true })).toBe("pane.toggle")
 	})
 
+	test("escape and shift-escape walk the pane history", () => {
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "escape" })).toBe("pane.back")
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "escape", shift: true })).toBe("pane.forward")
+	})
+
+	test("ctrl-arrows jump the cursor by a few lines", () => {
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "up", ctrl: true })).toBe("nav.jumpUp")
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "down", ctrl: true })).toBe("nav.jumpDown")
+	})
+
 	test("requires the modifiers to match exactly", () => {
-		expect(matchKeymap(DEFAULT_KEYMAP, { name: "down", ctrl: true })).toBeNull()
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "left", ctrl: true })).toBeNull()
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "r", ctrl: true, shift: true })).toBeNull()
 		expect(matchKeymap(DEFAULT_KEYMAP, {})).toBeNull()
 	})

@@ -21,7 +21,11 @@ import { clampCursor, moveCursor } from "./selection.js"
 import { runLine } from "./script.js"
 import { getOperation, runOperation } from "./operations.js"
 
+// Constant: PAGE / JUMP
+// Cursor movement steps: a page for PgUp/PgDn, a shorter jump for the
+// ctrl-arrow accelerators.
 const PAGE = 10
+const JUMP = 5
 
 // Function: PALETTE_KEYS
 // Command-bar hints shown while the command palette is open.
@@ -112,6 +116,24 @@ const commands = [
 		},
 	},
 	{
+		id: "nav.jumpUp",
+		title: "Jump up",
+		keys: "^↑",
+		kind: "ui",
+		run(session) {
+			bump(session, -JUMP)
+		},
+	},
+	{
+		id: "nav.jumpDown",
+		title: "Jump down",
+		keys: "^↓",
+		kind: "ui",
+		run(session) {
+			bump(session, JUMP)
+		},
+	},
+	{
 		id: "nav.home",
 		title: "First entry",
 		keys: "Home",
@@ -148,6 +170,24 @@ const commands = [
 		bar: true,
 		run(session) {
 			return pane(session).up()
+		},
+	},
+	{
+		id: "pane.back",
+		title: "Back",
+		keys: "Esc",
+		kind: "ui",
+		run(session) {
+			return pane(session).back()
+		},
+	},
+	{
+		id: "pane.forward",
+		title: "Forward",
+		keys: "⇧Esc",
+		kind: "ui",
+		run(session) {
+			return pane(session).forward()
 		},
 	},
 	{

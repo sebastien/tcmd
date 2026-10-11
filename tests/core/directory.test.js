@@ -32,6 +32,42 @@ describe("directory", () => {
 		dir.dispose()
 	})
 
+	test("navigation history walks back and forward", async () => {
+		const dir = createDirectory({ fs: createMockFs(TREE), path: "/home" })
+		await dir.refresh()
+		await dir.navigate("/home/tester")
+		dir.filter.set("notes")
+		await dir.navigate("/")
+		expect(dir.path.value).toBe("/")
+
+		await dir.back()
+		expect(dir.path.value).toBe("/home/tester")
+		expect(dir.filter.value).toBe("") // back re-applies like a navigation
+		await dir.back()
+		expect(dir.path.value).toBe("/home")
+		await dir.back() // no-op at the start of the history
+		expect(dir.path.value).toBe("/home")
+
+		await dir.forward()
+		expect(dir.path.value).toBe("/home/tester")
+		await dir.forward()
+		expect(dir.path.value).toBe("/")
+		await dir.forward() // no-op at the end of the history
+		expect(dir.path.value).toBe("/")
+		dir.dispose()
+	})
+
+	test("a new navigation truncates the forward history", async () => {
+		const dir = createDirectory({ fs: createMockFs(TREE), path: "/home" })
+		await dir.refresh()
+		await dir.navigate("/home/tester")
+		await dir.back()
+		await dir.navigate("/")
+		await dir.forward() // the /home/tester branch is gone
+		expect(dir.path.value).toBe("/")
+		dir.dispose()
+	})
+
 	test("dispose releases the reactive watchers", async () => {
 		const dir = createDirectory({ fs: createMockFs(TREE), path: "/home" })
 		await dir.refresh()

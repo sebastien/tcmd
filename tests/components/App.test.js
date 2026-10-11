@@ -196,6 +196,20 @@ describe("App", () => {
 		expect(calls).toEqual([{ id: "filter.clear", payload: undefined }])
 	})
 
+	test("escape without a filter reaches the keymap as pane.back", () => {
+		const behaviors = createBehaviors({ quit: () => {} })
+		const { calls, data } = makeData()
+		behaviors.keys(null, data, { name: "escape" })
+		expect(calls).toEqual([{ id: "pane.back", payload: { paneId: "left" } }])
+	})
+
+	test("shift-escape reaches the keymap as pane.forward, even with a filter", () => {
+		const behaviors = createBehaviors({ quit: () => {} })
+		const { calls, data } = makeData({ leftFilter: "not" })
+		behaviors.keys(null, data, { name: "escape", shift: true })
+		expect(calls).toEqual([{ id: "pane.forward", payload: { paneId: "left" } }])
+	})
+
 	test("palette mode publishes confirm with the query", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
 		const calls = []

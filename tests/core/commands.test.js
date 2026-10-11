@@ -39,6 +39,31 @@ describe("commands", () => {
 		expect(session.panes.left.cursor.value).toBe(1)
 	})
 
+	test("nav.jumpDown/jumpUp move the cursor by a few lines, clamped", async () => {
+		const fs = createMockFs({
+			"/": [{ name: "many", isDir: true }],
+			"/many": Array.from({ length: 12 }, (_, i) => ({ name: `f${i}.txt` })),
+		})
+		const session = createSession({
+			fs,
+			left: createPane({ fs, path: "/many" }),
+			right: createPane({ fs, path: "/" }),
+		})
+		await load(session)
+		session.dispatch("nav.jumpDown")
+		expect(session.panes.left.cursor.value).toBe(5)
+		session.dispatch("nav.jumpDown")
+		expect(session.panes.left.cursor.value).toBe(10)
+		session.dispatch("nav.jumpDown") // clamps at the last entry
+		expect(session.panes.left.cursor.value).toBe(11)
+		session.dispatch("nav.jumpUp")
+		expect(session.panes.left.cursor.value).toBe(6)
+		session.dispatch("nav.jumpUp") // clamps at the first entry
+		session.dispatch("nav.jumpUp")
+		session.dispatch("nav.jumpUp")
+		expect(session.panes.left.cursor.value).toBe(0)
+	})
+
 	test("pane.toggle switches the active pane", async () => {
 		const session = makeSession()
 		session.dispatch("pane.toggle")
@@ -62,6 +87,26 @@ describe("commands", () => {
 		await new Promise((resolve) => setTimeout(resolve, 0))
 		expect(session.panes.left.path.value).toBe("/home/tester")
 		session.dispatch("pane.up")
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(session.panes.left.path.value).toBe("/home")
+	})
+
+	test("pane.back and pane.forward walk the pane history", async () => {
+		const session = makeSession()
+		await load(session)
+		session.dispatch("pane.back") // nothing recorded yet
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(session.panes.left.path.value).toBe("/home")
+
+		session.dispatch("pane.enter") // /home -> /home/tester
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		session.dispatch("pane.up") // /home/tester -> /home
+		await new Promise((resolve) => setTimeout(resolve, 0))
+
+		session.dispatch("pane.back")
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(session.panes.left.path.value).toBe("/home/tester")
+		session.dispatch("pane.forward")
 		await new Promise((resolve) => setTimeout(resolve, 0))
 		expect(session.panes.left.path.value).toBe("/home")
 	})

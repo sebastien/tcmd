@@ -6,7 +6,8 @@
 // Module: tcmd/core/directory
 // A Directory is the per-pane state: the current path, the entries read from
 // the filesystem, the derived (filtered + sorted) view, the cursor, the disk
-// figures and the selection buffer. A pane owns exactly one directory — the
+// figures, the selection buffer and the navigation history (back/forward).
+// A pane owns exactly one directory — the
 // former multi-tab model is gone — and the pane's cells proxy it directly.
 
 import { cell, derived, effect } from "select/state/cells"
@@ -60,6 +61,9 @@ function createDirectory({ fs, path: initialPath }) {
 	let cursorStatPath = null
 	// Selection buffer for this directory (the pane's marked paths).
 	dir.marked = cell(new Set())
+	// Navigation history: visited paths with the current one at
+	// `history.index`, so back/forward walk the stack like a browser.
+	dir.history = { stack: [initialPath], index: 0 }
 
 	// A changing filter re-ranks the listing: snap the cursor back to the top
 	// match. Disposed with the directory (see `dispose`).
@@ -94,15 +98,49 @@ function createDirectory({ fs, path: initialPath }) {
 		}
 	}
 
-	// Function: navigate
-	// Moves the directory to `path` (resetting filter, marks and cursor) and
-	// refreshes.
-	dir.navigate = async (path) => {
+	// Function: apply
+	// The actual move to `path`: sets the path, resets filter, marks and
+	// cursor, then refreshes. History-neutral — navigate/back/forward record
+	// their own steps around it.
+	const apply = async (path) => {
 		dir.path.set(path)
 		dir.filter.set("")
 		dir.marked.set(new Set())
 		dir.cursor.set(0)
 		await dir.refresh()
+	}
+
+	// Function: navigate
+	// Moves the directory to `path` (resetting filter, marks and cursor),
+	// records the step in the history and refreshes. Re-navigating to the
+	// current path does not duplicate the entry.
+	dir.navigate = async (path) => {
+		const history = dir.history
+		if (history.stack[history.index] !== path) {
+			// A new navigation truncates the forward branch, like a browser.
+			history.stack.length = history.index + 1
+			history.stack.push(path)
+			history.index = history.stack.length - 1
+		}
+		await apply(path)
+	}
+
+	// Function: back
+	// Steps one entry back in the navigation history; no-op at its start.
+	dir.back = async () => {
+		const history = dir.history
+		if (history.index <= 0) return
+		history.index -= 1
+		await apply(history.stack[history.index])
+	}
+
+	// Function: forward
+	// Steps one entry forward in the navigation history; no-op at its end.
+	dir.forward = async () => {
+		const history = dir.history
+		if (history.index >= history.stack.length - 1) return
+		history.index += 1
+		await apply(history.stack[history.index])
 	}
 
 	// Function: up

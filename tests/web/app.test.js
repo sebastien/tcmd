@@ -81,6 +81,24 @@ describe("web app", () => {
 		}
 	})
 
+	test("the entry detail shows the selected count in the mark span", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			const pane = session.panes.left
+			pane.toggleMark()
+			pane.cursor.set(1)
+			pane.toggleMark()
+			await new Promise((resolve) => setTimeout(resolve, 20))
+			expect(host.querySelector(".pane-left .entry-detail-marked").textContent).toBe("2 selected")
+			// Back to one mark: the counter drops out.
+			pane.toggleMark()
+			await new Promise((resolve) => setTimeout(resolve, 20))
+			expect(host.querySelector(".pane-left .entry-detail-marked").textContent).toBe("")
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
 	test("a row click bubbles through .sub to a dispatch", async () => {
 		const { host, instance, session } = await mountApp()
 		try {
