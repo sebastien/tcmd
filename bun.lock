@@ -6,8 +6,8 @@
       "name": "tcmd",
       "dependencies": {
         "@opentui/core": "0.5.9",
-        "@ssebastien/select": "^1.2.1",
-        "@ssebastien/select-tui": "^0.1.0",
+        "select": "npm:@ssebastien/select@^1.2.1",
+        "select.tui": "npm:@ssebastien/select-tui@^0.1.0",
       },
       "devDependencies": {
         "happy-dom": "^20.10.6",
@@ -35,8 +35,6 @@
 
     "@ssebastien/select": ["@ssebastien/select@1.2.1", "", {}, "sha512-sTYbwk/3OgFYeMYwSsBiIZe3rLAYi7t5BocJPr5w2HNg4nbgVcGjLGi89E0uDcX/7LQlyJCf6DGM+7eqWnpa+g=="],
 
-    "@ssebastien/select-tui": ["@ssebastien/select-tui@0.1.0", "", { "dependencies": { "@opentui/core": "^0.5.9", "@ssebastien/select": "^1.2.1" } }, "sha512-ZVeYlvMEZj0Ov4vj0Vj8im4H9AZgFuk/fEMsSFyIabmUSO4IIYVmnWroFad+wLj0YlGL8mRsqxGWLvuLLGqtvQ=="],
-
     "@types/node": ["@types/node@26.6.3", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-dsqMQQoeTLqu9wynDD00q573mNzso3IdQOAfHRJqLCcmCFPoGo9A1bDpUcv/9tnKpErQWv9uKeGfl37EIS02Yg=="],
 
     "@types/whatwg-mimetype": ["@types/whatwg-mimetype@3.0.2", "", {}, "sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA=="],
@@ -60,6 +58,10 @@
     "happy-dom": ["happy-dom@20.14.5", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-x/RzkpWO40bTjIoT30iQtt64FLLmH/iRcUCN2X//bLx7H3ifkdfPXyqsro/OYtqzIAhiLMMA7mmiOR9C3NOKjQ=="],
 
     "marked": ["marked@17.0.1", "", { "bin": { "marked": "bin/marked.js" } }, "sha512-boeBdiS0ghpWcSwoNm/jJBwdpFaMnZWRzjA6SkUMYb40SVaN1x7mmfGKp0jvexGcx+7y2La5zRZsYFZI6Qpypg=="],
+
+    "select": ["@ssebastien/select@1.2.1", "", {}, "sha512-sTYbwk/3OgFYeMYwSsBiIZe3rLAYi7t5BocJPr5w2HNg4nbgVcGjLGi89E0uDcX/7LQlyJCf6DGM+7eqWnpa+g=="],
+
+    "select.tui": ["@ssebastien/select-tui@0.1.0", "", { "dependencies": { "@opentui/core": "^0.5.9", "@ssebastien/select": "^1.2.1" } }, "sha512-ZVeYlvMEZj0Ov4vj0Vj8im4H9AZgFuk/fEMsSFyIabmUSO4IIYVmnWroFad+wLj0YlGL8mRsqxGWLvuLLGqtvQ=="],
 
     "string-width": ["string-width@7.2.0", "", { "dependencies": { "emoji-regex": "^10.3.0", "get-east-asian-width": "^1.0.0", "strip-ansi": "^7.1.0" } }, "sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ=="],
 

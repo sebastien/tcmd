@@ -41,7 +41,7 @@ Or install it globally with `npm install -g @ssebastien/tcmd` and run `tcmd`.
 For development:
 
 ```sh
-bun install          # installs @ssebastien/select and @ssebastien/select-tui
+bun install          # installs the published select packages under their import names
 bun run tcmd         # open cwd (left) and ~ (right)
 bun run tcmd /tmp ~  # open specific directories
 ```

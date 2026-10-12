@@ -10,6 +10,7 @@ run-local: ## Serves the Web UI on http://localhost:$(TCMD_WEB_PORT)
 
 .PHONY: release
 release: ## Tests and publishes the npm package
+	@npm whoami --registry=https://registry.npmjs.org/ >/dev/null 2>&1 || { echo "[RELEASE] Log in to npm first: npm login --scope=@ssebastien --registry=https://registry.npmjs.org/" >&2; exit 1; }
 	$(BUN) test tests
 	npm publish
 

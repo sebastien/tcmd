@@ -14,4 +14,4 @@ while [ -L "$script" ]; do
 	esac
 done
 dir=$(CDPATH= cd -- "$(dirname -- "$script")" && pwd)
-exec bun "$dir/../src/js/tcmd/tui/index.js" "$@"
+exec bun "$dir/tcmd.js" "$@"
