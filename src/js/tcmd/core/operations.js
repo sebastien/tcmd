@@ -4,13 +4,13 @@
 // Created: 2026-09-27
 
 // Module: tcmd/core/operations
-// The scripting operations: the file-management verbs the command palette's
-// scripting mode completes and runs. An operation receives the session and
-// its raw argument tokens; path arguments resolve filesets ($A … $FILE), `~`
-// and paths relative to the active pane. Operations own their side effects and
-// return a one-line message (shown in the command bar) or undefined.
+// The CLI operations: the file-management verbs the command panel runs. An
+// operation receives the session and its raw argument tokens; path arguments
+// resolve filesets ($A … $FILE), `~` and paths relative to the active pane.
+// Operations own their side effects and return a one-line message (shown in
+// the command bar) or undefined.
 //
-// Registry entries carry the presentation metadata the palette renders:
+// Registry entries carry the presentation metadata the panel renders:
 // `signature`, `description`, `aliases` and an optional `confirmText`. An
 // optional `risk` ("caution" for a move, "destructive" for delete/erase) lets
 // the command panel tint the operation by how dangerous it is.

@@ -13,11 +13,13 @@
 // presentation bind the same source (`Breadcrumbs` uses `RowList.html`).
 
 import { ui } from "select/ui"
+import { unwrap } from "select/state/cells"
 import bookmarkListHtml from "../components/BookmarkList.html" with { type: "text" }
 import bookmarkRowHtml from "../components/BookmarkRow.html" with { type: "text" }
 import commandBarHtml from "../components/CommandBar.html" with { type: "text" }
+import commandArgRowHtml from "../components/CommandArgRow.html" with { type: "text" }
+import commandPanelHtml from "../components/CommandPanel.html" with { type: "text" }
 import commandItemHtml from "../components/CommandItem.html" with { type: "text" }
-import commandPaletteHtml from "../components/CommandPalette.html" with { type: "text" }
 import confirmHtml from "../components/Confirm.html" with { type: "text" }
 import crumbHtml from "../components/Crumb.html" with { type: "text" }
 import entryDetailHtml from "../components/EntryDetail.html" with { type: "text" }
@@ -25,8 +27,8 @@ import fileListHtml from "../components/FileList.html" with { type: "text" }
 import filePreviewHtml from "../components/FilePreview.html" with { type: "text" }
 import fileRowHtml from "../components/FileRow.html" with { type: "text" }
 import filterBarHtml from "../components/FilterBar.html" with { type: "text" }
+import helpHtml from "../components/Help.html" with { type: "text" }
 import headerHtml from "./header.html" with { type: "text" }
-import paletteRowHtml from "../components/PaletteRow.html" with { type: "text" }
 import rowListHtml from "../components/RowList.html" with { type: "text" }
 import summaryHtml from "../components/Summary.html" with { type: "text" }
 
@@ -37,9 +39,11 @@ import {
 	bookmarkRows,
 	breadcrumbsBehaviors,
 	commandBarBehaviors,
+	commandBarMarksItem,
+	commandArgRowBehaviors,
 	commandItemBehaviors,
 	commandItemRows,
-	commandPaletteBehaviors,
+	commandPanelBehaviors,
 	confirmBehaviors,
 	crumbBehaviors,
 	crumbRows,
@@ -49,55 +53,48 @@ import {
 	fileRowBehaviors,
 	fileRows,
 	filterBarBehaviors,
-	paletteRowBehaviors,
-	paletteRows,
+	helpBehaviors,
+	panelArgRows,
+	panelOpRows,
 	summaryBehaviors,
 } from "../components/index.js"
 import { createBehaviors as headerBehaviors } from "./header.js"
+import { columnWidth } from "./effects.js"
 import { webTheme } from "./theme.js"
 
 let registered = false
 
-// Advance width of one monospace cell, cached from the header's computed font.
-let charWidth = 0
+// Function: paneWidth
+// Reading the injected width cell keeps fitting reactive on pure resizes.
+function paneWidth(self, data) {
+	const width = unwrap(data.width) ?? 0
+	return columnWidth(self.ref.box) || width
+}
 
-// Function: columnWidth
-// Columns available in `el`, measured from the monospace advance width. Returns
-// 0 when the DOM cannot measure (happy-dom, no layout), disabling compression.
-// ponytail: measured per render; a pure viewport resize waits for the next one.
-function columnWidth(el) {
-	const px = el?.clientWidth || el?.ownerDocument?.defaultView?.innerWidth || 0
-	if (!px) return 0
-	const view = el.ownerDocument?.defaultView
-	if (!view) return 0
-	if (!charWidth) {
-		try {
-			const ctx = el.ownerDocument.createElement("canvas").getContext("2d")
-			const style = view.getComputedStyle(el)
-			ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
-			charWidth = ctx.measureText("0").width || 0
-		} catch {
-			return 0
-		}
-	}
-	return charWidth ? Math.floor(px / charWidth) : 0
+function elide(text, width) {
+	return width > 0 && text.length > width ? `${text.slice(0, Math.max(0, width - 1))}…` : text
 }
 
 // Function: createComponents
 // Binds every shared component to its `.html` presentation.
 function createComponents() {
 	const commandItem = bind(ui, "CommandItem", commandItemHtml, commandItemBehaviors(webTheme))
+	// Browsers lack the Nerd Font, so panel entries carry the text tag instead
+	// of the glyph.
+	const commandArgRow = bind(ui, "CommandArgRow", commandArgRowHtml, commandArgRowBehaviors({
+		...webTheme,
+		icons: false,
+	}))
 	const crumb = bind(ui, "Crumb", crumbHtml, crumbBehaviors(webTheme))
 	const fileRow = bind(ui, "FileRow", fileRowHtml, fileRowBehaviors(webTheme))
 	const filterBar = bind(ui, "FilterBar", filterBarHtml, filterBarBehaviors(webTheme))
-	const paletteRow = bind(ui, "PaletteRow", paletteRowHtml, paletteRowBehaviors(webTheme))
 	const bookmarkRow = bind(ui, "BookmarkRow", bookmarkRowHtml, bookmarkRowBehaviors(webTheme))
 	return {
 		BookmarkRow: bookmarkRow,
 		CommandItem: commandItem,
+		CommandArgRow: commandArgRow,
 		Crumb: crumb,
 		FileRow: fileRow,
-		PaletteRow: paletteRow,
 		Breadcrumbs: bind(ui, "Breadcrumbs", rowListHtml, breadcrumbsBehaviors({
 			...webTheme,
 			listClass: "breadcrumbs",
@@ -110,25 +107,33 @@ function createComponents() {
 		CommandBar: bind(ui, "CommandBar", commandBarHtml, commandBarBehaviors({
 			...webTheme,
 			listClass: "command-bar-keys",
-			rows: commandItemRows(commandItem),
+			rows: (self, data) => {
+				const marks = commandBarMarksItem(data)
+				const items = unwrap(data.items) ?? []
+				return commandItemRows(commandItem)(self, { ...data, items: marks ? [...items, marks] : items })
+			},
 		})),
-		CommandPalette: bind(ui, "CommandPalette", commandPaletteHtml, commandPaletteBehaviors({
+		CommandPanel: bind(ui, "CommandPanel", commandPanelHtml, commandPanelBehaviors({
 			...webTheme,
-			rows: paletteRows(paletteRow),
+			opRows: panelOpRows(commandArgRow),
+			argRows: panelArgRows(commandArgRow),
 		})),
 		Confirm: bind(ui, "Confirm", confirmHtml, confirmBehaviors(webTheme)),
-		EntryDetail: bind(ui, "EntryDetail", entryDetailHtml, entryDetailBehaviors(webTheme)),
+		EntryDetail: bind(ui, "EntryDetail", entryDetailHtml, entryDetailBehaviors({ ...webTheme, width: paneWidth, elide })),
 		FileList: bind(ui, "FileList", fileListHtml, fileListBehaviors({
 			...webTheme,
 			rows: fileRows(fileRow),
 		})),
-		FilePreview: bind(ui, "FilePreview", filePreviewHtml, filePreviewBehaviors(webTheme)),
-		FilterBar: filterBar,
-		Header: bind(ui, "Header", headerHtml, headerBehaviors({
+		FilePreview: bind(ui, "FilePreview", filePreviewHtml, filePreviewBehaviors({
 			...webTheme,
-			width: (self) => columnWidth(self.ref.box),
+			// Open/edit/run are TUI-only: the browser says so instead of
+			// advertising keys it cannot honour.
+			actions: () => " Open / edit are unavailable in the browser",
 		})),
-		Summary: bind(ui, "Summary", summaryHtml, summaryBehaviors(webTheme)),
+		FilterBar: filterBar,
+		Help: bind(ui, "Help", helpHtml, helpBehaviors({ theme: webTheme })),
+		Header: bind(ui, "Header", headerHtml, headerBehaviors(webTheme)),
+		Summary: bind(ui, "Summary", summaryHtml, summaryBehaviors({ ...webTheme, width: paneWidth, elide })),
 	}
 }
 
@@ -143,13 +148,14 @@ function registerWebComponents() {
 	ui.format("Breadcrumbs", components.Breadcrumbs)
 	ui.format("BookmarkList", components.BookmarkList)
 	ui.format("CommandBar", components.CommandBar)
-	ui.format("CommandPalette", components.CommandPalette)
+	ui.format("CommandPanel", components.CommandPanel)
 	ui.format("Confirm", components.Confirm)
 	ui.format("EntryDetail", components.EntryDetail)
 	ui.format("FileList", components.FileList)
 	ui.format("FilePreview", components.FilePreview)
 	ui.format("FilterBar", components.FilterBar)
 	ui.format("Header", components.Header)
+	ui.format("Help", components.Help)
 	ui.format("Summary", components.Summary)
 	return components
 }

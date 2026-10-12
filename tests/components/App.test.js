@@ -18,11 +18,6 @@ function makeData(overrides = {}) {
 			filtering: null,
 			leftError: null,
 			leftFilter: null,
-			paletteIndex: 0,
-			paletteItems: [],
-			paletteMode: "ui",
-			paletteOpen: false,
-			paletteQuery: "",
 			panelCommand: "",
 			panelFocus: "ops",
 			panelOpIndex: 0,
@@ -74,20 +69,15 @@ describe("App", () => {
 			filtering: "filtering",
 			host: "test-host",
 			notice: "notice",
-			paletteIndex: "pi",
-			paletteItems: "pit",
-			paletteMode: "pm",
-			paletteOpen: "po",
-			paletteQuery: "pq",
 			panelCommand: "pc",
 			panelCursorRow: "pcr",
 			panelDraft: "pd",
+			panelEntry: "pentry",
 			panelFiltered: "pfil",
 			panelFocus: "pf",
 			panelOpIndex: "pix",
 			panelItems: "pitems",
 			panelOpen: "pop",
-			panelOperation: "poper",
 			panelQuery: "pq2",
 			panelRowIndex: "pr",
 			panelRows: "prs",
@@ -112,8 +102,7 @@ describe("App", () => {
 			leftFilter: "lf",
 			leftId: "left",
 			notice: "notice",
-			paletteItems: "pit",
-			paletteMode: "pm",
+			panelEntry: "pentry",
 			panelItems: "pitems",
 			panelQuery: "pq2",
 			preview: "preview",
@@ -139,29 +128,7 @@ describe("App", () => {
 		expect(quitWith).toBe("SELF")
 	})
 
-	test("palette mode routes navigation, completion and close to commands", () => {
-		const behaviors = createBehaviors({ quit: () => {} })
-		const { calls, data } = makeData({ paletteOpen: true, paletteQuery: "sw" })
-		behaviors.keys(null, data, { name: "down" })
-		behaviors.keys(null, data, { name: "up" })
-		behaviors.keys(null, data, { name: "tab" })
-		behaviors.keys(null, data, { name: "escape" })
-		expect(calls).toEqual([
-			{ id: "palette.down", payload: undefined },
-			{ id: "palette.up", payload: undefined },
-			{ id: "palette.complete", payload: undefined },
-			{ id: "palette.toggle", payload: undefined },
-		])
-	})
-
-	test("palette mode shift-tab walks the list backwards", () => {
-		const behaviors = createBehaviors({ quit: () => {} })
-		const { calls, data } = makeData({ paletteOpen: true })
-		behaviors.keys(null, data, { name: "tab", shift: true })
-		expect(calls).toEqual([{ id: "palette.up", payload: undefined }])
-	})
-
-	test("shift-tab reaches the keymap outside the palette", () => {
+	test("shift-tab reaches the keymap outside the panel", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
 		const { calls, data } = makeData()
 		behaviors.keys(null, data, { name: "tab", shift: true })
@@ -210,14 +177,6 @@ describe("App", () => {
 		expect(calls).toEqual([{ id: "pane.forward", payload: { paneId: "left" } }])
 	})
 
-	test("palette mode publishes confirm with the query", () => {
-		const behaviors = createBehaviors({ quit: () => {} })
-		const calls = []
-		const self = { pub: (name, payload) => calls.push({ id: name, payload }) }
-		behaviors.keys(self, makeData({ paletteOpen: true, paletteQuery: "sw" }).data, { name: "return" })
-		expect(calls).toEqual([{ id: "palette:confirm", payload: "sw" }])
-	})
-
 	test("confirm mode routes y/enter to confirm.yes and n/esc to confirm.no", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
 		const { calls, data } = makeData({ confirm: { text: "erase?" } })
@@ -239,14 +198,11 @@ describe("App", () => {
 		events["list:select"](null, data, { data: { paneId: "left", index: 2 } })
 		events["commandbar:run"](null, data, { data: "pane.reload" })
 		events["commandbar:run"](null, data, { data: null })
-		events["palette:run"](null, data, { data: "view.togglePreview" })
 		events["pane:activate"](null, data, { data: "right" })
 		expect(calls.map((call) => call.id)).toEqual([
 			"pane.setPath",
 			"list.cursor",
 			"pane.reload",
-			"view.togglePreview",
-			"palette.toggle",
 			"pane.activate",
 		])
 	})
@@ -296,43 +252,8 @@ describe("App", () => {
 		])
 	})
 
-	test("palette:confirm runs the selected item and closes", () => {
-		const events = createEvents()
-		const { calls, data } = makeData({
-			paletteIndex: 1,
-			paletteItems: [
-				{ id: "pane.toggle", title: "Switch" },
-				{ id: "view.togglePreview", title: "Preview" },
-			],
-			paletteOpen: true,
-		})
-		events["palette:confirm"](null, data, { data: "sw" })
-		expect(calls).toEqual([
-			{ id: "view.togglePreview", payload: undefined },
-			{ id: "palette.toggle", payload: undefined },
-		])
-	})
-
-	test("palette:confirm submits the line in scripting mode", () => {
-		const events = createEvents()
-		const { calls, data } = makeData({ paletteMode: "script", paletteOpen: true })
-		events["palette:confirm"](null, data, { data: "stat ." })
-		expect(calls).toEqual([{ id: "palette.submit", payload: undefined }])
-	})
-
-	test("palette:run completes script rows instead of dispatching them", () => {
-		const events = createEvents()
-		const { calls, data } = makeData({
-			paletteItems: [{ id: "op:copy", title: "copy", completion: "copy " }],
-			paletteMode: "script",
-			paletteOpen: true,
-		})
-		events["palette:run"](null, data, { data: "op:copy" })
-		expect(calls).toEqual([{ id: "palette.setQuery", payload: { query: "copy " } }])
-	})
-
 	test("panel mode navigates operations and arguments by focus", () => {
-		const behaviors = createBehaviors({ panel: true, quit: () => {} })
+		const behaviors = createBehaviors({ quit: () => {} })
 		const ops = makeData({ panelOpen: true, panelFocus: "ops" })
 		behaviors.keys(null, ops.data, { name: "down" })
 		behaviors.keys(null, ops.data, { name: "up" })
@@ -359,19 +280,33 @@ describe("App", () => {
 		])
 	})
 
-	test("panel Enter runs the highlighted command from either column", () => {
+	test("panel Enter runs the command only when no input owns the keyboard", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
+		// The entry column: the filter input owns Enter, so the key does
+		// nothing here — its `on:enter` publishes `panel:confirm`.
 		const ops = makeData({ panelFocus: "ops", panelOpIndex: 2, panelOpen: true })
 		behaviors.keys(null, ops.data, { name: "return" })
-		expect(ops.calls).toEqual([{ id: "panel.run", payload: undefined }])
+		expect(ops.calls).toEqual([])
 
+		// A textual argument: the value field owns Enter instead.
+		const textual = makeData({ panelFocus: "args", panelOpen: true, panelTextual: true })
+		behaviors.keys(null, textual.data, { name: "return" })
+		expect(textual.calls).toEqual([])
+
+		// A plain argument row has no input pressed: the key runs the command.
 		const args = makeData({ panelFocus: "args", panelOpen: true })
 		behaviors.keys(null, args.data, { name: "return" })
 		expect(args.calls).toEqual([{ id: "panel.run", payload: undefined }])
+
+		// A host whose inputs have no `enter` event routes Enter itself.
+		const web = createBehaviors({ inputOwnsEnter: false, quit: () => {} })
+		const webOps = makeData({ panelFocus: "ops", panelOpen: true })
+		web.keys(null, webOps.data, { name: "return" })
+		expect(webOps.calls).toEqual([{ id: "panel.run", payload: undefined }])
 	})
 
 	test("a textual argument hands typing and Enter to the field", () => {
-		const behaviors = createBehaviors({ panel: true, quit: () => {} })
+		const behaviors = createBehaviors({ quit: () => {} })
 		const { calls, data } = makeData({ panelFocus: "args", panelOpen: true, panelTextual: true })
 		// Letters and Enter are left to the input (its `on:enter` runs the
 		// command); navigation still works.
@@ -383,7 +318,7 @@ describe("App", () => {
 	})
 
 	test("typing on a non-textual argument returns to the command filter", () => {
-		const behaviors = createBehaviors({ panel: true, quit: () => {} })
+		const behaviors = createBehaviors({ quit: () => {} })
 		const { calls, data } = makeData({ panelFocus: "args", panelOpen: true, panelTextual: false })
 		behaviors.keys(null, data, { name: "e" })
 		behaviors.keys(null, data, { name: "backspace" })

@@ -1,28 +1,34 @@
-<div class="app" tabindex="0" on:keydown="keys">
-	<header out="headerView|Header"></header>
-	<main class="panes">
+<div class="app" ref="root" tabindex="0" on:keydown="keys">
+	<div out="headerView|Header"></div>
+	<section class="resize-hint" when="tooSmall">
+		<h2 out="minSizeTitle"></h2>
+		<p out="minSizeHint"></p>
+	</section>
+	<main class="panes" when="!tooSmall">
 		<section class="pane pane-left" out:class="leftPaneClass" on:click="leftId!pane:activate">
 			<div class="pane-header">
-				<div out="leftCrumbsView|Breadcrumbs"></div>
+				<div when="!leftFilterOn" out="leftCrumbsView|Breadcrumbs"></div>
 				<div out="leftFilterView|FilterBar"></div>
 			</div>
-			<div out="leftListView|FileList"></div>
+			<div data-slot="list" out="leftListView|FileList"></div>
 			<div out="leftDetailView|EntryDetail"></div>
 			<div out="leftSummaryView|Summary"></div>
 		</section>
 		<section class="pane pane-right" out:class="rightPaneClass" on:click="rightId!pane:activate">
 			<div class="pane-header">
-				<div out="rightCrumbsView|Breadcrumbs"></div>
+				<div when="!rightFilterOn" out="rightCrumbsView|Breadcrumbs"></div>
 				<div out="rightFilterView|FilterBar"></div>
 			</div>
-			<div out="rightListView|FileList"></div>
+			<div data-slot="list" out="rightListView|FileList"></div>
 			<div out="rightDetailView|EntryDetail"></div>
 			<div out="rightSummaryView|Summary"></div>
 		</section>
-		<div when="showPreview" out="previewView|FilePreview"></div>
+		<div data-slot="inspector" when="showInspectorInline" out="previewView|FilePreview"></div>
 	</main>
-	<footer out="commandBarView|CommandBar"></footer>
-	<div when="paletteOpen" out="paletteView|CommandPalette"></div>
+	<div out="commandBarView|CommandBar"></div>
+	<div class="viewer" when="showViewer" role="dialog" aria-modal="true" aria-label="File inspector" tabindex="-1" out="previewView|FilePreview"></div>
+	<div when="panelOpen" out="panelView|CommandPanel"></div>
 	<div when="bookmarkOpen" out="bookmarkView|BookmarkList"></div>
 	<div out="confirmView|Confirm"></div>
+	<div when="helpOpen" out="helpView|Help"></div>
 </div>

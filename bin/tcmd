@@ -5,13 +5,21 @@ if ! command -v bun >/dev/null 2>&1; then
 	exit 1
 fi
 script=$0
+case "$script" in
+	*/*) ;;
+	*) script=$(command -v "$script") ;;
+esac
+case "$script" in
+	/*) ;;
+	*) script=$PWD/$script ;;
+esac
 while [ -L "$script" ]; do
-	dir=$(CDPATH= cd -- "$(dirname -- "$script")" && pwd)
+	dir=$(CDPATH= cd -P -- "$(dirname -- "$script")" && pwd)
 	link=$(readlink "$script")
 	case "$link" in
 		/*) script=$link ;;
 		*) script=$dir/$link ;;
 	esac
 done
-dir=$(CDPATH= cd -- "$(dirname -- "$script")" && pwd)
+dir=$(CDPATH= cd -P -- "$(dirname -- "$script")" && pwd)
 exec bun "$dir/tcmd.js" "$@"

@@ -13,13 +13,13 @@
 // preferred and HTTP is the fallback, so browsers without OPFS (or insecure
 // origins) still work when the page is served by `bun run web:serve`.
 //
-// select.js renders on animation frames and does no focus management, so this
-// module adds the two browser bits the shared components cannot know about:
-// default-key trapping and focus tracking.
+// DOM effects (focus, key trapping, resize, scroll) live in `web/effects.js`
+// and are wired by the App binding in `web/app.js`; bookmarks persist through
+// `web/bookmarks.js`, namespaced by backend and API root.
 //
 // Built by `bun run web:build` (see package.json) into `public/main.js`.
 
-import { effect } from "select/state/cells"
+import { createBookmarks } from "../core/bookmarks.js"
 import { createNullOs } from "../core/os.js"
 import { createPane } from "../core/pane.js"
 import { createSession, load } from "../core/session.js"
@@ -27,64 +27,7 @@ import { apiToken, createHttpFs } from "./http.js"
 import { main as mount } from "./index.js"
 import { createOpfsFs } from "./opfs.js"
 import { seedOpfs } from "./seed.js"
-
-// Constant: APP_KEYS
-// Keys with browser defaults that would fight the app keymap: focus traversal
-// (Tab), caret/scroll arrows, page scroll (Space) and history Backspace.
-const APP_KEYS = new Set([
-	" ",
-	"ArrowDown",
-	"ArrowLeft",
-	"ArrowRight",
-	"ArrowUp",
-	"Backspace",
-	"Enter",
-	"Tab",
-])
-
-// Function: trapKeys
-// Keeps browser defaults out of the way while the app owns the keyboard. Space
-// and Backspace stay untouched in text inputs so the palette query can be
-// typed; the app routes every other listed key itself.
-function trapKeys(root) {
-	root?.addEventListener("keydown", (event) => {
-		const inInput = event.target instanceof HTMLInputElement
-		if (inInput && (event.key === " " || event.key === "Backspace")) return
-		if (APP_KEYS.has(event.key)) event.preventDefault()
-	})
-}
-
-// Function: trackFocus
-// The key handler lives on the app root, so focus must stay inside it. The
-// palette input is focused while the palette is open (select.js does not), and
-// the active pane's filter input while that pane is filtering; focus returns to
-// the app root otherwise. Focus that leaves the app — a removed input, a click
-// on the page background — is pulled back.
-function trackFocus(session, root) {
-	if (!root) return
-	const focusInput = () => {
-		if (session.paletteOpen.value) return document.querySelector("#app .palette-input")
-		if (session.filtering.value) {
-			return document.querySelector(`#app .pane-${session.filtering.value} .filter-input`)
-		}
-		return null
-	}
-	const applyFocus = () => {
-		// select.js swaps the palette DOM on animation frames: wait for it.
-		requestAnimationFrame(() => {
-			const input = focusInput()
-			if (input) input.focus()
-			else if (!root.contains(document.activeElement)) root.focus()
-		})
-	}
-	effect([session.paletteOpen, session.filtering], applyFocus)
-	document.addEventListener("focusout", (event) => {
-		if (!session.paletteOpen.value && !session.filtering.value && event.relatedTarget && root.contains(event.relatedTarget)) {
-			return
-		}
-		applyFocus()
-	})
-}
+import { createWebBookmarkStore } from "./bookmarks.js"
 
 // Function: createOpfsBackend
 // OPFS adapter, probed and seeded. `readDir("/")` resolves the OPFS root, so
@@ -128,13 +71,10 @@ async function start() {
 			left,
 			right,
 			host: globalThis.location?.hostname ?? "",
+			bookmarks: createBookmarks({ store: createWebBookmarkStore({ mode, root: mode === "opfs" ? "/" : fs.root() }) }),
 		})
 		await load(session)
 		const instance = mount(session, "#app")
-		const root = document.querySelector("#app .app")
-		root?.focus()
-		trapKeys(root)
-		trackFocus(session, root)
 		document.title = `TinyCMD web (${mode})`
 		globalThis.tcmd = { fs, mode, session, instance }
 	} catch (error) {

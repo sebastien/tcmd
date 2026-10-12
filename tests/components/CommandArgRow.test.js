@@ -17,6 +17,20 @@ describe("CommandArgRow", () => {
 		expect(rowName({ type: "item", marker: "[ ]", name: "docs" })).toBe("[ ] docs")
 	})
 
+	test("marks an entry's namespace, by glyph or by text tag", () => {
+		expect(rowName({ type: "op", name: "copy", source: "cli" }, true)).toBe("\u{ebca} copy")
+		expect(rowName({ type: "op", name: "Open file", source: "app" }, true)).toBe("\u{f0e7} Open file")
+		expect(rowName({ type: "op", name: "copy", source: "cli" }, false)).toBe("cli copy")
+		expect(rowName({ type: "op", name: "Open file", source: "app" }, false)).toBe("app Open file")
+		// The behaviors take the choice from the renderer environment.
+		const tui = createBehaviors({ ...behaviorEnv, icons: true })
+		expect(tui.name(null, { row: { type: "op", name: "copy", source: "cli" } })).toBe("\u{ebca} copy")
+		const web = createBehaviors({ ...behaviorEnv, icons: false })
+		expect(web.name(null, { row: { type: "op", name: "copy", source: "cli" } })).toBe("cli copy")
+		// An argument or item row carries no namespace.
+		expect(tui.name(null, { row: { type: "arg", name: "FROM" } })).toBe("FROM")
+	})
+
 	test("summarises headers and shows an item's parent", () => {
 		expect(rowSummary({ type: "op", summary: "FROM TO" })).toBe("FROM TO")
 		expect(rowSummary({ type: "arg", summary: "/tmp" })).toBe("/tmp")

@@ -44,7 +44,6 @@ export {
 	prefix,
 	rankEntries,
 	runLine,
-	scriptItems,
 	sortEntries,
 	split,
 	toggleMark,

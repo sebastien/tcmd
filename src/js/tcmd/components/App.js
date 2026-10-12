@@ -5,7 +5,7 @@
 
 // Module: tcmd/components/App
 // Root component: a header, two panes (breadcrumbs + FileList + summary each),
-// an optional preview column, the command bar and the command palette overlay.
+// an optional preview column, the command bar and the command panel overlay.
 // App is the controller seam: component events (published bubbles) and key
 // chords are translated into `session.dispatch(commandId, payload)` calls; it
 // never mutates model state directly.
@@ -56,20 +56,15 @@ function createInit(session) {
 		leftMarked: left.marked,
 		leftSegments: left.segments,
 		notice: session.notice,
-		paletteIndex: session.paletteIndex,
-		paletteItems: session.paletteItems,
-		paletteMode: session.paletteMode,
-		paletteOpen: session.paletteOpen,
-		paletteQuery: session.paletteQuery,
 		panelCommand: session.panelCommand,
 		panelDraft: session.panelDraft,
 		panelCursorRow: session.panelCursorRow,
+		panelEntry: session.panelEntry,
 		panelFiltered: session.panelFiltered,
 		panelFocus: session.panelFocus,
 		panelOpIndex: session.panelOpIndex,
 		panelItems: session.panelItems,
 		panelOpen: session.panelOpen,
-		panelOperation: session.panelOperation,
 		panelQuery: session.panelQuery,
 		panelRowIndex: session.panelRowIndex,
 		panelRows: session.panelRows,
@@ -92,44 +87,28 @@ function createInit(session) {
 	})
 }
 
+// Function: inputOwnsEnter
+// True when one of the panel's inputs has the keyboard, and so its `on:enter`
+// publishes `panel:confirm`: the filter field while the entry column is
+// focused, the value field while a textual argument owns the cursor. A plain
+// argument row has no input pressed, so the key handler runs the command.
+function inputOwnsEnter(data, focus) {
+	return focus === PANEL_FOCUS.OPS || Boolean(unwrap(data.panelTextual))
+}
+
 // Function: createBehaviors
 // Builds the App data/key behavior map for the given renderer environment.
 // Published events are registered separately via `createEvents()` (`.sub`).
 function createBehaviors(env) {
 	return {
-		// Global key handling: confirm dialogs first, palette mode, then the
-		// keymap.
+		// Global key handling: confirm dialogs first, the command panel, then
+		// the keymap.
 		keys: (self, data, event) => {
 			const key = env.normalizeKey ? env.normalizeKey(event) : event
 			if (unwrap(data.confirm)) {
 				const name = key?.name
 				if (name === "y" || name === "return" || name === "enter") data.dispatch("confirm.yes")
 				else if (name === "n" || name === "escape") data.dispatch("confirm.no")
-				return
-			}
-			if (unwrap(data.paletteOpen)) {
-				if (key?.name === "escape") {
-					data.dispatch("palette.toggle")
-					return
-				}
-				if (key?.name === "up") {
-					data.dispatch("palette.up")
-					return
-				}
-				if (key?.name === "down") {
-					data.dispatch("palette.down")
-					return
-				}
-				if (key?.name === "tab") {
-					// Shift-Tab walks the palette list backwards.
-					data.dispatch(key.shift ? "palette.up" : "palette.complete")
-					return
-				}
-				if (key?.name === "return" || key?.name === "enter") {
-					self.pub("palette:confirm", `${unwrap(data.paletteQuery) ?? ""}`)
-					return
-				}
-				// Let the focused input handle typing.
 				return
 			}
 			if (unwrap(data.panelOpen)) {
@@ -153,10 +132,12 @@ function createBehaviors(env) {
 					return
 				}
 				if (key?.name === "return" || key?.name === "enter") {
-					// A focused textual-argument field owns Enter (its `on:enter`
-					// publishes `panel:confirm`), so the command is not run twice.
-					if (focus === PANEL_FOCUS.ARGS && unwrap(data.panelTextual)) return
-					// Enter runs the highlighted command with the current draft.
+					// The focused input owns Enter (its `on:enter` publishes
+					// `panel:confirm`): the query field while the entry column
+					// is focused, the value field while a textual argument owns
+					// the cursor. Only a plain argument row has no input to
+					// press, so only then does the key run the command.
+					if (env.inputOwnsEnter !== false && inputOwnsEnter(data, focus)) return
 					data.dispatch("panel.run")
 					return
 				}
@@ -256,9 +237,6 @@ function createBehaviors(env) {
 				env.quit(self)
 				return
 			}
-			// The command panel is a TUI-only view; the web renderer omits the
-			// capability so `m` never opens an invisible modal there.
-			if (id === "panel.toggle" && !env.panel) return
 			data.dispatch(id, { paneId: unwrap(data.active) })
 		},
 	}
@@ -296,6 +274,8 @@ function createEvents(env = {}) {
 			if (row?.type === "item") data.dispatch("panel.toggleItem")
 		},
 		"panel:confirm": (_self, data) => {
+			// Published by a focused panel input's `on:enter`; the key handler
+			// leaves Enter to it (see `inputOwnsEnter`).
 			if (!unwrap(data.panelOpen)) return
 			data.dispatch("panel.run")
 		},
@@ -319,33 +299,6 @@ function createEvents(env = {}) {
 			if (!unwrap(data.bookmarkOpen)) return
 			if (unwrap(data.bookmarkMode) === "name") data.dispatch("bookmark.save")
 			else data.dispatch("bookmark.select")
-		},
-		"palette:confirm": (_self, data, event) => {
-			// The global key handler and the input's on:enter can both fire;
-			// only the first one (while the palette is open) acts.
-			if (!unwrap(data.paletteOpen)) return
-			if (unwrap(data.paletteMode) === "script") {
-				// Submit the typed line: run it, or complete the highlighted row
-				// when the input is empty.
-				data.dispatch("palette.submit")
-				return
-			}
-			const items = unwrap(data.paletteItems) ?? []
-			const index = Math.max(0, Math.min(unwrap(data.paletteIndex) ?? 0, items.length - 1))
-			const match = items[index] ?? items[0]
-			if (match?.id) data.dispatch(match.id)
-			data.dispatch("palette.toggle")
-		},
-		"palette:run": (_self, data, event) => {
-			if (!event.data) return
-			if (unwrap(data.paletteMode) === "script") {
-				// Clicking a script row completes it; running stays on Enter.
-				const item = (unwrap(data.paletteItems) ?? []).find((row) => row.id === event.data)
-				if (item?.completion) data.dispatch("palette.setQuery", { query: item.completion })
-				return
-			}
-			data.dispatch(event.data)
-			data.dispatch("palette.toggle")
 		},
 	}
 }

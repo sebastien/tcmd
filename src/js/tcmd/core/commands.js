@@ -10,10 +10,10 @@
 // source of truth for every presentation layer.
 //
 // Commands carry presentation metadata:
-// - `kind`: "ui" for UI-level actions; the command palette lists UI actions by
-//   default (scripting operations live in core/operations.js).
+// - `kind`: "ui" for UI-level actions; the command panel lists the visible UI
+//   actions alongside the CLI operations (see core/panel.js).
 // - `bar`: true when the command appears in the command bar's key hints.
-// - `hidden`: true for internal commands that never show in the palette.
+// - `hidden`: true for internal commands that never show in the panel.
 
 import { basename, parent as parentOf } from "./path.js"
 import { PANEL_FOCUS, argvFor, bindingAt, missingArg, rowAt, withToggledItem } from "./panel.js"
@@ -26,24 +26,6 @@ import { getOperation, runOperation } from "./operations.js"
 // ctrl-arrow accelerators.
 const PAGE = 10
 const JUMP = 5
-
-// Function: PALETTE_KEYS
-// Command-bar hints shown while the command palette is open.
-const PALETTE_KEYS = [
-	{ id: null, title: "Navigate", keys: "↑/↓" },
-	{ id: null, title: "Complete", keys: "Tab" },
-	{ id: null, title: "Run", keys: "Enter", primary: true },
-	{ id: null, title: "Close", keys: "Esc" },
-]
-
-// Constant: SCRIPT_KEYS
-// Command-bar hints for scripting mode (no UI navigation, only the palette
-// itself).
-const SCRIPT_KEYS = [
-	{ id: null, title: "Complete", keys: "Tab" },
-	{ id: null, title: "Run", keys: "Enter", primary: true },
-	{ id: null, title: "Close", keys: "Esc" },
-]
 
 // Constant: FILTER_KEYS
 // Command-bar hints shown while a pane filter is capturing input.
@@ -417,33 +399,30 @@ const commands = [
 			return session.os.edit(entry.path).then(() => session.panes[session.active.value].refresh())
 		},
 	},
-	// Command panel (`:`/`m`): the structured Commando view over the
-	// operations. Lifecycle, then navigation, then draft editing, then run.
-	{
-		id: "panel.toggle",
-		title: "Commands",
-		keys: "m",
-		kind: "ui",
-		bar: true,
-		run(session) {
-			togglePanel(session)
-		},
-	},
+	// Command panel (`:`): the one entry point, over both the CLI operations
+	// and the TinyCmd actions. Lifecycle, then navigation, then draft editing,
+	// then run.
 	{
 		id: "panel.open",
 		title: "Commands",
 		keys: ":",
 		kind: "ui",
+		bar: true,
+		run(session) {
+			openPanel(session)
+		},
+	},
+	{
+		id: "panel.shell",
+		title: "Shell command",
+		kind: "ui",
 		hidden: true,
 		run(session) {
-			// `:` is the natural "command" key: open the structured panel on
-			// renderers that have it, and fall back to the flat script palette
-			// on those that do not (the web view).
-			if (!session.panelEnabled?.value) {
-				openPalette(session, "script", "")
-				return
-			}
-			openPanel(session)
+			// `!` is the "run a shell command" reflex: land on the `run`
+			// operation with its raw CMD field already owning the keyboard. The
+			// field starts empty — `!` is a script-line alias, not part of the
+			// command itself.
+			openPanel(session, { name: "run", focus: PANEL_FOCUS.ARGS })
 		},
 	},
 	{
@@ -595,8 +574,15 @@ const commands = [
 		kind: "ui",
 		hidden: true,
 		async run(session) {
-			const op = session.panelOperation.value
-			if (!op) return
+			const entry = session.panelEntry.value
+			if (!entry) return
+			// A TinyCmd action takes no arguments: dispatch it and close.
+			if (entry.source === "app") {
+				await session.dispatch(entry.command.id)
+				closePanel(session)
+				return "ran"
+			}
+			const op = entry.op
 			// An unrunnable draft is refused with the missing argument's name —
 			// the `«NAME»` the preview already flags — instead of the generic
 			// usage error `runOperation` would produce.
@@ -618,37 +604,6 @@ const commands = [
 		hidden: true,
 		run(session) {
 			closePanel(session)
-		},
-	},
-	{
-		id: "palette.toggle",
-		title: "Palette",
-		keys: "^P",
-		kind: "ui",
-		bar: true,
-		run(session) {
-			if (session.paletteOpen.value) {
-				closePalette(session)
-				return
-			}
-			openPalette(session, "ui", "")
-		},
-	},
-	{
-		id: "palette.script",
-		title: "Script",
-		kind: "ui",
-		run(session) {
-			openPalette(session, "script", "")
-		},
-	},
-	{
-		id: "palette.run",
-		title: "Run command",
-		keys: "!",
-		kind: "ui",
-		run(session) {
-			openPalette(session, "script", "!")
 		},
 	},
 	{
@@ -678,64 +633,6 @@ const commands = [
 		run(session) {
 			pane(session).clearFilter()
 			session.filtering.set(null)
-		},
-	},
-	{
-		id: "palette.up",
-		title: "Previous command",
-		kind: "ui",
-		hidden: true,
-		run(session) {
-			movePalette(session, -1)
-		},
-	},
-	{
-		id: "palette.down",
-		title: "Next command",
-		kind: "ui",
-		hidden: true,
-		run(session) {
-			movePalette(session, 1)
-		},
-	},
-	{
-		id: "palette.complete",
-		title: "Complete",
-		kind: "ui",
-		hidden: true,
-		run(session) {
-			const items = session.paletteItems.value
-			const item = items[clampCursor(session.paletteIndex.value, items.length)]
-			if (item?.completion) session.paletteQuery.set(item.completion)
-		},
-	},
-	{
-		id: "palette.setQuery",
-		title: "Set palette query",
-		kind: "ui",
-		hidden: true,
-		run(session, payload) {
-			session.paletteQuery.set(`${payload?.query ?? ""}`)
-		},
-	},
-	{
-		id: "palette.submit",
-		title: "Submit palette",
-		kind: "ui",
-		hidden: true,
-		run(session) {
-			const query = `${session.paletteQuery.value ?? ""}`.trim()
-			if (!query) {
-				// Nothing to run: complete the highlighted row instead.
-				const items = session.paletteItems.value
-				const item = items[clampCursor(session.paletteIndex.value, items.length)]
-				if (item?.completion) session.paletteQuery.set(item.completion)
-				return
-			}
-			return runLine(session, query).then((status) => {
-				if (status !== "empty") closePalette(session)
-				return status
-			})
 		},
 	},
 	{
@@ -772,7 +669,7 @@ const commands = [
 	// Quit: presentation-only. The key path intercepts `app.quit` before
 	// dispatch, and the command-bar click does the same (the renderer owns
 	// exiting); the registry entry exists so the bar and the `?` reference
-	// can advertise it. Hidden from the palette, where it could only no-op.
+	// can advertise it. Hidden from the panel, where it could only no-op.
 	{
 		id: "app.quit",
 		title: "Quit",
@@ -799,34 +696,34 @@ function getCommand(id) {
 	return null
 }
 
-// Function: getPaletteCommands
-// Commands the command palette lists in UI mode: user-visible UI actions.
-function getPaletteCommands() {
+// Function: getAppCommands
+// The TinyCmd actions the command panel lists: user-visible UI actions, which
+// `core/panel` tags as the `app` namespace next to the CLI operations.
+function getAppCommands() {
 	return commands.filter((command) => !command.hidden && (command.kind ?? "ui") === "ui")
 }
 
 // Function: getCommandBarItems
-// Command-bar rows for the current context: the palette's key hints while it
-// is open (scripting mode has its own), the filter hints while a pane filter is
-// capturing input, the `bar`-flagged UI commands otherwise (keymap order).
-function getCommandBarItems(paletteOpen, paletteMode, filtering, bookmarkOpen, bookmarkMode, panelOpen) {
+// Command-bar rows for the current context: the panel's key hints while it is
+// open, the filter hints while a pane filter is capturing input, the bookmark
+// hints while the picker owns the keyboard, the `bar`-flagged UI commands
+// otherwise (keymap order). Takes the context as named fields — four adjacent
+// flags are too easy to transpose.
+function getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen }) {
 	if (panelOpen) return PANEL_HINT_KEYS
 	if (bookmarkOpen) return bookmarkMode === "name" ? BOOKMARK_NAME_KEYS : BOOKMARK_LIST_KEYS
-	if (paletteOpen) return paletteMode === "script" ? SCRIPT_KEYS : PALETTE_KEYS
 	if (filtering) return FILTER_KEYS
-	return commands.filter((command) => command.bar).map(commandRow)
+	return commands.filter((command) => command.bar).map(barRow)
 }
 
-// Function: commandRow
-// Projects a command to the small row object views render.
-function commandRow(command) {
+// Function: barRow
+// Projects a command to the small row object the command bar renders.
+function barRow(command) {
 	return {
 		id: command.id,
 		title: command.title,
 		keys: command.keys,
-		kind: command.kind ?? "ui",
 		primary: command.primary === true,
-		completion: command.completion ?? command.title,
 	}
 }
 
@@ -871,11 +768,6 @@ function bump(session, delta) {
 	p.cursor.set(moveCursor(p.cursor.value, delta, p.entries.value.length))
 }
 
-function movePalette(session, delta) {
-	const length = session.paletteItems.value.length
-	session.paletteIndex.set(moveCursor(session.paletteIndex.value, delta, length))
-}
-
 function moveBookmark(session, delta) {
 	const length = session.bookmarkItems.value.length
 	session.bookmarkIndex.set(moveCursor(session.bookmarkIndex.value, delta, length))
@@ -885,46 +777,42 @@ function closeBookmark(session) {
 	session.bookmarkOpen.set(false)
 }
 
-function openPanel(session) {
+// Function: openPanel
+// Opens the command panel fresh: empty query, first entry selected, the entry
+// column focused. `options.name` selects a CLI operation by name — `!` lands on
+// `run` — and `options.focus` moves the focus ring to the argument column so a
+// raw or literal argument owns the keyboard right away.
+function openPanel(session, options = {}) {
 	session.panelQuery.set("")
 	session.panelOpIndex.set(0)
 	session.panelRowIndex.set(0)
 	session.panelFocus.set(PANEL_FOCUS.OPS)
 	session.panelOpen.set(true)
-}
-
-// Function: togglePanel
-// Opens the command panel, or closes it when already open. Disabled (TUI-only)
-// renderers ignore it.
-function togglePanel(session) {
-	if (!session.panelEnabled?.value) return
-	if (session.panelOpen.value) {
-		closePanel(session)
-		return
+	if (!options.name) return
+	// Select the operation by index rather than by query, so the filter stays
+	// empty and the list keeps its full ordering. A missing name is a bug in
+	// the caller (a renamed operation), not something to silently paper over by
+	// landing on the first entry.
+	const index = session.panelFiltered.value.findIndex((entry) => entry.name === options.name)
+	if (index < 0) throw new Error(`command panel has no entry named "${options.name}"`)
+	session.panelOpIndex.set(index)
+	if (options.focus === PANEL_FOCUS.ARGS) {
+		session.panelFocus.set(PANEL_FOCUS.ARGS)
+		session.panelRowIndex.set(0)
 	}
-	openPanel(session)
 }
 
 function closePanel(session) {
 	session.panelOpen.set(false)
 }
 
-function openPalette(session, mode, query) {
-	session.paletteMode.set(mode)
-	session.paletteQuery.set(query)
-	session.paletteIndex.set(0)
-	session.paletteOpen.set(true)
-}
-
-function closePalette(session) {
-	session.paletteOpen.set(false)
-}
-
 export {
-	commandRow,
+	barRow,
+	closePanel,
 	createDispatch,
+	getAppCommands,
 	getCommand,
 	getCommandBarItems,
 	getCommands,
-	getPaletteCommands,
+	openPanel,
 }

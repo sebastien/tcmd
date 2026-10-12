@@ -8,9 +8,10 @@
 // filesystem API (`/api/*`) over the Node filesystem adapter, so browsers
 // without OPFS (or users who want to browse real files) can run the web UI.
 //
-// Security: binds to loopback only by default and requires the per-process
-// token, injected into `index.html` at serve time, on every API request. When
-// `root` is set, every path is confined to it. This is a local development
+// Security: binds to loopback only by default (`HOST` overrides the address)
+// and requires the per-process token, injected into `index.html` at serve
+// time, on every API request. When `root` is set, every path is confined to
+// it. This is a local development
 // tool, not a sandbox: it serves the same files `bun run tcmd` can reach, so
 // do not expose the port.
 
@@ -24,10 +25,11 @@ const TOKEN_PLACEHOLDER = "__TCMD_TOKEN__"
 // Function: createWebServer
 // Builds the server. `port` 0 picks a free port (tests); `root` defaults to
 // "/" (the whole filesystem, like the TUI); `token` defaults to a fresh UUID.
+// `hostname` and `port` default to the HOST and PORT environment variables.
 function createWebServer({
 	root = process.env.TCMD_WEB_ROOT ?? "/",
 	port = Number(process.env.PORT ?? 8787),
-	hostname = "127.0.0.1",
+	hostname = process.env.HOST || "127.0.0.1",
 	publicDir = new URL("../../../../public/", import.meta.url),
 	token = crypto.randomUUID(),
 } = {}) {

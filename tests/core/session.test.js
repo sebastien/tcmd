@@ -44,54 +44,73 @@ describe("session", () => {
 		expect(preview.text).toContain("hello")
 	})
 
-	test("command bar shows bar commands, then palette hints while open", () => {
+	test("command bar shows bar commands, then panel hints while open", () => {
 		const session = makeSession()
 		const ids = session.commandBarItems.value.map((item) => item.id)
 		expect(ids).toContain("pane.toggle")
 		expect(ids).not.toContain("nav.up")
 
-		session.paletteOpen.set(true)
+		session.panelOpen.set(true)
 		const hints = session.commandBarItems.value.map((item) => item.title)
-		expect(hints).toEqual(["Navigate", "Complete", "Run", "Close"])
+		expect(hints).toEqual(["Command", "Arg", "Toggle", "Run", "Close"])
 	})
 
-	test("palette lists every visible UI command and excludes hidden ones", () => {
+	test("the panel lists the CLI operations first, then the TinyCmd actions", () => {
 		const session = makeSession()
-		const ids = session.paletteItems.value.map((item) => item.id)
-		expect(ids).toContain("nav.up")
-		expect(ids).toContain("pane.reload")
-		expect(ids).toContain("pane.toggle")
-		expect(ids).not.toContain("list.cursor")
-		expect(ids).not.toContain("pane.setPath")
-		expect(ids).not.toContain("palette.up")
+		const items = session.panelItems.value
+		const ids = items.map((item) => item.id)
+		expect(ids).toContain("op:copy")
+		expect(ids).toContain("cmd:file.open")
+		// Hidden and internal commands stay out; so does raw cursor movement.
+		expect(ids).not.toContain("cmd:list.cursor")
+		expect(ids).not.toContain("cmd:pane.setPath")
+		expect(ids).not.toContain("cmd:nav.up")
+		expect(ids).not.toContain("cmd:panel.run")
+		// Every entry is tagged with its namespace.
+		for (const item of items) expect(item.source).toMatch(/^(cli|app)$/)
+		// CLI operations come first; each namespace is alphabetical by name.
+		const sources = items.map((item) => item.source)
+		const firstApp = sources.indexOf("app")
+		const lastCli = sources.lastIndexOf("cli")
+		expect(lastCli).toBeLessThan(firstApp)
+		const names = (from, to) => items.slice(from, to).map((item) => item.name)
+		expect(names(0, firstApp)).toEqual([...names(0, firstApp)].toSorted())
+		expect(names(firstApp)).toEqual([...names(firstApp)].toSorted())
 	})
 
-	test("palette filters commands by query and resets its cursor", () => {
+	test("the panel filters both namespaces by query and resets its cursor", () => {
 		const session = makeSession()
-		session.paletteQuery.set("preview")
-		const ids = session.paletteItems.value.map((item) => item.id)
-		expect(ids).toContain("view.togglePreview")
-		expect(ids).not.toContain("nav.up")
+		session.panelQuery.set("preview")
+		const ids = session.panelItems.value.map((item) => item.id)
+		expect(ids).toContain("cmd:view.togglePreview")
+		expect(ids).not.toContain("op:copy")
 
-		session.paletteIndex.set(3)
-		session.paletteQuery.set("switch")
-		expect(session.paletteIndex.value).toBe(0)
+		session.panelOpIndex.set(3)
+		session.panelQuery.set("switch")
+		expect(session.panelOpIndex.value).toBe(0)
 	})
 
-	test("palette navigation clamps to the filtered items", () => {
+	test("a query ranks by match, the CLI namespace winning ties", () => {
 		const session = makeSession()
-		session.paletteQuery.set("switch")
-		session.dispatch("palette.down")
-		expect(session.paletteIndex.value).toBe(0)
-		session.dispatch("palette.up")
-		expect(session.paletteIndex.value).toBe(0)
+		session.panelQuery.set("open")
+		const items = session.panelItems.value
+		const ids = items.map((item) => item.id)
+		expect(ids).toContain("cmd:file.open")
+		// `open` (the CLI operation) and `Open` (the pane action) score the
+		// same, so the CLI namespace wins the tie; the weaker app match follows.
+		expect(ids[0]).toBe("op:open")
+		expect(ids[1]).toBe("cmd:pane.enter")
 	})
 
-	test("palette completion fills the query with the selected item", () => {
+	test("`!` lands on the shell operation with its CMD field focused", () => {
 		const session = makeSession()
-		session.paletteQuery.set("sw")
-		session.dispatch("palette.complete")
-		expect(session.paletteQuery.value).toBe("Switch")
+		session.dispatch("panel.shell")
+		expect(session.panelOpen.value).toBe(true)
+		expect(session.panelEntry.value.name).toBe("run")
+		expect(session.panelFocus.value).toBe("args")
+		expect(session.panelTextual.value).toBe(true)
+		// Selecting by index, not by query: the filter stays empty.
+		expect(session.panelQuery.value).toBe("")
 	})
 
 	test("filesets expose the two pane buffers and the preview file", async () => {
@@ -206,22 +225,5 @@ describe("session", () => {
 	test("pane identity: labels are SRC/DST and buffers A/B", () => {
 		expect(PANE_LABELS).toEqual({ left: "SRC", right: "DST" })
 		expect(PANE_BUFFERS).toEqual({ left: "A", right: "B" })
-	})
-
-	test("script mode completes active-directory and nested paths", async () => {
-		const session = makeSession()
-		await load(session)
-		session.paletteMode.set("script")
-
-		session.paletteQuery.set("copy no")
-		const flat = session.paletteItems.value.filter((row) => row.kind === "path")
-		expect(flat.map((row) => row.title)).toEqual(["notes.txt"])
-		expect(flat[0].completion).toBe("copy notes.txt")
-
-		session.paletteQuery.set("copy tester/")
-		await new Promise((resolve) => setTimeout(resolve, 0))
-		const nested = session.paletteItems.value.filter((row) => row.kind === "path")
-		expect(nested.map((row) => row.title)).toEqual(["notes.txt"])
-		expect(nested[0].completion).toBe("copy tester/notes.txt")
 	})
 })

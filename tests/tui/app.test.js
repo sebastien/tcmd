@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { argvFor } from "../../src/js/tcmd/core/panel.js"
 import { makeSetup as makeSetupTui, settle } from "../helpers/tui-setup.js"
 
 const TREE = {
@@ -148,49 +149,54 @@ describe("tui app", () => {
 		}
 	})
 
-	test("command palette opens, filters and runs commands", async () => {
+	test("the panel opens, filters and runs a TinyCmd action", async () => {
 		const { setup, session } = await makeSetup()
 		try {
-			setup.mockInput.pressKey("p", { ctrl: true })
+			setup.mockInput.pressKey(":")
 			await settle(setup)
-			expect(session.paletteOpen.value).toBe(true)
-			expect(setup.captureCharFrame()).toContain("palette")
+			expect(session.panelOpen.value).toBe(true)
+			expect(setup.captureCharFrame()).toContain("Command ·")
 
-			setup.mockInput.typeText("switch")
+			await setup.mockInput.typeText("switch")
 			await settle(setup)
-			const items = session.paletteItems.value.map((item) => item.id)
-			expect(items).toEqual(["pane.toggle"])
+			expect(session.panelItems.value.map((item) => item.id)).toEqual(["cmd:pane.toggle"])
 
 			setup.mockInput.pressKey("\r")
 			await settle(setup)
-			expect(session.paletteOpen.value).toBe(false)
+			expect(session.panelOpen.value).toBe(false)
 			expect(session.active.value).toBe("right")
 		} finally {
 			setup.renderer.destroy()
 		}
 	})
 
-	test("command palette arrows navigate, tab completes and enter runs the selection", async () => {
+	test("the panel arrows navigate the entries, Tab walks the focus ring", async () => {
 		const { setup, session } = await makeSetup()
 		try {
-			setup.mockInput.pressKey("p", { ctrl: true })
+			setup.mockInput.pressKey(":")
 			await settle(setup)
-			expect(session.paletteOpen.value).toBe(true)
+			expect(session.panelOpen.value).toBe(true)
 
 			setup.mockInput.pressArrow("down")
 			await settle(setup)
-			expect(session.paletteIndex.value).toBe(1)
+			expect(session.panelOpIndex.value).toBe(1)
 			setup.mockInput.pressArrow("up")
 			await settle(setup)
-			expect(session.paletteIndex.value).toBe(0)
+			expect(session.panelOpIndex.value).toBe(0)
 
+			// Tab walks the focus ring: the first argument header, then the
+			// second, then back to the command column.
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
-			expect(session.paletteQuery.value).toBe(session.paletteItems.value[0].title)
-
-			setup.mockInput.pressKey("\r")
+			expect(session.panelFocus.value).toBe("args")
+			expect(session.panelRowIndex.value).toBe(0)
+			setup.mockInput.pressKey("\t")
 			await settle(setup)
-			expect(session.paletteOpen.value).toBe(false)
+			expect(session.panelFocus.value).toBe("args")
+			expect(session.panelRowIndex.value).toBe(1)
+			setup.mockInput.pressKey("\t")
+			await settle(setup)
+			expect(session.panelFocus.value).toBe("ops")
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -238,64 +244,34 @@ describe("tui app", () => {
 		}
 	})
 
-	test("scripting mode lists filesets and operations, then runs a line", async () => {
+	test("`!` lands on the shell operation with its CMD field focused", async () => {
 		const { setup, session } = await makeSetup()
 		try {
-			// Mark notes.txt, then open scripting mode: the buffer shows as $A.
-			setup.mockInput.pressArrow("down")
-			setup.mockInput.pressArrow("down")
-			setup.mockInput.pressKey(" ")
+			setup.mockInput.pressKey("!")
 			await settle(setup)
+			expect(session.panelOpen.value).toBe(true)
+			expect(session.panelEntry.value.name).toBe("run")
+			expect(session.panelFocus.value).toBe("args")
+			expect(session.panelTextual.value).toBe(true)
+			expect(setup.captureCharFrame()).toContain("Command · run")
 
-			// `:` now opens the command panel; scripting mode stays reachable
-			// from the palette's "Script" entry and `!`.
-			session.dispatch("palette.script")
+			// The raw field takes the rest of the line verbatim, so fileset
+			// tokens still reach `expandArg` when the operation runs.
+			await setup.mockInput.typeText("stat $A")
 			await settle(setup)
-			expect(session.paletteOpen.value).toBe(true)
-			expect(session.paletteMode.value).toBe("script")
-			const frame = setup.captureCharFrame()
-			expect(frame).toContain("script")
-			expect(frame).toContain("$A")
-			expect(frame).toContain("copy")
-
-			setup.mockInput.typeText("touch fresh.txt")
-			await settle(setup)
-			setup.mockInput.pressKey("\r")
-			await new Promise((resolve) => setTimeout(resolve, 0))
-			await setup.renderOnce()
-			expect(session.paletteOpen.value).toBe(false)
-			expect(session.notice.value.text).toContain("touched")
+			expect(session.panelValue.value).toBe("stat $A")
+			expect(argvFor(session.panelDraft.value)).toEqual(["stat $A"])
 		} finally {
 			setup.renderer.destroy()
 		}
 	})
 
-	test("scripting mode tab-completes the selected path argument", async () => {
-		const { setup, session } = await makeSetup()
-		try {
-			await session.dispatch("palette.script")
-			await settle(setup)
-			setup.mockInput.typeText("copy notes")
-			await settle(setup)
-			const titles = session.paletteItems.value.map((item) => item.title)
-			expect(titles).toEqual(["copy", "notes.txt"])
-			setup.mockInput.pressArrow("down")
-			await settle(setup)
-			setup.mockInput.pressKey("\t")
-			await settle(setup)
-			expect(session.paletteQuery.value).toBe("copy notes.txt")
-		} finally {
-			setup.renderer.destroy()
-		}
-	})
-
-	test("`:` opens the command panel instead of the script palette", async () => {
+	test("`:` opens the command panel", async () => {
 		const { setup, session } = await makeSetup()
 		try {
 			setup.mockInput.pressKey(":")
 			await settle(setup)
 			expect(session.panelOpen.value).toBe(true)
-			expect(session.paletteOpen.value).toBe(false)
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain("Command ·")
 			expect(frame).toContain("copy FROM TO")

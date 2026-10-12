@@ -8,7 +8,9 @@
 // their leading content; other kinds show a metadata card. Renderer-agnostic
 // logic; `FilePreview.xml` / `FilePreview.html` are the presentations.
 //
-// Environment: `textFg`, `textSecondaryFg`, `textHeadingFg`.
+// Environment: `textFg`, `textSecondaryFg`, `textHeadingFg`, and the optional
+// `actions` footer text (default: the TUI's `[Open O] [Edit E]` hints; the web
+// substitutes a note that those keys do not exist in a browser).
 
 import { unwrap } from "select/state/cells"
 import { formatSize } from "./format.js"
@@ -82,9 +84,12 @@ function headerTitle(preview, entry) {
 
 // Function: createBehaviors
 // Builds the FilePreview behavior map for the given renderer environment.
+// `env.actions` overrides the footer line so a presentation can carry its own
+// copy (the browser has no Open/Edit); the default advertises the TUI keys.
 function createBehaviors(env) {
+	const actions = env.actions ?? (() => " [Open O] [Edit E]")
 	return {
-		actions: () => " [Open O] [Edit E]",
+		actions,
 		actionsFg: () => env.textSecondaryFg,
 		cardText: (_self, data) => cardText(unwrap(data.preview)),
 		dimFg: () => env.textSecondaryFg,

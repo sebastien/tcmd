@@ -5,17 +5,16 @@
 
 // Module: tcmd/core/session
 // A Session wires two panes plus cross-pane UI state (active pane, preview,
-// command palette, bookmarks) into one dispatchable model. Everything reactive
+// command panel, bookmarks) into one dispatchable model. Everything reactive
 // is a cell or derived cell; views subscribe, commands mutate.
 
 import { cell, derived, effect } from "select/state/cells"
 import { createBookmarks } from "./bookmarks.js"
-import { commandRow, createDispatch, getCommandBarItems, getPaletteCommands } from "./commands.js"
+import { createDispatch, getAppCommands, getCommandBarItems } from "./commands.js"
 import { createNullOs } from "./os.js"
-import { PANEL_FOCUS, bindArgs, filterPanelOperations, isTextualRow, panelCommand, panelOperations, panelRowList, panelRunnable, rowAt, withArgValue } from "./panel.js"
+import { PANEL_FOCUS, bindArgs, filterPanelEntries, isTextualRow, panelCommand, panelEntries, panelRowList, panelRunnable, rowAt, withArgValue } from "./panel.js"
 import { basename, join } from "./path.js"
 import { PANE_BUFFERS } from "./pane.js"
-import { completionToken, scriptItems } from "./script.js"
 import { hasMatch, score } from "../vendor/fzy.js"
 
 const PREVIEW_BYTES = 65536
@@ -44,10 +43,6 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 		active === "left" ? l : r,
 	)
 	session.showPreview = cell(true)
-	session.paletteOpen = cell(false)
-	session.paletteMode = cell("ui")
-	session.paletteQuery = cell("")
-	session.paletteIndex = cell(0)
 	session.notice = cell(null)
 	session.confirm = cell(null)
 	// The pane whose filter input currently owns the keyboard, or null.
@@ -62,29 +57,25 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	// The path being recorded while in "name" mode.
 	session.bookmarkTarget = cell(null)
 
-	// Command panel (`m` / `:`): a structured Commando-style view over the
-	// operations and their argument bindings. `panelQuery` filters the
-	// operation list by typed name; `panelOpIndex` selects the operation in
-	// that filtered list; `panelRowIndex` is the cursor in the flattened
-	// argument rows (headers + items); `panelFocus` is a `PANEL_FOCUS` token
-	// ("ops": typing filters operations, "args": an argument owns the
-	// keyboard). `panelDraft` holds the transient bindings the user tweaks —
-	// it never mutates the real pane marks.
+	// Command panel (`:`): the one entry point, listing the CLI operations
+	// first and the TinyCmd actions after, with the selected operation's
+	// arguments bound from the live context. `panelQuery` filters the entry
+	// list by typed name; `panelOpIndex` selects an entry in that filtered
+	// list; `panelRowIndex` is the cursor in the flattened argument rows
+	// (headers + items); `panelFocus` is a `PANEL_FOCUS` token ("ops": typing
+	// filters entries, "args": an argument owns the keyboard). `panelDraft`
+	// holds the transient bindings the user tweaks — it never mutates the real
+	// pane marks.
 	session.panelOpen = cell(false)
 	session.panelQuery = cell("")
 	session.panelOpIndex = cell(0)
 	session.panelRowIndex = cell(0)
 	session.panelFocus = cell(PANEL_FOCUS.OPS)
 	session.panelDraft = cell([])
-	session.panelOps = cell(panelOperations())
-	// The command panel view is TUI-only; the web view disables it at startup
-	// so no dispatch path (key, palette, command bar) opens an invisible modal.
-	session.panelEnabled = cell(true)
+	session.panelEntries = cell(panelEntries(getAppCommands()))
 
-	// The command palette keeps its cursor on the first match whenever the
+	// The bookmark picker keeps its cursor on the first match whenever the
 	// query changes.
-	effect([session.paletteQuery], () => session.paletteIndex.set(0))
-	// The bookmark picker likewise.
 	effect([session.bookmarkQuery], () => session.bookmarkIndex.set(0))
 
 	// Filter editing is bound to the active pane: switching pane drops the
@@ -177,37 +168,6 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 		},
 	)
 
-	// The active pane's entries, used for script path completion.
-	session.activeEntries = derived(
-		[session.active, left.entries, right.entries],
-		([active, l, r]) => (active === "left" ? l : r),
-	)
-
-	// Script path completion: the entries of the directory being typed (a
-	// token containing "/"), or the active pane's entries otherwise.
-	session.completionEntries = cell([])
-	session._completionToken = 0
-	effect(
-		[session.paletteMode, session.paletteQuery, session.activeEntries, session.active],
-		async ([mode, query, activeEntries, active]) => {
-			if (mode !== "script") {
-				session.completionEntries.set([])
-				return
-			}
-			const token = completionToken(query)
-			if (!token) {
-				session.completionEntries.set(activeEntries ?? [])
-				return
-			}
-			const base = session.panes[active]?.path.value ?? session.fs.cwd()
-			const dir = token.dir.startsWith("/") ? token.dir : join(base, token.dir)
-			const mine = ++session._completionToken
-			const entries = await session.fs.readDir(dir).catch(() => [])
-			if (mine !== session._completionToken) return
-			session.completionEntries.set(entries)
-		},
-	)
-
 	// Bookmark picker rows: the bookmarks fuzzily matched by name or path,
 	// ranked by fzy score. Only meaningful in "list" mode.
 	session.bookmarkItems = derived(
@@ -231,45 +191,34 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	)
 
 	// Command bar rows: context-dependent key hints (see core/commands). The
-	// TUI-only panel button is dropped when the renderer disables the panel.
+	// panel button is dropped when a host disables the panel.
 	session.commandBarItems = derived(
-		[
-			session.paletteOpen,
-			session.paletteMode,
-			session.filtering,
-			session.bookmarkOpen,
-			session.bookmarkMode,
-			session.panelOpen,
-			session.panelEnabled,
-		],
-		([open, mode, filtering, bookmarkOpen, bookmarkMode, panelOpen, panelEnabled]) => {
-			const items = getCommandBarItems(open, mode, filtering, bookmarkOpen, bookmarkMode, panelOpen)
-			if (panelEnabled) return items
-			return items.filter((item) => item.id !== "panel.toggle")
-		},
+		[session.filtering, session.bookmarkOpen, session.bookmarkMode, session.panelOpen],
+		([filtering, bookmarkOpen, bookmarkMode, panelOpen]) =>
+			getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen }),
 	)
 
-	// The operation list filtered by the typed query; `panelOpIndex` indexes
-	// into this filtered list.
+	// The entry list filtered by the typed query; `panelOpIndex` indexes into
+	// this filtered list.
 	session.panelFiltered = derived(
-		[session.panelOps, session.panelQuery],
-		([operations, query]) => filterPanelOperations(operations, query),
+		[session.panelEntries, session.panelQuery],
+		([entries, query]) => filterPanelEntries(entries, query),
 	)
-	// The operation the command panel is editing, and its bound arguments.
-	session.panelOperation = derived(
+	// The entry the command panel is editing, and its bound arguments.
+	session.panelEntry = derived(
 		[session.panelFiltered, session.panelOpIndex],
-		([operations, index]) => operations[Math.max(0, Math.min(index, operations.length - 1))] ?? null,
+		([entries, index]) => entries[Math.max(0, Math.min(index, entries.length - 1))] ?? null,
 	)
 	session.panelRows = derived([session.panelDraft], ([draft]) => panelRowList(draft))
 	// The assembled command line the draft maps to, and whether it is runnable.
 	// The preview answers "what will this run" as the shell would see it,
-	// prefixed with the operation name; a `«NAME»` marks a required argument
-	// still to fill.
+	// prefixed with the entry name; a `«NAME»` marks a required argument still
+	// to fill. A TinyCmd action has no arguments, so it previews as its title.
 	session.panelCommand = derived(
-		[session.panelDraft, session.panelOperation],
-		([draft, op]) => {
+		[session.panelDraft, session.panelEntry],
+		([draft, entry]) => {
 			const args = panelCommand(draft)
-			const name = op?.name ?? ""
+			const name = entry?.name ?? ""
 			return args ? `${name} ${args}` : name
 		},
 	)
@@ -296,51 +245,36 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 		}
 	})
 
-	// A picker-row projection for the operation list (left column), over the
-	// query-filtered operations. `summary` is the argument list the row shows
-	// — the signature with the leading operation name stripped, so the name is
-	// not repeated next to the title.
-	session.panelItems = derived([session.panelFiltered], ([operations]) =>
-		operations.map((op) => ({
-			id: `op:${op.name}`,
-			title: op.name,
-			summary: `${op.signature ?? ""}`.replace(/^\S+\s*/, ""),
-			risk: op.risk ?? null,
+	// A picker-row projection for the entry list (left column), over the
+	// query-filtered entries. `summary` is the argument list a CLI operation
+	// shows — its signature with the leading name stripped — or the key
+	// shortcut of a TinyCmd action; `source` is the namespace marker the row
+	// renders.
+	session.panelItems = derived([session.panelFiltered], ([entries]) =>
+		entries.map((entry) => ({
+			id: entry.id,
+			name: entry.name,
+			summary: entry.summary,
+			risk: entry.risk,
+			source: entry.source,
 		})),
 	)
 
-	// Re-bind the panel draft when the panel opens or the selected operation
+	// Re-bind the panel draft when the panel opens or the selected entry
 	// changes. The panel is modal, so the pane context does not change
-	// underneath it; an explicit toggle owns the draft while it is open.
-	effect([session.panelOpen, session.panelOperation], ([open, op]) => {
+	// underneath it; opening the panel owns the draft while it is open.
+	effect([session.panelOpen, session.panelEntry], ([open, entry]) => {
 		if (!open) return
-		session.panelDraft.set(bindArgs(session, op))
+		session.panelDraft.set(bindArgs(session, entry))
 	})
-	// Selecting another operation resets the argument cursor.
-	effect([session.panelOperation], () => {
+	// Selecting another entry resets the argument cursor.
+	effect([session.panelEntry], () => {
 		session.panelRowIndex.set(0)
 	})
-	// Typing a query re-anchors the operation cursor on the first match.
+	// Typing a query re-anchors the entry cursor on the first match.
 	effect([session.panelQuery], () => {
 		session.panelOpIndex.set(0)
 	})
-
-	// Command palette rows: UI actions by default; in scripting mode, the
-	// operations plus the available filesets. Both are filtered by the query.
-	session.paletteCommands = cell(getPaletteCommands().map(commandRow))
-	session.paletteItems = derived(
-		[
-			session.paletteMode,
-			session.paletteQuery,
-			session.paletteCommands,
-			session.filesets,
-			session.completionEntries,
-		],
-		([mode, query, commands, filesets, entries]) =>
-			mode === "script"
-				? scriptItems(query, filesets, { entries })
-				: filterCommandRows(commands, query),
-	)
 
 	session.dispatch = createDispatch(session)
 	session.load = () => load(session)
@@ -374,14 +308,6 @@ function entrySummary(entry) {
 		owner: entry.owner,
 		ext: entry.ext,
 	}
-}
-
-// Function: filterCommandRows
-// Case-insensitive title filter; an empty query keeps every row.
-function filterCommandRows(rows, query) {
-	const q = `${query ?? ""}`.trim().toLowerCase()
-	if (!q) return rows
-	return rows.filter((row) => row.title.toLowerCase().includes(q))
 }
 
 // Function: previewKind

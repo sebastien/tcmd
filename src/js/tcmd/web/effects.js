@@ -1,0 +1,131 @@
+// Project: TinyCommand
+// Author:  Sebastien Pierre
+// License: BSD
+// Created: 2026-10-13
+
+// Module: tcmd/web/effects
+// DOM effects owned by the mounted App: viewport measurement, modal focus,
+// default-key trapping and keeping the keyboard cursor visible. select.js
+// renders without any of this, so the web binding owns it explicitly.
+
+import { INSPECTOR_INLINE_WIDTH } from "../components/Frame.js"
+
+const canvases = new WeakMap()
+
+// Function: columnWidth
+// Available monospace columns, or zero in a DOM without layout (happy-dom).
+function columnWidth(el) {
+	if (!el?.clientWidth) return 0
+	const doc = el.ownerDocument
+	const view = doc.defaultView
+	let canvas = canvases.get(doc)
+	if (!canvas) {
+		canvas = doc.createElement("canvas")
+		canvases.set(doc, canvas)
+	}
+	const ctx = canvas.getContext("2d")
+	if (!ctx) return 0
+	const style = view.getComputedStyle(el)
+	ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+	const width = ctx.measureText("0").width
+	const padding = (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0)
+	return width ? Math.floor((el.clientWidth - padding) / width) : 0
+}
+
+// Function: keepVisible
+// Scroll only the row's own list, never the page or an ancestor overlay.
+function keepVisible(list, row) {
+	if (!list?.clientHeight || !row) return
+	const listRect = list.getBoundingClientRect()
+	const rowRect = row.getBoundingClientRect()
+	if (rowRect.top < listRect.top) list.scrollTop -= listRect.top - rowRect.top
+	else if (rowRect.bottom > listRect.bottom) list.scrollTop += rowRect.bottom - listRect.bottom
+}
+
+// Function: connectEffects
+// Returns a frame scheduler and teardown; the App registers teardown with
+// instance.effect(), so remounting leaves no listeners or observers behind.
+function connectEffects(session, root, { size, help, viewer }) {
+	// Select initially clones into an inert template document; the live window
+	// is available before mount even though ownerDocument.defaultView is not.
+	const view = root.ownerDocument.defaultView ?? globalThis.window
+	const doc = view.document
+	let frame = null
+	let disposed = false
+	const viewerOpen = () => viewer.value && size.value.width > 0 && size.value.width < INSPECTOR_INLINE_WIDTH
+	const modalOpen = () => Boolean(session.confirm.value || help.value || viewerOpen() || session.panelOpen.value || session.bookmarkOpen.value)
+	const focusTarget = () => {
+		if (session.confirm.value) return root.querySelector(".confirm")
+		if (help.value) return root.querySelector(".help")
+		if (viewerOpen()) return root.querySelector(".viewer")
+		if (session.panelOpen.value) {
+			if (session.panelFocus.value === "ops") return root.querySelector(".panel-query")
+			return root.querySelector(session.panelTextual.value ? ".panel-value" : ".command-panel")
+		}
+		if (session.bookmarkOpen.value) return root.querySelector(".bookmark-query")
+		if (session.filtering.value) return root.querySelector(`.pane-${session.filtering.value} .filter-input`)
+		return root
+	}
+	const update = () => {
+		frame = null
+		if (disposed || !root.isConnected) return
+		const width = columnWidth(root)
+		const lineHeight = Number.parseFloat(view.getComputedStyle(root).lineHeight)
+		const height = lineHeight ? Math.floor(root.clientHeight / lineHeight) : 0
+		if (width && height && (size.value.width !== width || size.value.height !== height)) size.set({ width, height })
+		// A fullscreen viewer only exists while the viewport is narrow;
+		// widening back to the inline inspector drops the stale state so a
+		// later narrow resize does not resurrect it. Reads the cell (not just
+		// the fresh measurement) so a host that drives `size` directly is
+		// honoured too.
+		if (viewer.value && size.value.width >= INSPECTOR_INLINE_WIDTH) viewer.set(false)
+		const target = focusTarget() ?? root
+		if (target !== doc.activeElement) target.focus({ preventScroll: true })
+		for (const list of root.querySelectorAll(".file-list, .bookmark-rows, .panel-ops, .panel-args")) {
+			keepVisible(list, list.querySelector(".is-current, .is-selected, .is-focused"))
+		}
+	}
+	const schedule = () => {
+		// Root renders queue child renders on the next frame. Wait past those
+		// before focusing a newly mounted field or measuring a changed layout.
+		if (!disposed && frame === null) frame = view.requestAnimationFrame(() => {
+			frame = view.requestAnimationFrame(update)
+		})
+	}
+	const trapKeys = (event) => {
+		const input = event.target?.tagName === "INPUT" || event.target?.tagName === "TEXTAREA"
+		// Editing keeps native text/caret keys except the ones the shared
+		// controller explicitly owns (vertical arrows, Enter and Tab).
+		if (input && [" ", "Backspace", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) return
+		if ([" ", "Backspace", "Enter", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Escape"].includes(event.key) ||
+			(event.ctrlKey && event.key.toLowerCase() === "r")) event.preventDefault()
+	}
+	const focusIn = (event) => {
+		if (modalOpen() && event.target !== focusTarget()) schedule()
+	}
+	root.addEventListener("keydown", trapKeys)
+	doc.addEventListener("focusin", focusIn)
+	root.addEventListener("focusout", schedule)
+	view.addEventListener("resize", schedule)
+	const observer = view.ResizeObserver ? new view.ResizeObserver(schedule) : null
+	observer?.observe(root)
+	// Pane proportions also change when the inspector is toggled.
+	for (const pane of root.querySelectorAll(".pane")) observer?.observe(pane)
+	schedule()
+	return {
+		schedule,
+		dispose() {
+			disposed = true
+			if (frame !== null) view.cancelAnimationFrame(frame)
+			observer?.disconnect()
+			root.removeEventListener("keydown", trapKeys)
+			root.removeEventListener("focusout", schedule)
+			doc.removeEventListener("focusin", focusIn)
+			view.removeEventListener("resize", schedule)
+		},
+	}
+}
+
+export { columnWidth, connectEffects, keepVisible }
+
+// EOF

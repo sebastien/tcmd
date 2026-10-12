@@ -4,11 +4,12 @@
 // Created: 2026-10-09
 
 // Module: tcmd/components/icons
-// Nerd Font icon for a file entry, in the spirit of yazi: a kind icon
-// (directory, symlink, device node) wins, then a per-extension icon, then the
-// generic file icon. A few basenames map directly too, so `Makefile`,
+// Nerd Font icons, in the spirit of yazi. `iconFor` maps a file entry to its
+// kind icon (directory, symlink, device node), then a per-extension icon, then
+// the generic file icon; a few basenames map directly too, so `Makefile`,
 // `Dockerfile` and dotfiles like `.gitignore` get their icon even without a
-// distinguishing extension.
+// distinguishing extension. `sourceMarker` maps a command-panel entry's
+// namespace (a CLI operation or a TinyCmd action) to its marker.
 //
 // The glyphs are Nerd Font codepoints (from `glyphnames.json`), so they only
 // render on a terminal patched with a Nerd Font: rows show them when the
@@ -26,6 +27,20 @@ const DIR_ICON = "\u{f07b}" // nf-fa-folder
 const SYMLINK_ICON = "\u{f0c1}" // nf-fa-link
 const DEVICE_ICON = "\u{e795}" // nf-dev-terminal
 const FILE_ICON = "\u{f016}" // nf-fa-file_o
+
+// Constant: SOURCE_ICON / SOURCE_TAG
+// The namespace marker the command panel puts in front of each entry name:
+// a terminal prompt for a CLI operation, a bolt for a TinyCmd action. Browsers
+// lack the Nerd Font (and `TCMD_ICONS=0` opts out), so the same marker exists
+// as a three-character tag that keeps the name column aligned either way.
+const SOURCE_ICON = {
+	cli: "\u{ebca}", // nf-cod-terminal_bash
+	app: "\u{f0e7}", // nf-fa-bolt
+}
+const SOURCE_TAG = {
+	cli: "cli",
+	app: "app",
+}
 
 // Constant: NAME_ICONS
 // Basename (lowercase, leading dot stripped) → glyph, checked before the
@@ -180,6 +195,25 @@ function iconsEnabled(environment = globalThis.process?.env ?? {}) {
 	return value !== "0" && value !== "false" && value !== "off"
 }
 
-export { DEVICE_ICON, DIR_ICON, FILE_ICON, SYMLINK_ICON, extensionOf, iconFor, iconsEnabled }
+// Function: sourceMarker
+// The marker a command-panel entry carries: the Nerd Font glyph when icons are
+// on, the three-character tag otherwise (browsers lack the font).
+function sourceMarker(source, icons) {
+	if (icons) return SOURCE_ICON[source] ?? ""
+	return SOURCE_TAG[source] ?? ""
+}
+
+export {
+	DEVICE_ICON,
+	DIR_ICON,
+	FILE_ICON,
+	SOURCE_ICON,
+	SOURCE_TAG,
+	SYMLINK_ICON,
+	extensionOf,
+	iconFor,
+	iconsEnabled,
+	sourceMarker,
+}
 
 // EOF

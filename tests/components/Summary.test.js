@@ -18,12 +18,12 @@ describe("Summary", () => {
 			width: () => 4,
 			elide: (text, width) => text.slice(0, width),
 		})
-		expect(elided.line(null, { entries, disk: null })).toBe("  0 ")
+		expect(elided.priorityLine(null, { entries, disk: null })).toBe("  0 ")
 		expect(elided.lineFg()).toBe("dim")
 
 		// No hooks: the full text is returned.
 		const plain = createBehaviors(behaviorEnv)
-		expect(plain.line(null, { entries, disk: null })).toBe("  0 dirs, 1 files, 2.0K")
+		expect(plain.priorityLine(null, { entries, disk: null })).toBe("  0 dirs, 1 files, 2.0K")
 	})
 
 	test("priorityLine degrades by information value, never mid-token", () => {

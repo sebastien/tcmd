@@ -49,18 +49,13 @@ function summaryShortDisk(disk) {
 function createBehaviors(env) {
 	const measure = env.measure ?? ((text) => `${text}`.length)
 	return {
-		line: (self, data) => {
-			const text = summaryText(unwrap(data.entries), unwrap(data.disk))
-			const width = env.width ? env.width(self) : 0
-			return env.elide ? env.elide(text, width) : text
-		},
 		lineFg: () => env.lineFg,
 		// TUI: degrade by information value instead of chopping mid-token:
 		// full line -> short disk -> counts only -> elided counts.
 		priorityLine: (self, data) => {
 			const entries = unwrap(data.entries)
 			const disk = unwrap(data.disk)
-			const width = env.width ? env.width(self) : 0
+			const width = env.width ? env.width(self, data) : 0
 			const full = summaryText(entries, disk)
 			if (!width || measure(full) <= width) return full
 			const counts = `${INDENT}${summaryCounts(entries)}`

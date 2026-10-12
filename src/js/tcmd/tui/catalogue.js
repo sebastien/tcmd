@@ -13,7 +13,9 @@
 // `rows` environment. Components sharing a presentation bind the same source
 // (`Breadcrumbs` uses `RowList.xml`).
 //
-// TUI-only components (`Help`) live in `tui/` and are registered here only.
+// The workspace chrome (`Frame.js`) and the key reference (`Help.js`) are
+// shared logic bound here to their `.xml` presentations; the browser view
+// binds the same modules to `.html`.
 
 import { extend, ui } from "select.tui"
 import { unwrap } from "select/state/cells"
@@ -23,7 +25,6 @@ import commandBarXml from "../components/CommandBar.xml" with { type: "text" }
 import commandArgRowXml from "../components/CommandArgRow.xml" with { type: "text" }
 import commandItemXml from "../components/CommandItem.xml" with { type: "text" }
 import commandPanelXml from "../components/CommandPanel.xml" with { type: "text" }
-import commandPaletteXml from "../components/CommandPalette.xml" with { type: "text" }
 import confirmXml from "../components/Confirm.xml" with { type: "text" }
 import crumbXml from "../components/Crumb.xml" with { type: "text" }
 import entryDetailXml from "../components/EntryDetail.xml" with { type: "text" }
@@ -32,7 +33,6 @@ import filePreviewXml from "../components/FilePreview.xml" with { type: "text" }
 import fileRowXml from "../components/FileRow.xml" with { type: "text" }
 import filterBarXml from "../components/FilterBar.xml" with { type: "text" }
 import helpXml from "../components/Help.xml" with { type: "text" }
-import paletteRowXml from "../components/PaletteRow.xml" with { type: "text" }
 import rowListXml from "../components/RowList.xml" with { type: "text" }
 import summaryXml from "../components/Summary.xml" with { type: "text" }
 
@@ -48,7 +48,6 @@ import {
 	commandItemRows,
 	commandBarMarksItem,
 	commandPanelBehaviors,
-	commandPaletteBehaviors,
 	confirmBehaviors,
 	crumbBehaviors,
 	crumbRows,
@@ -60,14 +59,12 @@ import {
 	fileWindow,
 	filterBarBehaviors,
 	iconsEnabled,
-	paletteRowBehaviors,
-	paletteRows,
 	panelArgRows,
 	panelOpRows,
 	summaryBehaviors,
 } from "../components/index.js"
-import { createBehaviors as helpBehaviors } from "./help.js"
-import { INSPECTOR_INLINE_WIDTH } from "./frame.js"
+import { createBehaviors as helpBehaviors } from "../components/Help.js"
+import { INSPECTOR_INLINE_WIDTH } from "../components/Frame.js"
 import { tuiTheme } from "./theme.js"
 
 let registered = false
@@ -177,9 +174,6 @@ function fileListScrollTop(self, data) {
 		return keepVisible(self.ref.list, local, len)
 	}
 	return keepVisible(self.ref.list, unwrap(data.cursor) ?? 0, unwrap(data.entries)?.length ?? 0)
-}// Keep the palette selection inside its viewport.
-function paletteScrollTop(self, data) {
-	return keepVisible(self.ref.list, unwrap(data.selected) ?? 0, unwrap(data.items)?.length ?? 0)
 }
 
 // Keep the bookmark picker selection inside its viewport.
@@ -214,7 +208,6 @@ function createComponents() {
 	const crumb = bind(ui, "Crumb", crumbXml, crumbBehaviors(env))
 	const fileRow = bind(ui, "FileRow", fileRowXml, fileRowBehaviors(env))
 	const filterBar = bind(ui, "FilterBar", filterBarXml, filterBarBehaviors(env))
-	const paletteRow = bind(ui, "PaletteRow", paletteRowXml, paletteRowBehaviors(env))
 	const bookmarkRow = bind(ui, "BookmarkRow", bookmarkRowXml, bookmarkRowBehaviors(env))
 	return {
 		BookmarkRow: bookmarkRow,
@@ -222,7 +215,6 @@ function createComponents() {
 		CommandItem: commandItem,
 		Crumb: crumb,
 		FileRow: fileRow,
-		PaletteRow: paletteRow,
 		Breadcrumbs: bind(ui, "Breadcrumbs", rowListXml, breadcrumbsBehaviors({
 			...env,
 			rows: crumbRows(crumb),
@@ -241,11 +233,6 @@ function createComponents() {
 			opRows: panelOpRows(commandArgRow),
 			argRows: panelArgRows(commandArgRow),
 			argScrollTop: panelArgScrollTop,
-		})),
-		CommandPalette: bind(ui, "CommandPalette", commandPaletteXml, commandPaletteBehaviors({
-			...env,
-			rows: paletteRows(paletteRow),
-			scrollTop: paletteScrollTop,
 		})),
 		Confirm: bind(ui, "Confirm", confirmXml, confirmBehaviors(env)),
 		EntryDetail: bind(ui, "EntryDetail", entryDetailXml, entryDetailBehaviors({
@@ -283,7 +270,6 @@ function registerComponents() {
 		breadcrumbs: components.Breadcrumbs,
 		commandbar: components.CommandBar,
 		commandpanel: components.CommandPanel,
-		commandpalette: components.CommandPalette,
 		confirm: components.Confirm,
 		entrydetail: components.EntryDetail,
 		filelist: components.FileList,

@@ -1,5 +1,8 @@
-<aside class="preview" when="show" out:title="previewTitle">
+<aside class="preview" when="show" out:title="headerTitle">
+	<header out="headerTitle"></header>
 	<pre when="hasText" out="previewText" class="preview-text"></pre>
-	<div when="hasCard" out="cardText" class="preview-card"></div>
+	<pre when="hasCard" out="cardText" class="preview-card"></pre>
+	<pre when="hasEntryCard" out="entryText" class="preview-card"></pre>
+	<pre when="isEmpty" out="emptyText" class="preview-card"></pre>
 	<footer class="preview-actions" out="actions"></footer>
 </aside>

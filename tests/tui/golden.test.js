@@ -111,25 +111,6 @@ describe("golden frames", () => {
 		}
 	})
 
-	test("palette is centered with a selected marker and its own hints", async () => {
-		const { setup } = await makeSetup(100, 20)
-		try {
-			setup.mockInput.pressKey("p", { ctrl: true })
-			await settle(setup)
-			const frame = setup.captureCharFrame()
-			expect(frame).toContain("palette")
-			expect(frame).toContain("↑↓ move")
-			expect(frame).toContain("run")
-			// The command bar underneath still advertises its context.
-			const bar = frame.split("\n").find((line) => line.includes("Navigate"))
-			expect(bar).toBeDefined()
-			// Selected rows carry a marker, not just colour.
-			expect(frame).toMatch(/│>\s/)
-		} finally {
-			setup.renderer.destroy()
-		}
-	})
-
 	test("help overlay lists the bindings by category", async () => {
 		const { setup } = await makeSetup(100, 24)
 		try {
@@ -147,10 +128,10 @@ describe("golden frames", () => {
 	test("command panel lists operations and bound arguments", async () => {
 		const { setup, session } = await makeSetup(120, 30)
 		try {
-			setup.mockInput.pressKey("m")
+			setup.mockInput.pressKey(":")
 			await settle(setup)
 			const frame = setup.captureCharFrame()
-			// The operations list opens alphabetically, on `bookmark`.
+			// The entry list opens on `bookmark` (the first CLI operation).
 			expect(frame).toContain(" Command · bookmark ")
 			expect(frame).toContain("copy FROM TO")
 			expect(frame).toContain("FROM")
@@ -161,7 +142,11 @@ describe("golden frames", () => {
 			expect(frame).toContain("/home")
 			// Each operation row advertises the arguments it takes.
 			expect(frame).toContain("[NAME] [PATH]")
-			// A vertical rule divides the operation list from the argument
+			// CLI operations lead the TinyCmd actions, and each carries its
+			// namespace glyph (a terminal prompt, a bolt).
+			expect(frame).toContain("\u{ebca} bookmark")
+			expect(frame).toContain("\u{f0e7} Back")
+			// A vertical rule divides the entry list from the argument
 			// sidebar: the rows carry a "│" between the two columns.
 			expect(frame).toMatch(/bookmark[^\n]*│/)
 			// A horizontal rule separates the columns from the preview, whose
@@ -183,6 +168,36 @@ describe("golden frames", () => {
 		}
 	})
 
+	test("a TinyCmd action in the panel binds no arguments and says so", async () => {
+		const { setup, session } = await makeSetup(120, 30)
+		try {
+			setup.mockInput.pressKey(":")
+			await settle(setup)
+			await setup.mockInput.typeText("open")
+			await settle(setup)
+			// `open` (CLI), `Open` (the pane action) and the two actions whose
+			// id ends in `.open` all match; the CLI operation leads, and every
+			// row carries its namespace glyph.
+			expect(session.panelItems.value.map((item) => item.id)).toEqual([
+				"op:open",
+				"cmd:pane.enter",
+				"cmd:file.open",
+				"cmd:panel.open",
+			])
+			session.dispatch("panel.setOp", { index: 1 })
+			await settle(setup)
+			expect(session.panelEntry.value.name).toBe("Open")
+			const frame = setup.captureCharFrame()
+			expect(frame).toContain(" Command · Open ")
+			expect(frame).toContain("no arguments")
+			// The "runs" line shows the action's title: nothing to assemble.
+			expect(session.panelCommand.value).toBe("Open")
+			expect(session.panelRunnable.value).toBe(true)
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
 	test("typing in the panel filters operations and Tab cycles to the arguments", async () => {
 		const { setup, session } = await makeSetup(120, 30)
 		try {
@@ -191,7 +206,7 @@ describe("golden frames", () => {
 			await setup.mockInput.typeText("edit")
 			await settle(setup)
 			// The matching command takes the cursor; the list narrows to it.
-			expect(session.panelOperation.value.name).toBe("edit")
+			expect(session.panelEntry.value.name).toBe("edit")
 			expect(session.panelQuery.value).toBe("edit")
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain(" Command · edit ")
@@ -213,7 +228,7 @@ describe("golden frames", () => {
 	test("toggling an argument item is transient and flips the marker", async () => {
 		const { setup, session } = await makeSetup(120, 30)
 		try {
-			setup.mockInput.pressKey("m")
+			setup.mockInput.pressKey(":")
 			await settle(setup)
 			// Filter to `copy` so its FROM selection owns the argument rows.
 			await setup.mockInput.typeText("copy")
@@ -235,10 +250,10 @@ describe("golden frames", () => {
 	test("running the default copy from the panel closes it and reports", async () => {
 		const { setup, session } = await makeSetup(120, 30)
 		try {
-			setup.mockInput.pressKey("m")
+			setup.mockInput.pressKey(":")
 			await settle(setup)
-			// The list opens on `bookmark` (alphabetical); filter to the
-			// runnable `copy` draft.
+			// The list opens on `bookmark` (the first CLI operation); filter to
+			// the runnable `copy` draft.
 			await setup.mockInput.typeText("copy")
 			await settle(setup)
 			setup.mockInput.pressKey("\t")
@@ -248,6 +263,27 @@ describe("golden frames", () => {
 			await new Promise((resolve) => setTimeout(resolve, 20))
 			expect(session.panelOpen.value).toBe(false)
 			expect(session.notice.value?.text).toContain("copied")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("`!` lands on the shell operation with its CMD field focused", async () => {
+		const { setup, session } = await makeSetup(120, 30)
+		try {
+			setup.mockInput.pressKey("!")
+			await settle(setup)
+			expect(session.panelOpen.value).toBe(true)
+			expect(session.panelEntry.value.name).toBe("run")
+			// The raw CMD field owns the keyboard, so typing goes straight in;
+			// the filter stays empty so the full list keeps its ordering.
+			expect(session.panelQuery.value).toBe("")
+			expect(session.panelFocus.value).toBe("args")
+			expect(session.panelTextual.value).toBe(true)
+			await setup.mockInput.typeText("echo hi")
+			await settle(setup)
+			expect(session.panelCommand.value).toBe("run 'echo hi'")
+			expect(session.panelRunnable.value).toBe(true)
 		} finally {
 			setup.renderer.destroy()
 		}

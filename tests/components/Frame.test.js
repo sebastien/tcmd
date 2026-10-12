@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createFrameBehaviors, helpLines, INSPECTOR_INLINE_WIDTH, keyGlyph } from "../../src/js/tcmd/tui/frame.js"
+import { createFrameBehaviors, INSPECTOR_INLINE_WIDTH } from "../../src/js/tcmd/components/Frame.js"
 
 const theme = {
 	textHeadingFg: "title",
@@ -12,7 +12,7 @@ const theme = {
 // A fake instance whose renderer dimensions stand in for the viewport.
 const selfAt = (width, height) => ({ ctx: { width, height } })
 
-describe("tui frame", () => {
+describe("components Frame", () => {
 	test("the brand shimmers: Tiny along the blues, Cmd along brighter oranges", () => {
 		const behaviors = createFrameBehaviors({ theme })
 		// Each word reads back letter by letter, gradients at their endpoints
@@ -89,26 +89,5 @@ describe("tui frame", () => {
 		expect(behaviors.rightBorder()).toEqual(["top", "left", "bottom", "right"])
 		// A top-only border renders the header rule.
 		expect(behaviors.headRule()).toEqual(["top"])
-	})
-
-	test("key glyphs are human readable", () => {
-		expect(keyGlyph({ key: "up" })).toBe("↑")
-		expect(keyGlyph({ key: "w", ctrl: true })).toBe("^W")
-		expect(keyGlyph({ key: "tab" })).toBe("Tab")
-		expect(keyGlyph({ key: "tab", shift: true })).toBe("Tab")
-		expect(keyGlyph({ key: "o", shift: true })).toBe("⇧O")
-	})
-
-	test("help lines are grouped and list every binding", () => {
-		const lines = helpLines().join("\n")
-		expect(lines).toContain("Navigation")
-		expect(lines).toContain("Panes")
-		expect(lines).toContain("Cursor up")
-		expect(lines).toContain("Open")
-		expect(lines).toContain("^R")
-		expect(lines).toContain("Bookmarks")
-		expect(lines).toContain("Bookmark")
-		// One row per command, derived from the registry.
-		expect(lines).not.toContain("Tabs")
 	})
 })

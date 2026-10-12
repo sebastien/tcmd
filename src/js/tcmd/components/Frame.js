@@ -3,17 +3,16 @@
 // License: BSD
 // Created: 2026-10-02
 
-// Module: tcmd/tui/frame
-// TUI-only presentation behaviors for the workspace chrome: the responsive
-// breakpoints driven by the `uiSize` cell, the pane borders, header rules,
-// the command-bar geometry and the help overlay state. Everything here is
-// injected into the App binding; none of it lives in the shared
-// `components/` logic.
+// Module: tcmd/components/Frame
+// Shared presentation helpers for the workspace chrome: the responsive
+// breakpoints driven by the `uiSize` cell, the pane borders, header rules, the
+// command-bar geometry and the overlay visibility gates. Everything here is
+// injected into each renderer's App binding. Viewport dimensions are in
+// monospace columns/rows; the browser measures them from its own font. The key
+// reference's text lives with its overlay in `Help.js`.
 
 import { unwrap } from "select/state/cells"
-import { DEFAULT_KEYMAP } from "../core/keymap.js"
-import { getCommands } from "../core/commands.js"
-import { commandBarMarksItem, commandBarRowCount, commandBarStatus } from "../components/CommandBar.js"
+import { commandBarMarksItem, commandBarRowCount, commandBarStatus } from "./CommandBar.js"
 
 // Below this the two-pane workspace is replaced by a resize hint.
 const MIN_WIDTH = 64
@@ -167,7 +166,7 @@ function createFrameBehaviors(env) {
 		showInspectorInline: (self, data) => Boolean(unwrap(data.showPreview)) && !isNarrow(data, self),
 		showViewer: (self, data) => Boolean(unwrap(data.viewerOpen)) && isNarrow(data, self),
 
-		// Help overlay visibility; the content lives in `tui/Help.js` so the
+		// Help overlay visibility; the content lives in `Help.js` so the
 		// overlay has a single source of truth.
 		helpOpen: (_self, data) => Boolean(unwrap(data.helpOpen)),
 
@@ -180,90 +179,5 @@ function createFrameBehaviors(env) {
 	}
 }
 
-// Function: keyGlyph
-// Human-readable glyph for a keymap chord ("↑", "⇧Tab", "^W", "PgUp").
-function keyGlyph(chord) {
-	const name = chord.key
-	const named = {
-		up: "↑",
-		down: "↓",
-		left: "←",
-		right: "→",
-		return: "↵",
-		enter: "↵",
-		space: "Space",
-		tab: "Tab",
-		pageup: "PgUp",
-		pagedown: "PgDn",
-		escape: "Esc",
-		backspace: "Bksp",
-		home: "Home",
-		end: "End",
-	}
-	let base = named[name] ?? (name.length === 1 ? name.toUpperCase() : `${name}`)
-	if (chord.ctrl) base = `^${base}`
-	if (chord.meta) base = `⌘${base}`
-	if (chord.shift && name !== "tab") base = `⇧${base}`
-	return base
-}
-
-// Constant: GROUP_ORDER / GROUP_TITLES
-// Help sections, in display order.
-const GROUP_ORDER = ["nav", "pane", "list", "bookmark", "view", "file", "panel", "palette", "filter", "app"]
-const GROUP_TITLES = {
-	app: "Session",
-	bookmark: "Bookmarks",
-	file: "Files",
-	filter: "Filter",
-	list: "Selection",
-	nav: "Navigation",
-	palette: "Commands",
-	panel: "Command panel",
-	pane: "Panes",
-	view: "View",
-}
-
-// Function: helpLines
-// Builds the categorized key reference from the keymap and the command
-// registry, so it can never drift from the actual bindings.
-function helpLines() {
-	const byId = new Map(getCommands().map((command) => [command.id, command]))
-	const groups = new Map()
-	const seen = new Set()
-	for (const binding of DEFAULT_KEYMAP) {
-		const command = byId.get(binding.command)
-		if (!command) continue
-		const group = binding.command.split(".")[0]
-		if (!groups.has(group)) groups.set(group, new Map())
-		const rows = groups.get(group)
-		if (!rows.has(binding.command)) rows.set(binding.command, { keys: [], title: command.title })
-		const row = rows.get(binding.command)
-		const glyph = keyGlyph(binding)
-		if (!row.keys.includes(glyph) && !seen.has(`${binding.command}:${glyph}`)) {
-			row.keys.push(glyph)
-			seen.add(`${binding.command}:${glyph}`)
-		}
-	}
-	const lines = []
-	for (const group of GROUP_ORDER) {
-		const rows = groups.get(group)
-		if (!rows) continue
-		lines.push(GROUP_TITLES[group] ?? group)
-		for (const row of rows.values()) {
-			lines.push(`  ${row.keys.join("/").padEnd(9)} ${row.title}`)
-		}
-		lines.push("")
-	}
-	return lines
-}
-
-export {
-	commandBarLines,
-	createFrameBehaviors,
-	helpLines,
-	INSPECTOR_INLINE_WIDTH,
-	isNarrow,
-	keyGlyph,
-	sizeOf,
-}
+export { commandBarLines, createFrameBehaviors, INSPECTOR_INLINE_WIDTH, isNarrow, MIN_HEIGHT, MIN_WIDTH, sizeOf }
 // EOF

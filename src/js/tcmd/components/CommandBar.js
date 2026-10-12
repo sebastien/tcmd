@@ -5,8 +5,8 @@
 
 // Module: tcmd/components/CommandBar
 // CommandBar: the bottom bar. By default it shows the keys available in the
-// current context (the command registry's `bar` commands, or the palette
-// hints while the palette is open); a pane error or a session notice takes
+// current context (the command registry's `bar` commands, or the hints of the
+// overlay that owns the keyboard); a pane error or a session notice takes
 // its place. Entries are bracket shorthands (see `CommandItem.js`) that wrap
 // onto as many rows as the width demands; the active pane's marked count
 // joins the list as a dimmed, non-clickable entry. The row logic lives in
@@ -116,7 +116,7 @@ function createBehaviors(env) {
 		},
 	}
 	if (env?.rows) {
-		behaviors.rows = (_self, data) => env.rows(self, data)
+		behaviors.rows = (self, data) => env.rows(self, data)
 	}
 	return behaviors
 }

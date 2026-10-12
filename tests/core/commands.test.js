@@ -146,11 +146,15 @@ describe("commands", () => {
 	})
 
 	test("the command bar marks the Open action as primary", () => {
-		const items = getCommandBarItems(false, "ui", null)
+		const items = getCommandBarItems({ filtering: null, bookmarkOpen: false, bookmarkMode: "list", panelOpen: false })
 		const open = items.find((item) => item.id === "pane.enter")
 		expect(open.primary).toBe(true)
 		const others = items.filter((item) => item.id && item.id !== "pane.enter")
 		expect(others.every((item) => item.primary !== true)).toBe(true)
+		// The panel is the command entry point, so it is on the bar; the
+		// palette it replaced is gone.
+		expect(items.some((item) => item.id === "panel.open")).toBe(true)
+		expect(items.some((item) => item.id === "panel.toggle")).toBe(false)
 	})
 
 	test("failures land on the active pane error", async () => {

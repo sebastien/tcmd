@@ -61,6 +61,7 @@ function createBehaviors(env) {
 	return {
 		// Web: the whole shorthand as one label.
 		itemLabel: (_self, data) => commandLabel(data.item),
+		itemHint: (_self, data) => !data.item?.id,
 		// TUI: the dim pipe divider, then the bracket + title head, the
 		// accent key glyph, the closer.
 		itemSep: (_self, data) => (data.index > 0 ? COMMAND_SEP : ""),

@@ -15,23 +15,9 @@ import nodePath from "node:path"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { cell } from "select/state/cells"
 import { render } from "select.tui"
-import { commandRow, getPaletteCommands } from "../core/commands.js"
 import { createBookmarks, createFileBookmarkStore } from "../core/bookmarks.js"
 import { createNodeFs, createNodeOs, createPane, createSession, load } from "../core/index.js"
 import { createAppComponent } from "./app.js"
-
-// The TUI palette lists meaningful actions; raw cursor movement is already on
-// the arrow keys and is noise in the list. Hiding it here (rather than in core)
-// keeps the web palette and the shared registry unchanged.
-const PALETTE_NOISE = /^nav\./
-
-// Function: tuiPaletteCommands
-// The command rows the TUI palette offers.
-function tuiPaletteCommands() {
-	return getPaletteCommands()
-		.filter((command) => !PALETTE_NOISE.test(command.id))
-		.map(commandRow)
-}
 
 // Function: readSize
 // Normalizes a renderer resize payload. OpenTUI's live renderer emits
@@ -78,7 +64,6 @@ async function main(paths = []) {
 		}),
 	})
 	const session = createSession({ fs, os, left, right, host: nodeOs.hostname(), bookmarks })
-	session.paletteCommands.set(tuiPaletteCommands())
 	await load(session)
 	const size = cell({ width: 0, height: 0 })
 	const help = cell(false)
@@ -99,6 +84,6 @@ async function main(paths = []) {
 	return session
 }
 
-export { main, readSize, tuiPaletteCommands }
+export { main, readSize }
 
 // EOF

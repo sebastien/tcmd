@@ -19,8 +19,11 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   and previewed in its directory.
 - Operations over the current panes: copy, move, delete/erase, stat, touch,
   selection buffers, edit/view/open and shell commands
-- Command palette with UI actions, plus a scripting mode (`:`) that completes
-  operations and the available filesets ($A, $B, …, $FILE)
+- Command panel (`:`), the one entry point: the CLI operations and the TinyCmd
+  actions (Open, Bookmark, Preview, …) in one filtered list, each row marked
+  with its namespace by a Nerd Font glyph (a `cli`/`app` tag without one), with
+  editable arguments and a resolved-command preview. `!` lands straight on the
+  shell command.
 - Keyboard and mouse navigation, inline file previews
 - Bookmarks and quick find (later milestones)
 
@@ -49,12 +52,12 @@ bun run tcmd /tmp ~  # open specific directories
 Keys: `↑/↓` move (`^↑/^↓` jump a few lines), `Enter/→` open, `←/Bksp` parent,
 `Esc`/`⇧Esc` history back/forward, `Tab`/`⇧Tab` switch panes
 (`⇧Tab` goes back), `Space` mark, `b` bookmark the cursor entry (or the pane
-directory) under a basename-defaulted name, `g` jump to a bookmark, `:` or `m`
-open the command panel (Commando: operations, their arguments, and the live
-resolved command), `v` preview (fullscreen viewer when the terminal is narrow),
-`O`/`E` open/edit the previewed file, `/` fuzzy-filter the active pane (`Enter`
-keeps it, `Esc` clears), `^P` command palette, `!` run a shell command, `^R`
-reload, `?` key reference, `q` quit.
+directory) under a basename-defaulted name, `g` jump to a bookmark, `:` open the
+command panel (the one entry point: CLI operations and TinyCmd actions, their
+arguments, and the live resolved command), `v` preview (fullscreen viewer when
+the terminal is narrow), `O`/`E` open/edit the previewed file, `/` fuzzy-filter
+the active pane (`Enter` keeps it, `Esc` clears), `!` open the panel on the
+shell command, `^R` reload, `?` key reference, `q` quit.
 
 The workspace opens with a slim identity bar (`TinyCmd - HOST`) over an
 unframed tiling of pane boxes (the two middle edges sit side by
@@ -70,7 +73,9 @@ rule are highlighted and its cursor row uses the strong cursor colour, while
 the inactive pane stays dim with a muted cursor. Rows lead with a yazi-style
 Nerd Font icon (folder/link kind icons plus a per-extension icon, `Makefile`,
 `Dockerfile` and dotfiles included), on unless `TCMD_ICONS=0` — it needs a
-Nerd-Font-patched terminal font, and the web view never shows icons. A
+Nerd-Font-patched terminal font, and the web view never shows icons. The
+command panel marks its entries the same way — a glyph in the TUI, a `cli`/`app`
+tag on the web. A
 context-aware inspector sits
 on the right when the terminal is at least 100 columns wide, and becomes a
 fullscreen viewer below that. The status bar lists every binding as a bracket
@@ -89,12 +94,31 @@ backends:
 - **HTTP API** (automatic fallback, or `?fs=http`): the server exposes the
   real filesystem over `/api/*`, using the same Node adapter as the TUI.
 
+It uses the same command panel (`:`), selection/filter and history keys as the
+TUI, plus `?` for the key reference. Pane focus, marks,
+entry details and command risk colours follow the terminal presentation. The
+inspector sits beside the panes when wide and opens with `v` as a fullscreen
+viewer when narrow (`Esc` closes it). Bookmarks persist in browser storage,
+separately for each filesystem backend and HTTP root; they are not shared with
+the TUI's bookmark file. Storage denial leaves bookmarks usable for the session.
+
 ```sh
+tcmd --server        # installed command: serve the web UI without the TUI
 make run-local       # build and serve both backends (alias to `bun run web`)
 bun run web          # build and serve both backends on http://localhost:8787
 bun run web:build    # bundle only, into public/main.js
 bun run web:serve    # serve the existing bundle plus /api/*
 ```
+
+From a checkout, `./bin/tcmd --server` (or `bun run tcmd --server`) does the
+same thing, building the browser bundle if it is missing. Installed packages
+include the bundle. Open http://localhost:8787/?fs=http for your actual files,
+or http://localhost:8787/?fs=opfs for the browser-storage demo. Stop with Ctrl-C.
+Use `HOST=0.0.0.0 PORT=9000 tcmd --server` to change the address and port
+(default `127.0.0.1:8787`), or
+`TCMD_WEB_ROOT=/some/dir tcmd --server` to confine the filesystem API. `HOST`
+takes an IP address (`0.0.0.0` or `::` for every interface); a machine name
+resolves to several addresses and the server binds only one of them.
 
 `make run-local` is the local dev entry point (it wraps `bun run web` and
 honours `TCMD_WEB_PORT`, default 8787). The Makefile bootstraps the LittleSDK
@@ -102,8 +126,9 @@ into `deps/sdk` for the standard `make` targets.
 
 Appending `?fs=opfs` or `?fs=http` to the URL forces one backend. The HTTP
 backend needs the page served by `bun run web:serve` (a plain static server
-only supports OPFS); the server binds to loopback and requires a per-process
-token injected into `index.html`. `TCMD_WEB_ROOT=/some/dir` confines the API
+only supports OPFS); the server binds to loopback by default (`HOST`
+overrides it) and requires a per-process token injected into `index.html`.
+`TCMD_WEB_ROOT=/some/dir` confines the API
 (default `/`, the same access as `bun run tcmd`), but it is not a sandbox:
 don't expose the port. With OPFS, deleting moves entries to `/.trash`; the API
 uses the desktop trash. Open/edit/run are unavailable in the browser either
@@ -127,24 +152,24 @@ src/js/tcmd/
     directory.js one pane's directory: path, entries, view, cursor, marks
     pane.js      one directory, proxying its cells
     bookmarks.js named bookmarks (path + file/dir kind) + the memory/file stores
-    panel.js     command panel: operation args bound from the live context
-    session.js   two panes + active pane, preview, palette, panel, dispatch
+    panel.js     command panel: CLI ops + TinyCmd actions, args bound from context
+    session.js   two panes + active pane, preview, panel, dispatch
     keymap.js    key chords -> command ids
     commands.js  command registry; commands are `run(session, payload)`
-    operations.js scripting operations (copy/move/delete/erase/stat/sel/…)
-    script.js    scripting line parser, runner and palette completions
+    operations.js CLI operations (copy/move/delete/erase/stat/sel/…)
+    script.js    scripting line parser and runner
   components/  Shared, renderer-agnostic component logic
     App.js            root controller: key + event -> dispatch
     bind.js           `ui.component(name).does(behaviors).using(source)` binding
     rows.js           keyed row-bag builders shared by both catalogues
     FileList.js …     one `.js` per component (behaviors + pure helpers)
     FileRow.js …      row behaviors shared by both engines
+    Frame.js          workspace chrome, breakpoints and command-bar geometry
+    Help.js           key-reference overlay behaviors + the grouped key text
     format.js         presentation helpers (sizes/counts)
   tui/      View (select.tui templates on OpenTUI)
     app.js       binds App.js + App.xml + TUI environment; size/help cells
     catalogue.js binds each `components/*.js` to its `.xml` and registers tags
-    frame.js     TUI-only chrome: frame title, breakpoints
-    help.js      TUI-only `?` key-reference overlay behaviors
     index.js     TUI entry point; feeds `size` from renderer resize events
     theme.js     TUI palette resolver (dark/light/mono, NO_COLOR)
   web/      Browser view (select.js templates on the DOM, same core)
@@ -152,6 +177,8 @@ src/js/tcmd/
     catalogue.js binds each `components/*.js` to its `.html`
     index.js     web entry point: `main(session, selector)`
     main.js      browser bootstrap: backend choice + session (bundled)
+    effects.js   instance-owned focus, key trapping, resize and scroll effects
+    bookmarks.js localStorage bookmark store, scoped by backend and API root
     opfs.js      OPFS filesystem adapter (browser storage)
     http.js      filesystem adapter over the `/api` JSON endpoints
     server.js    dev server: `public/` + `/api/*` (used by `bun run web:serve`)
@@ -177,9 +204,12 @@ reactive collections, sharing row behaviors over a `{ item, index, … }` bag
 built by `components/rows.js`; cells stay in the bag and are read at the point
 of use.
 
-TUI-only components live under `tui/` (`frame.js`, `help.js`) and their `.xml`
-templates under `components/`; they are registered only by `tui/catalogue.js`.
-Web-only components live under `web/` (`header.js` + `header.html`). Shared
+`components/Frame.js` holds the renderer-free workspace chrome (brand bar,
+responsive breakpoints, pane borders, command-bar geometry) and
+`components/Help.js` holds the key reference — behaviours and the grouped key
+text — used by both views. Web-only components live under `web/` (`header.js` +
+`header.html`, plus the DOM effects in `effects.js` and the bookmark store in
+`bookmarks.js`). Shared
 behaviors only ever grow additively (a new key for a new presentation),
 so the other engine's presentation and the parity tests keep working unchanged.
 
@@ -222,11 +252,12 @@ tests run the shared logic through select.js on a happy-dom document.
 ## Roadmap
 
 - [x] Walking skeleton: two panes, navigation, breadcrumbs, summary, command
-      bar, command palette, text preview
-- [x] File operations (copy/move/delete/erase/stat/touch/sel), scripting mode
-      with the `$A`/`$B` pane filesets
-- [x] Scripting completion (operations, filesets, active-directory and nested
-      paths)
+      bar, command panel, text preview
+- [x] File operations (copy/move/delete/erase/stat/touch/sel), with the
+      `$A`/`$B` pane filesets and `$FILE` still resolving in any argument
+- [x] Unified command panel (`:`): the CLI operations and the TinyCmd actions in
+      one filtered list, each marked by its namespace, with editable arguments
+      and a resolved-command preview; `!` lands on the shell command
 - [x] Pane fuzzy filtering (`/` to filter, `Enter` to keep, `Esc` to clear)
 - [x] Named bookmarks (`b` records, `g` jumps, persisted to a JSON file)
 - [ ] Quick find, grep

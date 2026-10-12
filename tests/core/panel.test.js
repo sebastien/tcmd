@@ -1,14 +1,15 @@
 import { describe, expect, test } from "bun:test"
+import { openPanel } from "../../src/js/tcmd/core/commands.js"
 import { createPane } from "../../src/js/tcmd/core/pane.js"
 import { createSession } from "../../src/js/tcmd/core/session.js"
 import {
 	argvFor,
 	bindArgs,
 	decodePathToken,
-	filterPanelOperations,
+	filterPanelEntries,
 	missingArg,
 	panelCommand,
-	panelOperations,
+	panelEntries,
 	panelRowList,
 	panelRunnable,
 	panelSummary,
@@ -18,7 +19,7 @@ import {
 	withArgValue,
 	withToggledItem,
 } from "../../src/js/tcmd/core/panel.js"
-import { expandArg, getOperation } from "../../src/js/tcmd/core/operations.js"
+import { expandArg } from "../../src/js/tcmd/core/operations.js"
 import { createMockFs } from "../helpers/mock-fs.js"
 
 const TREE = {
@@ -34,6 +35,12 @@ const TREE = {
 	"/tmp": [],
 }
 
+// The panel entry for a CLI operation name; these tests exercise the CLI half
+// of the union, so no TinyCmd actions are needed.
+function entryFor(name) {
+	return panelEntries().find((entry) => entry.name === name)
+}
+
 async function makeSession() {
 	const fs = createMockFs(TREE)
 	const left = createPane({ fs, path: "/home" })
@@ -44,35 +51,44 @@ async function makeSession() {
 }
 
 describe("panel", () => {
-	test("lists the operations that carry an args signature", () => {
-		const names = panelOperations().map((op) => op.name)
-		expect(names).toContain("copy")
-		expect(names).toContain("sel")
-		expect(names).toContain("run")
-		// Every listed operation has at least one argument descriptor.
-		for (const op of panelOperations()) expect(op.args.length).toBeGreaterThan(0)
+	test("lists the CLI operations and the TinyCmd actions, tagged apart", () => {
+		const entries = panelEntries([
+			{ id: "file.open", title: "Open file", keys: "O" },
+			{ id: "nav.up", title: "Cursor up" },
+		])
+		const cli = entries.filter((entry) => entry.source === "cli").map((entry) => entry.name)
+		const app = entries.filter((entry) => entry.source === "app").map((entry) => entry.name)
+		expect(cli).toContain("copy")
+		expect(cli).toContain("sel")
+		expect(cli).toContain("run")
+		// Cursor movement is noise and stays out of the list.
+		expect(app).toEqual(["Open file"])
+		// Every CLI entry carries an operation and an args signature.
+		for (const entry of entries.filter((candidate) => candidate.source === "cli")) {
+			expect(entry.op.args.length).toBeGreaterThan(0)
+		}
 	})
 
-	test("filterPanelOperations orders alphabetically and ranks matches by importance", () => {
-		const ops = panelOperations()
-		// No query: every operation, alphabetically by name.
-		expect(filterPanelOperations(ops, "").map((op) => op.name)).toEqual(
-			ops.map((op) => op.name).sort((a, b) => a.localeCompare(b)),
+	test("filterPanelEntries orders CLI first and ranks matches by importance", () => {
+		const entries = panelEntries()
+		// No query: every entry, alphabetically by name.
+		expect(filterPanelEntries(entries, "").map((entry) => entry.name)).toEqual(
+			entries.map((entry) => entry.name).sort((a, b) => a.localeCompare(b)),
 		)
 		// A query ranks by match importance: `open` (prefix) outranks `copy`
 		// (a subsequence match).
-		expect(filterPanelOperations(ops, "op").map((op) => op.name)).toEqual(["open", "copy"])
-		expect(filterPanelOperations(ops, "edit").map((op) => op.name)).toEqual(["edit"])
+		expect(filterPanelEntries(entries, "op").map((entry) => entry.name)).toEqual(["open", "copy"])
+		expect(filterPanelEntries(entries, "edit").map((entry) => entry.name)).toEqual(["edit"])
 		// An alias matches (`!` -> run).
-		expect(filterPanelOperations(ops, "!").map((op) => op.name)).toEqual(["run"])
+		expect(filterPanelEntries(entries, "!").map((entry) => entry.name)).toEqual(["run"])
 		// A signature fragment matches (SEL's `[+|-][BUF]`), ranked last.
-		expect(filterPanelOperations(ops, "buf").map((op) => op.name)).toEqual(["sel"])
-		expect(filterPanelOperations(ops, "zzz")).toEqual([])
+		expect(filterPanelEntries(entries, "buf").map((entry) => entry.name)).toEqual(["sel"])
+		expect(filterPanelEntries(entries, "zzz")).toEqual([])
 	})
 
 	test("binds a selection argument to the cursor entry when nothing is marked", async () => {
 		const { session } = await makeSession()
-		const bindings = bindArgs(session, getOperation("delete"))
+		const bindings = bindArgs(session, entryFor("delete"))
 		expect(bindings).toHaveLength(1)
 		expect(bindings[0].kind).toBe("selection")
 		expect(bindings[0].role).toBe("active")
@@ -84,7 +100,7 @@ describe("panel", () => {
 		const { session } = await makeSession()
 		session.panes.left.cursor.set(1)
 		session.dispatch("list.mark")
-		const bindings = bindArgs(session, getOperation("copy"))
+		const bindings = bindArgs(session, entryFor("copy"))
 		expect(selectedPaths(bindings[0])).toEqual(["/home/notes.txt"])
 		// The destination binds the DST pane's directory.
 		expect(bindings[1].kind).toBe("dest")
@@ -95,7 +111,7 @@ describe("panel", () => {
 		const { session } = await makeSession()
 		session.panes.left.cursor.set(0)
 		session.panes.left.marked.set(new Set(["/home/docs", "/home/notes.txt"]))
-		const draft = bindArgs(session, getOperation("delete"))
+		const draft = bindArgs(session, entryFor("delete"))
 		const next = withToggledItem(draft, 0, 0)
 		expect(next[0].items.map((i) => i.selected)).toEqual([false, true])
 		// The pane marks are untouched.
@@ -109,7 +125,7 @@ describe("panel", () => {
 
 	test("argvFor encodes selection paths and passes literals through", async () => {
 		const { session } = await makeSession()
-		const bindings = bindArgs(session, getOperation("sel"))
+		const bindings = bindArgs(session, entryFor("sel"))
 		// Default buffer "+A" plus the active selection.
 		const argv = argvFor(bindings)
 		expect(argv[0]).toBe("+A")
@@ -165,7 +181,7 @@ describe("panel", () => {
 
 	test("panelRowList flattens arguments and their items", async () => {
 		const { session } = await makeSession()
-		const rows = panelRowList(bindArgs(session, getOperation("delete")))
+		const rows = panelRowList(bindArgs(session, entryFor("delete")))
 		expect(rows[0].type).toBe("arg")
 		expect(rows[0].name).toBe("PATH")
 		expect(rows[1].type).toBe("item")
@@ -217,24 +233,24 @@ describe("panel", () => {
 
 	test("panelCommand and panelRunnable track the draft through the session", async () => {
 		const { session } = await makeSession()
-		session.dispatch("panel.toggle")
+		session.dispatch("panel.open")
 		// The first operation (alphabetically) is `bookmark`; its PATH binds
 		// the SRC cursor, and the preview is the full command line. Its NAME —
 		// an optional literal before the filled PATH — leaves a positional
 		// gap, so the draft is not runnable until the name is filled.
-		expect(session.panelOperation.value.name).toBe("bookmark")
+		expect(session.panelEntry.value.name).toBe("bookmark")
 		expect(session.panelCommand.value).toBe("bookmark /home/docs")
 		expect(session.panelRunnable.value).toBe(false)
-		// The panel's operation rows advertise their signatures.
-		expect(session.panelItems.value.find((item) => item.title === "copy").summary).toBe("FROM TO")
+		// The panel's CLI rows advertise their argument lists.
+		expect(session.panelItems.value.find((item) => item.name === "copy").summary).toBe("FROM TO")
 	})
 
 	test("run via panel dispatch executes and stays transient", async () => {
 		const { fs, session } = await makeSession()
-		session.dispatch("panel.toggle")
+		session.dispatch("panel.open")
 		expect(session.panelOpen.value).toBe(true)
 		// The list opens alphabetically, on `bookmark`.
-		expect(session.panelOperation.value.name).toBe("bookmark")
+		expect(session.panelEntry.value.name).toBe("bookmark")
 		// Toggle the destination op to `delete` and run against the cursor.
 		const deleteIndex = session.panelFiltered.value.findIndex((op) => op.name === "delete")
 		session.dispatch("panel.setOp", { index: deleteIndex })
@@ -247,7 +263,7 @@ describe("panel", () => {
 
 	test("run refuses an unrunnable draft, naming the missing argument", async () => {
 		const { session } = await makeSession()
-		session.dispatch("panel.toggle")
+		session.dispatch("panel.open")
 		// A `run` (raw CMD) draft with no command typed is not runnable.
 		const runIndex = session.panelFiltered.value.findIndex((op) => op.name === "run")
 		session.dispatch("panel.setOp", { index: runIndex })
@@ -261,24 +277,36 @@ describe("panel", () => {
 		expect(session.panelOpen.value).toBe(true)
 	})
 
-	test("`:` opens the panel when enabled and the script palette when not", async () => {
+	test("`:` opens the panel on the first entry, the entry column focused", async () => {
 		const { session } = await makeSession()
-		// TUI-like (panel enabled): `:` opens the structured panel.
 		session.dispatch("panel.open")
 		expect(session.panelOpen.value).toBe(true)
-		expect(session.paletteOpen.value).toBe(false)
-		// Web-like (panel disabled): `:` keeps the script palette.
-		session.dispatch("panel.cancel")
-		session.panelEnabled.set(false)
+		expect(session.panelQuery.value).toBe("")
+		expect(session.panelOpIndex.value).toBe(0)
+		expect(session.panelFocus.value).toBe("ops")
+		expect(session.panelEntry.value.name).toBe("bookmark")
+	})
+
+	test("a TinyCmd action binds no arguments and dispatches on run", async () => {
+		const { session } = await makeSession()
 		session.dispatch("panel.open")
+		session.dispatch("panel.setQuery", { query: "Preview" })
+		expect(session.panelEntry.value.name).toBe("Preview")
+		expect(session.panelEntry.value.source).toBe("app")
+		// Nothing to bind: an empty draft, an empty row list, a runnable entry
+		// whose "runs" line is the action's title.
+		expect(session.panelDraft.value).toEqual([])
+		expect(session.panelRows.value).toEqual([])
+		expect(session.panelRunnable.value).toBe(true)
+		expect(session.panelCommand.value).toBe("Preview")
+		await session.dispatch("panel.run")
 		expect(session.panelOpen.value).toBe(false)
-		expect(session.paletteOpen.value).toBe(true)
-		expect(session.paletteMode.value).toBe("script")
+		expect(session.showPreview.value).toBe(false)
 	})
 
 	test("erase through the panel routes the confirm back to the draft", async () => {
 		const { fs, session } = await makeSession()
-		session.dispatch("panel.toggle")
+		session.dispatch("panel.open")
 		const eraseIndex = session.panelFiltered.value.findIndex((op) => op.name === "erase")
 		session.dispatch("panel.setOp", { index: eraseIndex })
 		await session.dispatch("panel.run")
@@ -288,14 +316,24 @@ describe("panel", () => {
 		expect(await fs.readDir("/home")).toHaveLength(1)
 	})
 
-	test("typing a query filters the operations and anchors the cursor", async () => {
+	test("an unknown entry name refuses to open rather than silently selecting the first", async () => {
+		const { session } = await makeSession()
+		// A renamed/removed operation is a caller bug; landing on `bookmark`
+		// would hide it behind a plausible-looking panel.
+		expect(() => session.dispatch("panel.shell")).not.toThrow()
+		expect(session.panelEntry.value.name).toBe("run")
+		expect(() => openPanel(session, { name: "no-such-op" })).toThrow(/no entry named "no-such-op"/)
+	})
+
+	test("typing a query filters the entries and anchors the cursor", async () => {
 		const { session } = await makeSession()
 		session.dispatch("panel.open")
 		session.dispatch("panel.setQuery", { query: "edit" })
-		expect(session.panelFiltered.value.map((op) => op.name)).toEqual(["edit"])
+		// Both namespaces match; the CLI operation leads its action.
+		expect(session.panelFiltered.value.map((entry) => entry.name)).toEqual(["edit", "Edit file"])
 		expect(session.panelOpIndex.value).toBe(0)
-		expect(session.panelOperation.value.name).toBe("edit")
-		// The draft re-binds to the new operation's arguments.
+		expect(session.panelEntry.value.name).toBe("edit")
+		// The draft re-binds to the new entry's arguments.
 		expect(session.panelDraft.value.map((b) => b.name)).toEqual(["PATH"])
 	})
 
@@ -305,9 +343,9 @@ describe("panel", () => {
 		// The list opens alphabetically; select `copy` explicitly to keep the
 		// ring walk independent of the ordering: two argument headers, FROM
 		// (row 0, then its item at row 1), then TO (row 2).
-		expect(session.panelOperation.value.name).toBe("bookmark")
+		expect(session.panelEntry.value.name).toBe("bookmark")
 		session.dispatch("panel.setOp", { index: session.panelFiltered.value.findIndex((op) => op.name === "copy") })
-		expect(session.panelOperation.value.name).toBe("copy")
+		expect(session.panelEntry.value.name).toBe("copy")
 		expect(session.panelFocus.value).toBe("ops")
 		session.dispatch("panel.tab", { delta: 1 })
 		expect(session.panelFocus.value).toBe("args")

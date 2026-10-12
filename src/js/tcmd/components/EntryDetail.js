@@ -135,7 +135,7 @@ function createBehaviors(env = {}) {
 		const entry = unwrap(data.entry)
 		const marked = unwrap(data.marked)
 		const markedCount = marked?.size ?? 0
-		const width = env.width ? env.width(self) : 0
+		const width = env.width ? env.width(self, data) : 0
 		const kept = fitBlocks(detailBlocks(entry, markedCount), width, measure, env.elide)
 		const keys = new Set(kept.map((block) => block.key))
 		const texts = {}

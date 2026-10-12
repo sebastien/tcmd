@@ -8,6 +8,8 @@
 import { beforeAll, describe, expect, test } from "bun:test"
 import { createPane, createSession, load } from "../../src/js/tcmd/core/index.js"
 import { createMockFs } from "../helpers/mock-fs.js"
+import { cell } from "select/state/cells"
+import { createHttpFs } from "../../src/js/tcmd/web/http.js"
 
 const TREE = {
 	"/": [
@@ -41,16 +43,30 @@ beforeAll(async () => {
 	;({ createWebApp, normalizeKey } = await import("../../src/js/tcmd/web/app.js"))
 })
 
-async function mountApp() {
-	const fs = createMockFs(TREE)
+async function mountApp(options = {}) {
+	const fs = options.fs ?? createMockFs(TREE)
 	const left = createPane({ fs, path: "/home" })
 	const right = createPane({ fs, path: "/" })
 	const session = createSession({ fs, left, right })
 	await load(session)
 	const host = document.createElement("div")
 	document.body.appendChild(host)
-	const instance = createWebApp(session).new().mount(host)
+	const instance = createWebApp(session, options).new().mount(host)
 	return { host, instance, session }
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 40))
+
+function press(host, key, options = {}) {
+	const target = host.ownerDocument.activeElement
+	const event = new host.ownerDocument.defaultView.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...options })
+	;(host.contains(target) ? target : host.querySelector(".app")).dispatchEvent(event)
+	return event
+}
+
+function type(input, value) {
+	input.value = value
+	input.dispatchEvent(new input.ownerDocument.defaultView.Event("input", { bubbles: true }))
 }
 
 describe("web app", () => {
@@ -93,7 +109,7 @@ describe("web app", () => {
 			// Back to one mark: the counter drops out.
 			pane.toggleMark()
 			await new Promise((resolve) => setTimeout(resolve, 20))
-			expect(host.querySelector(".pane-left .entry-detail-marked").textContent).toBe("")
+			expect(host.querySelector(".pane-left .entry-detail-marked")).toBeNull()
 		} finally {
 			instance?.unmount?.()
 		}
@@ -113,16 +129,220 @@ describe("web app", () => {
 		}
 	})
 
-	test("the command panel is disabled and absent from the web bar", async () => {
+	test("`:` opens the visible panel and Escape closes it", async () => {
 		const { host, instance, session } = await mountApp()
 		try {
-			expect(session.panelEnabled.value).toBe(false)
-			expect(host.textContent).not.toContain("panel.toggle")
-			// `m` is a no-op on the web: no invisible modal opens.
-			session.dispatch("panel.toggle")
+			press(host, ":")
+			await settle()
+			expect(session.panelOpen.value).toBe(true)
+			expect(host.querySelector(".command-panel")).not.toBeNull()
+			expect(document.activeElement === host.querySelector(".panel-query")).toBe(true)
+			expect(host.querySelector(".panel-ops").textContent).toContain("copy")
+			// The browser has no Nerd Font, so entries carry the text tag.
+			const names = [...host.querySelectorAll(".panel-ops .panel-name")].map((row) => row.textContent)
+			expect(names).toContain("cli bookmark")
+			expect(names).toContain("app Open file")
+			press(host, "Escape")
+			await settle()
 			expect(session.panelOpen.value).toBe(false)
+			expect(document.activeElement === host.querySelector(".app")).toBe(true)
 		} finally {
 			instance?.unmount?.()
+		}
+	})
+
+	test("panel input, clicks and keyboard edit the draft, not the real marks, and Enter runs once", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			session.panes.left.toggleMark()
+			session.panes.left.cursor.set(1)
+			session.panes.left.toggleMark()
+			press(host, ":")
+			await settle()
+			type(host.querySelector(".panel-query"), "copy")
+			await settle()
+			expect(session.panelEntry.value.name).toBe("copy")
+			expect(host.querySelector(".panel-runs pre").textContent).toBe("copy /home/tester /home/notes.txt /")
+			const items = host.querySelectorAll('.panel-args [data-type="item"]')
+			items[0].dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await settle()
+			expect(host.querySelector(".panel-runs pre").textContent).toBe("copy /home/notes.txt /")
+			expect(session.panes.left.marked.value.size).toBe(2)
+			// From an item, Tab returns to operations, then visits FROM and TO.
+			press(host, "Tab")
+			press(host, "Tab")
+			press(host, "Tab")
+			await settle()
+			expect(document.activeElement === host.querySelector(".panel-value")).toBe(true)
+			type(host.querySelector(".panel-value"), "/etc")
+			await settle()
+			expect(host.querySelector(".panel-runs pre").textContent).toBe("copy /home/notes.txt /etc")
+			let copies = 0
+			const copy = session.fs.copy
+			session.fs.copy = (...args) => { copies++; return copy(...args) }
+			press(host, "Enter")
+			await settle()
+			expect(copies).toBe(1)
+			expect(session.panelOpen.value).toBe(false)
+			expect(await session.fs.readTextHead("/etc/notes.txt")).toBe("hello\nworld\n")
+		} finally {
+			instance.unmount()
+		}
+	})
+
+	test("the panel exposes risk colours and refuses missing required arguments", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			press(host, ":")
+			await settle()
+			expect(host.querySelectorAll('[data-risk="destructive"]').length).toBeGreaterThan(0)
+			expect(host.querySelectorAll('[data-risk="caution"]').length).toBeGreaterThan(0)
+			type(host.querySelector(".panel-query"), "touch")
+			await settle()
+			press(host, "Tab")
+			press(host, " ")
+			await settle()
+			expect(host.querySelector(".panel-runs").getAttribute("data-runnable")).toBe("false")
+			press(host, "Enter")
+			await settle()
+			expect(session.panelOpen.value).toBe(true)
+			expect(session.notice.value.kind).toBe("error")
+		} finally {
+			instance.unmount()
+		}
+	})
+
+	test("bookmarks and filters get input focus, and app keys suppress browser defaults", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			await settle()
+			// The browser's own `^R` shortcut stays swallowed so a reload
+			// cannot fire while the app has focus; `^P` belonged to the
+			// palette, so the browser gets that key back.
+			expect(press(host, "r", { ctrlKey: true }).defaultPrevented).toBe(true)
+			expect(press(host, "p", { ctrlKey: true }).defaultPrevented).toBe(false)
+			await settle()
+			expect(session.panelOpen.value).toBe(false)
+			press(host, "b")
+			await settle()
+			expect(document.activeElement === host.querySelector(".bookmark-query")).toBe(true)
+			expect(press(host, " ").defaultPrevented).toBe(false)
+			type(host.querySelector(".bookmark-query"), "tester")
+			press(host, "Enter")
+			await settle()
+			expect(session.bookmarks.entries.value.tester).toEqual({ path: "/home/tester", isDir: true })
+			press(host, "g")
+			await settle()
+			expect(document.activeElement === host.querySelector(".bookmark-query")).toBe(true)
+			expect(host.querySelector(".bookmark-rows").textContent).toContain("tester/")
+			press(host, "Escape")
+			await settle()
+			expect(press(host, "/").defaultPrevented).toBe(false)
+			await settle()
+			expect(document.activeElement === host.querySelector(".filter-input")).toBe(true)
+			type(host.querySelector(".filter-input"), "notes")
+			press(host, "Enter")
+			await settle()
+			expect(session.panes.left.filter.value).toBe("notes")
+			expect(press(host, "PageDown").defaultPrevented).toBe(true)
+			press(host, "Escape")
+			await settle()
+			expect(session.panes.left.filter.value).toBe("")
+		} finally {
+			instance.unmount()
+		}
+	})
+
+	test("help is modal and the inspector responds to viewport changes", async () => {
+		const size = cell({ width: 120, height: 24 })
+		const { host, instance, session } = await mountApp({ size })
+		try {
+			expect(host.querySelector('[data-slot="inspector"] .preview').textContent).toContain("directory: tester/")
+			press(host, "?")
+			await settle()
+			const help = host.querySelector(".help").textContent
+			expect(help).toContain("Commands")
+			expect(help).toContain("Shell command")
+			expect(document.activeElement === host.querySelector(".help")).toBe(true)
+			press(host, "ArrowDown")
+			expect(session.panes.left.cursor.value).toBe(0)
+			press(host, "Escape")
+			await settle()
+			expect(host.querySelector(".help")).toBeNull()
+			size.set({ width: 80, height: 24 })
+			await settle()
+			expect(host.querySelector('[data-slot="inspector"]')).toBeNull()
+			press(host, "v")
+			await settle()
+			expect(host.querySelector(".viewer .preview")).not.toBeNull()
+			press(host, "Escape")
+			await settle()
+			expect(host.querySelector(".viewer")).toBeNull()
+			size.set({ width: 40, height: 10 })
+			await settle()
+			expect(host.querySelector(".resize-hint").textContent).toContain("Window too small")
+			expect(host.querySelector(".panes")).toBeNull()
+			size.set({ width: 120, height: 24 })
+			await settle()
+			expect(host.querySelector(".panes")).not.toBeNull()
+		} finally {
+			instance.unmount()
+		}
+	})
+
+	test("pane focus, loading, empty state and marked count reach the web components", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			expect(host.querySelector(".pane-left .is-current").dataset.active).toBe("true")
+			expect(host.querySelector(".pane-right .is-current").dataset.active).toBe("false")
+			session.panes.left.toggleMark()
+			await settle()
+			expect(host.querySelector(".pane-left .is-current").dataset.marked).toBe("true")
+			expect(host.querySelector(".command-bar").textContent).toContain("1 marked")
+			session.panes.left.loading.set(true)
+			await settle()
+			expect(host.querySelector(".pane-left .file-list").textContent).toContain("loading")
+			session.panes.left.loading.set(false)
+			session.panes.left.filter.set("no-match")
+			await settle()
+			expect(host.querySelector(".pane-left .file-list").textContent).toContain("(empty)")
+		} finally {
+			instance.unmount()
+		}
+	})
+
+	test("the same command panel works through the HTTP filesystem adapter", async () => {
+		const backend = createMockFs(TREE)
+		const calls = []
+		const fs = await createHttpFs({
+			base: "http://api.test/api",
+			fetch: async (url, init) => {
+				const route = url.pathname.split("/").pop()
+				calls.push(route)
+				let payload
+				if (route === "info") payload = { root: "/", home: "/home/tester", cwd: "/home" }
+				else if (init.method === "POST") {
+					const body = JSON.parse(init.body)
+					payload = await backend[route](body.from, body.to)
+				} else payload = await backend[route](url.searchParams.get("path"))
+				return new Response(JSON.stringify(payload ?? { ok: true }), { headers: { "content-type": "application/json" } })
+			},
+		})
+		const { host, instance, session } = await mountApp({ fs })
+		try {
+			session.panes.left.cursor.set(1)
+			press(host, ":")
+			await settle()
+			type(host.querySelector(".panel-query"), "copy")
+			await settle()
+			expect(host.querySelector(".panel-runs pre").textContent).toBe("copy /home/notes.txt /")
+			press(host, "Enter")
+			await settle()
+			expect(session.panelOpen.value).toBe(false)
+			expect(calls).toContain("copy")
+			expect(await fs.readTextHead("/notes.txt")).toBe("hello\nworld\n")
+		} finally {
+			instance.unmount()
 		}
 	})
 
@@ -178,15 +398,18 @@ describe("web app", () => {
 		}
 	})
 
-	test("scripting mode renders the prompt and operation rows", async () => {
+	test("`!` lands on the shell operation with its CMD field focused", async () => {
 		const { host, instance, session } = await mountApp()
 		try {
-			session.paletteMode.set("script")
-			session.paletteOpen.set(true)
-			await new Promise((resolve) => setTimeout(resolve, 0))
-			expect(host.querySelector(".palette-sign").textContent).toBe(":")
-			const labels = [...host.querySelectorAll(".palette-item")].map((item) => item.textContent)
-			expect(labels.some((label) => label.includes("copy  copy FROM TO"))).toBe(true)
+			press(host, "!")
+			await settle()
+			expect(session.panelOpen.value).toBe(true)
+			expect(session.panelEntry.value.name).toBe("run")
+			// The raw CMD field owns the keyboard, so the browser focuses it.
+			expect(document.activeElement === host.querySelector(".panel-value")).toBe(true)
+			type(host.querySelector(".panel-value"), "echo hi")
+			await settle()
+			expect(host.querySelector(".panel-runs pre").textContent).toBe("run 'echo hi'")
 		} finally {
 			instance?.unmount?.()
 		}

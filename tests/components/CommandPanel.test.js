@@ -8,11 +8,12 @@ import {
 import { behaviorEnv } from "../helpers/behavior-env.js"
 
 describe("CommandPanel", () => {
-	test("titles itself with the selected operation", () => {
+	test("titles itself with the selected entry", () => {
 		expect(panelTitle({ name: "copy" })).toBe(" Command · copy ")
+		expect(panelTitle({ name: "Open file" })).toBe(" Command · Open file ")
 		expect(panelTitle(null)).toBe(" Command ")
 		const behaviors = createBehaviors(behaviorEnv)
-		expect(behaviors.title(null, { operation: { name: "move" } })).toBe(" Command · move ")
+		expect(behaviors.title(null, { entry: { name: "move" } })).toBe(" Command · move ")
 	})
 
 	test("shows a prompt before the command filter input", () => {
@@ -28,6 +29,14 @@ describe("CommandPanel", () => {
 		expect(behaviors.footer()).toBe(PANEL_FOOTER)
 		expect(behaviors.open(null, { open: true })).toBe(true)
 		expect(behaviors.open(null, { open: false })).toBe(false)
+	})
+
+	test("an entry with no bound arguments shows the empty state", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		expect(behaviors.argsEmptyText()).toBe("no arguments")
+		// A TinyCmd action binds nothing; a CLI operation always has rows.
+		expect(behaviors.argsEmpty(null, { rows: [] })).toBe(true)
+		expect(behaviors.argsEmpty(null, { rows: [{ key: "arg:0" }] })).toBe(false)
 	})
 
 	test("draws a rule between the columns and above the runs preview", () => {

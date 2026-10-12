@@ -76,4 +76,21 @@ describe("opfs web bootstrap", () => {
 			instance?.unmount?.()
 		}
 	})
+
+	test("the web command panel copies through the OPFS backend", async () => {
+		const { fs, host, instance, session } = await boot()
+		try {
+			const notes = session.panes.left.entries.value.findIndex((entry) => entry.name === "notes.txt")
+			session.panes.left.cursor.set(notes)
+			session.dispatch("panel.open")
+			session.panelQuery.set("copy")
+			await new Promise((resolve) => setTimeout(resolve, 20))
+			expect(host.querySelector(".panel-runs pre").textContent).toBe("copy /home/tester/notes.txt /")
+			await session.dispatch("panel.run")
+			expect(session.panelOpen.value).toBe(false)
+			expect(await fs.readTextHead("/notes.txt")).toBe(await fs.readTextHead("/home/tester/notes.txt"))
+		} finally {
+			instance.unmount()
+		}
+	})
 })

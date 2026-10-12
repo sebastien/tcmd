@@ -1,15 +1,15 @@
-<div class="entry-detail">
+<div class="entry-detail" ref="box">
 	<div class="entry-detail-line">
-		<span class="entry-detail-indent" out="detailIndent"></span>
-		<span class="entry-detail-marked" out="detailMarked"></span>
+		<span class="entry-detail-indent" when="detailHasIndent" out="detailIndent"></span>
+		<span class="entry-detail-marked" when="detailHasMarked" out="detailMarked"></span>
 		<span class="entry-detail-sep" when="detailSepTime" out="detailSep"></span>
-		<span class="entry-detail-time" out="detailTime"></span>
+		<span class="entry-detail-time" when="detailHasTime" out="detailTime"></span>
 		<span class="entry-detail-sep" when="detailSepType" out="detailSep"></span>
-		<span class="entry-detail-type" out:class="detailTypeClass" out="detailType"></span>
+		<span class="entry-detail-type" when="detailHasType" out:class="detailTypeClass" out="detailType"></span>
 		<span class="entry-detail-sep" when="detailSepSize" out="detailSep"></span>
-		<span class="entry-detail-size" out="detailSize"></span>
+		<span class="entry-detail-size" when="detailHasSize" out="detailSize"></span>
 		<span class="entry-detail-spacer" when="detailHasMode"></span>
 		<span class="entry-detail-sep" when="detailSepMode" out="detailSep"></span>
-		<span class="entry-detail-mode" out="detailMode"></span>
+		<span class="entry-detail-mode" when="detailHasMode" out="detailMode"></span>
 	</div>
 </div>

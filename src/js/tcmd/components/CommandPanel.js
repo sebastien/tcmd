@@ -4,15 +4,18 @@
 // Created: 2026-10-09
 
 // Module: tcmd/components/CommandPanel
-// CommandPanel: the Commando-style overlay (`m` / `:`). A filter input at the
-// top narrows the left operation list as you type (the matching command takes
-// the cursor); a right column shows the selected operation's arguments: one
-// header row per argument (its name and binding summary) and, for a selection,
-// one row per path with a `[x]`/`[ ]` toggle. A vertical rule divides the two
-// columns, a horizontal one separates them from the "runs" line below, which
-// shows the assembled command the draft maps to. The footer advertises the
-// panel keys. The row logic lives in `CommandArgRow.js`; this parent maps both
-// the operation list and the flattened argument rows.
+// CommandPanel: the one entry point (`:`). A filter input at the top narrows
+// the left entry list as you type (the matching entry takes the cursor); the
+// list marks CLI operations and TinyCmd actions apart by their namespace
+// marker. A right column shows the selected operation's arguments: one header
+// row per argument (its name and binding summary) and, for a selection, one
+// row per path with a `[x]`/`[ ]` toggle; a TinyCmd action takes none, so the
+// column says so. A vertical rule divides the two columns, a horizontal one
+// separates them from the "runs" line below, which shows the assembled command
+// the draft maps to (the action's title when there is nothing to bind). The
+// footer advertises the panel keys. The row logic lives in
+// `CommandArgRow.js`; this parent maps both the entry list and the flattened
+// argument rows.
 //
 // Environment: `overlayBg`, `borderPrimaryActiveFg`, `textSecondaryFg`
 // (footer), `textHeadingFg` (title/sign), `accentFg` (preview),
@@ -24,10 +27,10 @@ import { unwrap } from "select/state/cells"
 import { PANEL_FOCUS } from "../core/panel.js"
 
 // Function: panelTitle
-// " Command · copy " while an operation is selected (spaces so the title sits
+// " Command · copy " while an entry is selected (spaces so the title sits
 // clear of the border corners).
-function panelTitle(op) {
-	const name = unwrap(op)?.name
+function panelTitle(entry) {
+	const name = unwrap(entry)?.name
 	return name ? ` Command · ${name} ` : " Command "
 }
 
@@ -62,9 +65,13 @@ function createBehaviors(env) {
 			const row = unwrap(data.argRow)
 			return row?.type === "arg" ? `${row.name}: ` : ""
 		},
+		// The argument column's empty state: a TinyCmd action binds no
+		// arguments, so there is nothing to edit or toggle.
+		argsEmpty: (_self, data) => (unwrap(data.rows)?.length ?? 0) === 0,
+		argsEmptyText: () => "no arguments",
 		footer: () => PANEL_FOOTER,
 		footerFg: () => env.textSecondaryFg,
-		// Dividers: a vertical rule between the operation list and the argument
+		// Dividers: a vertical rule between the entry list and the argument
 		// sidebar, a horizontal one above the "runs" preview — both in the
 		// secondary border colour, like the pane header rules.
 		ruleFg: () => env.borderSecondaryFg,
@@ -78,6 +85,7 @@ function createBehaviors(env) {
 		// `previewColor`); the "runs" label wears the same colour so the two
 		// read as one block.
 		preview: (_self, data) => unwrap(data.command) ?? "",
+		runnableState: (_self, data) => `${unwrap(data.runnable) !== false}`,
 		previewFg: (_self, data) => previewColor(data),
 		previewLabel: () => "runs",
 		previewLabelFg: (_self, data) => previewColor(data),
@@ -86,11 +94,11 @@ function createBehaviors(env) {
 		queryFocused: (_self, data) => Boolean(unwrap(data.open)) && unwrap(data.focus) !== PANEL_FOCUS.ARGS,
 		sign: () => panelSign(),
 		signFg: () => env.textHeadingFg,
-		title: (_self, data) => panelTitle(data.operation),
+		title: (_self, data) => panelTitle(data.entry),
 		titleColor: () => env.textHeadingFg,
 	}
-	if (env?.opRows) behaviors.opRows = (_self, data) => env.opRows(self, data)
-	if (env?.argRows) behaviors.argRows = (_self, data) => env.argRows(self, data)
+	if (env?.opRows) behaviors.opRows = (self, data) => env.opRows(self, data)
+	if (env?.argRows) behaviors.argRows = (self, data) => env.argRows(self, data)
 	if (env?.argScrollTop) behaviors.argScrollTop = (self, data) => env.argScrollTop(self, data)
 	return behaviors
 }

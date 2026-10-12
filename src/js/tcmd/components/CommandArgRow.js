@@ -4,21 +4,23 @@
 // Created: 2026-10-09
 
 // Module: tcmd/components/CommandArgRow
-// CommandArgRow: one row shared by both command-panel columns. The operation
-// column passes `{ type: "op" }` rows (name = operation title, summary =
-// signature, `risk` tints destructive/caution operations); the argument column
-// passes `{ type: "arg" | "item" }` rows from `core/panel.panelRowList`. An
-// item shows a `[x]`/`[ ]` toggle with its basename and, dimmed after it, the
-// parent directory; a focused row carries a `>` marker so focus is not
+// CommandArgRow: one row shared by both command-panel columns. The entry
+// column passes `{ type: "op" }` rows (name = entry name, summary = signature
+// or key shortcut, `risk` tints destructive/caution operations, and `source`
+// marks the namespace — a CLI operation or a TinyCmd action); the argument
+// column passes `{ type: "arg" | "item" }` rows from `core/panel.panelRowList`.
+// An item shows a `[x]`/`[ ]` toggle with its basename and, dimmed after it,
+// the parent directory; a focused row carries a `>` marker so focus is not
 // colour-only. Reads the row bag `{ item, index, row, cursor, focus }` built by
 // `rows.js`.
 //
 // Environment: `accentFg` (focused row), `textFg`, `textSecondaryFg` (summary),
 // `accentSecondaryFg` (a selected item), `errorFg` (destructive op),
 // `warningFg` (caution op), `selectionBg` (row background), `focusedClass`
-// (web).
+// (web), `icons` (namespace marker: Nerd Font glyph, or its text fallback).
 
 import { unwrap } from "select/state/cells"
+import { sourceMarker } from "./icons.js"
 
 // Function: riskFg
 // The colour a row's risk maps to: red for destructive operations, amber for
@@ -30,21 +32,21 @@ function riskFg(row, env) {
 }
 
 // Function: rowName
-// The row's left cell: the operation title, an argument's name, or an item's
-// `[x] basename`.
-function rowName(row) {
+// The row's left cell: an entry prefixed with its namespace marker, an
+// argument's name, or an item's `[x] basename`.
+function rowName(row, icons) {
 	if (!row) return ""
 	if (row.type === "item") return `${row.marker ?? "[ ]"} ${row.name ?? ""}`
+	if (row.type === "op" && row.source) return `${sourceMarker(row.source, icons)} ${row.name ?? ""}`
 	return row.name ?? ""
 }
 
 // Function: rowSummary
-// The row's right cell: the operation signature, an argument's binding
-// summary, or an item's parent directory.
+// The row's right cell: an entry's argument list or key shortcut, an
+// argument's binding summary, or an item's parent directory.
 function rowSummary(row) {
 	if (!row) return ""
 	if (row.type === "item") return row.parent ?? ""
-	if (row.type === "op") return row.summary ?? ""
 	return row.summary ?? ""
 }
 
@@ -69,9 +71,10 @@ function createBehaviors(env) {
 	return {
 		marker: (_self, data) => (focused(data) ? ">" : " "),
 		markerFg: () => env.accentFg,
-		name: (_self, data) => rowName(data.row),
+		name: (_self, data) => rowName(data.row, env.icons),
 		rowBg: (_self, data) => (focused(data) ? env.selectionBg : undefined),
 		rowClass: (_self, data) => (focused(data) ? env.focusedClass : null),
+		rowSelected: (_self, data) => `${data.row?.selected === true}`,
 		rowFg: (_self, data) => {
 			// A risky operation (delete/erase/move) is always tinted — even
 			// focused — so danger reads at a glance; focus is carried by the

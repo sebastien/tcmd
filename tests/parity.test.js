@@ -72,4 +72,37 @@ describe("cross-engine parity", () => {
 			webInstance?.unmount?.()
 		}
 	})
+
+	test("both renderers show the same resolved command and transient selection", async () => {
+		const fs = createMockFs(TREE)
+		const session = createSession({ fs, left: createPane({ fs, path: "/home" }), right: createPane({ fs, path: "/etc" }) })
+		await load(session)
+		session.panes.left.cursor.set(1)
+		session.panes.left.toggleMark()
+		const host = document.createElement("div")
+		document.body.appendChild(host)
+		const instance = createWebApp(session).new().mount(host)
+		const setup = await testRender(createAppComponent(session), { width: 120, height: 30 })
+		try {
+			session.dispatch("panel.open")
+			session.panelQuery.set("copy")
+			await new Promise((resolve) => setTimeout(resolve, 30))
+			await setup.renderOnce()
+			for (const text of ["Command · copy", "notes.txt", "runs", "copy /home/notes.txt /etc"]) {
+				expect(host.textContent).toContain(text)
+				expect(setup.captureCharFrame()).toContain(text)
+			}
+			session.dispatch("panel.focusArg")
+			session.dispatch("panel.setRow", { index: 1 })
+			session.dispatch("panel.toggleItem")
+			await new Promise((resolve) => setTimeout(resolve, 30))
+			await setup.renderOnce()
+			expect(host.querySelector(".panel-runs pre").textContent).toContain("«FROM»")
+			expect(setup.captureCharFrame()).toContain("«FROM»")
+			expect(session.panes.left.marked.value.has("/home/notes.txt")).toBe(true)
+		} finally {
+			instance.unmount()
+			setup.renderer.destroy()
+		}
+	})
 })

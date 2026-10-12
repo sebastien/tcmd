@@ -1,4 +1,0 @@
-<box flexDirection="row" height="1" out:backgroundColor="rowBg" on:click="item.id!palette:run">
-	<text out="rowMarker" width="2" out:fg="rowFg"></text>
-	<text out="paletteLabel" flexGrow="1" out:fg="rowFg" wrapMode="none" truncate="true"></text>
-</box>

@@ -115,6 +115,9 @@ function createBehaviors(env) {
 			return undefined
 		},
 		rowClass: (_self, data) => (rowCurrent(data) ? env.currentClass : null),
+		rowMarked: (_self, data) => `${rowIsMarked(data)}`,
+		rowActive: (_self, data) => `${unwrap(data.active) !== false}`,
+		rowKind: (_self, data) => data.item?.isSymlink ? "link" : data.item?.isDir ? "dir" : data.item?.isDevice ? "dev" : "file",
 		// The icon is its own slot so it can sit dimmer than the name; it
 		// collapses when the environment keeps rows icon-free.
 		hasIcon: () => Boolean(env.icons),

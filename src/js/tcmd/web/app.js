@@ -9,10 +9,13 @@
 // `tcmd/tui/app.js` for the DOM backend.
 
 import { ui } from "select/ui"
-import { unwrap } from "select/state/cells"
+import { cell, derived, unwrap } from "select/state/cells"
 import appHtml from "../components/App.html" with { type: "text" }
 import { appBehaviors, appEvents, appInit } from "../components/index.js"
 import { registerWebComponents } from "./catalogue.js"
+import { elideCrumbs } from "../components/format.js"
+import { createFrameBehaviors, INSPECTOR_INLINE_WIDTH, isNarrow } from "../components/Frame.js"
+import { connectEffects } from "./effects.js"
 import { webTheme } from "./theme.js"
 
 // Map DOM key names to the core keymap chord names.
@@ -61,92 +64,160 @@ function webViewBehaviors() {
 			leftError: data.leftError,
 			notice: data.notice,
 			rightError: data.rightError,
+			active: data.active,
+			leftMarked: data.leftMarked,
+			rightMarked: data.rightMarked,
 		}),
 		confirmView: (_self, data) => ({ confirm: data.confirm }),
 		leftCrumbsView: (_self, data) => ({
 			segments: data.leftSegments,
 			paneId: data.leftId,
 		}),
-		leftDetailView: (_self, data) => ({ entry: data.leftEntry, marked: data.leftMarked }),
+		leftDetailView: (_self, data) => ({ entry: data.leftEntry, marked: data.leftMarked, width: data.paneWidth }),
 		leftFilterView: (_self, data) => ({
 			query: data.leftFilter,
 			paneId: data.leftId,
 			filtering: data.filtering,
 			entries: data.leftEntries,
 		}),
-		leftLabelView: (_self, data) => ({ paneId: data.leftId, active: data.active }),
 		leftListView: (_self, data) => ({
 			entries: data.leftEntries,
 			cursor: data.leftCursor,
 			marked: data.leftMarked,
 			paneId: data.leftId,
+			active: data.leftActive,
+			loading: data.leftLoading,
 		}),
 		leftPaneClass: (_self, data) => (unwrap(data.active) === "left" ? webTheme.activeClass : null),
 		leftSummaryView: (_self, data) => ({
 			entries: data.leftEntries,
 			disk: data.leftDisk,
+			width: data.paneWidth,
 		}),
-		paletteView: (_self, data) => ({
-			// Cells pass through (as `in:` slots do in the TUI); `query` is written
-			// back by the input's `inout` two-way binding.
-			items: data.paletteItems,
-			mode: data.paletteMode,
-			open: data.paletteOpen,
-			query: data.paletteQuery,
-			selected: data.paletteIndex,
+		panelView: (_self, data) => ({
+			// Cells pass through (as `in:` slots do in the TUI); `query`/`value`
+			// are written back by the inputs' `inout` two-way bindings.
+			open: data.panelOpen,
+			entry: data.panelEntry,
+			items: data.panelItems,
+			opCursor: data.panelOpIndex,
+			rows: data.panelRows,
+			argCursor: data.panelRowIndex,
+			focus: data.panelFocus,
+			textual: data.panelTextual,
+			argRow: data.panelCursorRow,
+			command: data.panelCommand,
+			runnable: data.panelRunnable,
+			query: data.panelQuery,
+			value: data.panelValue,
 		}),
+		helpView: (_self, data) => ({ open: data.helpOpen }),
 		previewView: (_self, data) => ({
 			preview: data.preview,
-			show: data.showPreview,
+			show: true,
+			entry: data.appEntry,
 		}),
 		rightCrumbsView: (_self, data) => ({
 			segments: data.rightSegments,
 			paneId: data.rightId,
 		}),
-		rightDetailView: (_self, data) => ({ entry: data.rightEntry, marked: data.rightMarked }),
+		rightDetailView: (_self, data) => ({ entry: data.rightEntry, marked: data.rightMarked, width: data.paneWidth }),
 		rightFilterView: (_self, data) => ({
 			query: data.rightFilter,
 			paneId: data.rightId,
 			filtering: data.filtering,
 			entries: data.rightEntries,
 		}),
-		rightLabelView: (_self, data) => ({ paneId: data.rightId, active: data.active }),
 		rightListView: (_self, data) => ({
 			entries: data.rightEntries,
 			cursor: data.rightCursor,
 			marked: data.rightMarked,
 			paneId: data.rightId,
+			active: data.rightActive,
+			loading: data.rightLoading,
 		}),
 		rightPaneClass: (_self, data) => (unwrap(data.active) === "right" ? webTheme.activeClass : null),
 		rightSummaryView: (_self, data) => ({
 			entries: data.rightEntries,
 			disk: data.rightDisk,
+			width: data.paneWidth,
 		}),
 	}
 }
 
 // Function: createWebApp
 // Builds the root App component for `session` on the web presentation.
-function createWebApp(session) {
+function createWebApp(session, options = {}) {
 	registerWebComponents()
-	// The command panel is a TUI-only view; disable it so no web dispatch path
-	// (key, palette, command bar) opens an invisible modal, and drop its
-	// palette entries (`:` and `m` both fall back to the script palette).
-	session.panelEnabled?.set(false)
-	const palette = session.paletteCommands?.value
-	if (palette) {
-		session.paletteCommands.set(palette.filter((row) => row.id !== "panel.toggle" && row.id !== "panel.open"))
-	}
+	const size = options.size ?? cell({ width: 0, height: 0 })
+	const help = cell(false)
+	const viewer = cell(false)
+	const paneWidth = derived([size, session.showPreview], ([value, show]) => {
+		if (!value.width) return 0
+		const columns = show && value.width >= INSPECTOR_INLINE_WIDTH ? 3 : 2
+		return Math.max(1, Math.floor(value.width / columns) - 4)
+	})
+	const crumbs = (pane) => derived([pane.segments, paneWidth], ([segments, width]) => elideCrumbs(segments, width))
+	const quit = (self) => self.unmount?.()
+	// DOM inputs have no native `enter` event; the root routes Enter for them.
+	const baseKeys = appBehaviors({ normalizeKey, inputOwnsEnter: false, quit }).keys
+	const events = appEvents({ quit })
 	return ui(appHtml)
-		.init(appInit(session))
+		.init(() => ({
+			...appInit(session)(),
+			uiSize: size,
+			helpOpen: help,
+			viewerOpen: viewer,
+			paneWidth,
+			leftSegments: crumbs(session.panes.left),
+			rightSegments: crumbs(session.panes.right),
+		}))
 		.does({
-			...appBehaviors({
-				normalizeKey,
-				quit: (self) => self.unmount?.(),
-			}),
+			...createFrameBehaviors({ theme: webTheme }),
 			...webViewBehaviors(),
+			minSizeTitle: () => "Window too small",
+			"effects!": (self) => {
+				if (!self._effects) self.effect(() => {
+					self._effects = connectEffects(session, self.ref.root, { size, help, viewer })
+					return () => self._effects.dispose()
+				})
+				self._effects.schedule()
+			},
+			keys: (self, data, event) => {
+				if (event.isComposing) return
+				const key = normalizeKey(event)
+				const busy = unwrap(data.confirm) || unwrap(data.bookmarkOpen) || unwrap(data.panelOpen) || unwrap(data.filtering)
+				if (help.value) {
+					if (["escape", "q", "?"].includes(key.name)) help.set(false)
+					return
+				}
+				if (!busy && key.name === "?") {
+					help.set(true)
+					return
+				}
+				// The viewer only exists while narrow: if the viewport widened
+				// underneath it, drop the stale state and keep handling the key.
+				if (viewer.value && !isNarrow(data, self)) viewer.set(false)
+				if (viewer.value) {
+					if (key.name === "escape" || key.name === "v") viewer.set(false)
+					else if (key.shift && key.name === "o") session.dispatch("file.open")
+					else if (key.shift && key.name === "e") session.dispatch("file.edit")
+					return
+				}
+				if (!busy && key.name === "v" && isNarrow(data, self)) {
+					viewer.set(!viewer.value)
+					return
+				}
+				return baseKeys(self, data, event)
+			},
 		})
-		.sub(appEvents({ quit: (self) => self.unmount?.() }))
+		.sub({
+			...events,
+			"commandbar:run": (self, data, event) => {
+				if (event.data === "view.togglePreview" && isNarrow(data, self)) viewer.set(!viewer.value)
+				else events["commandbar:run"](self, data, event)
+			},
+		})
 }
 
 export { createWebApp, normalizeKey }

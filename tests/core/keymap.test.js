@@ -30,6 +30,14 @@ describe("keymap", () => {
 		expect(matchKeymap(DEFAULT_KEYMAP, {})).toBeNull()
 	})
 
+	test("the panel is the only command entry point", () => {
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: ":" })).toBe("panel.open")
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "!" })).toBe("panel.shell")
+		// The Ctrl-P palette, and the second binding it used to share with `:`.
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "p", ctrl: true })).toBeNull()
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "m" })).toBeNull()
+	})
+
 	test("binds every entry to a command id", () => {
 		for (const binding of DEFAULT_KEYMAP) {
 			expect(binding.key.length).toBeGreaterThan(0)

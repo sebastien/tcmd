@@ -36,7 +36,7 @@ function isCell(value) {
 }
 
 // Function: isSelected
-// Whether a palette/bookmark row is the current selection. The plain
+// Whether a bookmark row is the current selection. The plain
 // `selectedRow` flag (snapshotted by the row builder) wins over the shared
 // `selected` cell, so a move only rewrites the rows that actually changed.
 function isSelected(data) {
@@ -119,21 +119,6 @@ function fileRows(FileRow) {
 	}
 }
 
-// Function: paletteRows
-// `{ item: command, index, selectedRow }` bags for `PaletteRow` rows.
-// `selectedRow` is the plain per-row selection flag so a palette move rewrites
-// only the changed rows.
-function paletteRows(PaletteRow) {
-	return (self, data) => {
-		const selected = isCell(data.selected) ? unwrap(data.selected) : data.selected
-		return PaletteRow.map(
-			data.items ?? [],
-			(item, index) => ({ item, index, selectedRow: index === selected }),
-			(command) => command.id,
-		)
-	}
-}
-
 // Function: commandItemRows
 // `{ item: command, index }` bags for `CommandItem` rows.
 function commandItemRows(CommandItem) {
@@ -146,12 +131,12 @@ function commandItemRows(CommandItem) {
 }
 
 // Function: panelOpRows
-// `{ item: op, index, row, cursor, focus }` bags for the command panel's
-// operation column (`CommandArgRow`). `row` is the normalized row shape the
-// component reads — `name` is the operation title and `summary` its argument
-// list (precomputed by `session.panelItems`, the signature with the leading
-// name stripped); `risk` tints destructive/caution operations; `cursor` is the
-// column's selected index.
+// `{ item: entry, index, row, cursor, focus }` bags for the command panel's
+// entry column (`CommandArgRow`). `row` is the normalized row shape the
+// component reads — `name` is the entry name and `summary` its argument list
+// or key shortcut (both precomputed by `session.panelItems`); `risk` tints
+// destructive/caution operations and `source` marks the namespace (a CLI
+// operation or a TinyCmd action); `cursor` is the column's selected index.
 function panelOpRows(CommandArgRow) {
 	return (self, data) =>
 		CommandArgRow.map(
@@ -162,9 +147,10 @@ function panelOpRows(CommandArgRow) {
 				row: {
 					type: "op",
 					key: item.id,
-					name: item.title,
+					name: item.name,
 					summary: item.summary ?? "",
 					risk: item.risk ?? null,
+					source: item.source ?? null,
 				},
 				cursor: data.opCursor,
 				focus: data.focus,
@@ -207,6 +193,6 @@ function bookmarkRows(BookmarkRow) {
 	}
 }
 
-export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, isSelected, paletteRows, panelArgRows, panelOpRows }
+export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, isSelected, panelArgRows, panelOpRows }
 
 // EOF

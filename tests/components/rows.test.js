@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { cell } from "select/state/cells"
-import { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, paletteRows } from "../../src/js/tcmd/components/rows.js"
+import { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, panelOpRows } from "../../src/js/tcmd/components/rows.js"
 
 // Captures what each builder passes to `Component.map` and returns a sentinel.
 function fakeRow() {
@@ -114,16 +114,18 @@ describe("rows", () => {
 		expect(fileWindow(data, 0)).toEqual({ start: 0, len: 2, local: 1, total: 2 })
 	})
 
-	test("paletteRows snapshots selection into a plain per-row flag", () => {
+	test("panelOpRows tags each entry with its namespace", () => {
 		const Row = fakeRow()
-		const selected = cell(1)
-		const command = { id: "pane.toggle" }
-		expect(paletteRows(Row)(null, { items: [command], selected })).toBe("MAPPED")
+		const items = [
+			{ id: "op:copy", name: "copy", summary: "FROM TO", risk: null, source: "cli" },
+			{ id: "cmd:file.open", name: "Open file", summary: "[O]", risk: null, source: "app" },
+		]
+		expect(panelOpRows(Row)(null, { items, opCursor: 0, focus: "ops" })).toBe("MAPPED")
 		const [call] = Row.calls
-		expect(call.data).toEqual([command])
-		expect(call.processor(command, 1)).toEqual({ item: command, index: 1, selectedRow: true })
-		expect(call.processor(command, 0)).toEqual({ item: command, index: 0, selectedRow: false })
-		expect(call.key(command)).toBe("pane.toggle")
+		expect(call.data).toEqual(items)
+		expect(call.processor(items[0], 0).row).toMatchObject({ type: "op", name: "copy", source: "cli" })
+		expect(call.processor(items[1], 1).row).toMatchObject({ type: "op", name: "Open file", source: "app" })
+		expect(call.key(items[0])).toBe("op:copy")
 	})
 
 	test("bookmarkRows snapshots selection into a plain per-row flag", () => {

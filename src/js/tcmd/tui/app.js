@@ -18,7 +18,7 @@ import appXml from "../components/App.xml" with { type: "text" }
 import { elideCrumbs } from "../components/format.js"
 import { appBehaviors, appEvents, appInit } from "../components/index.js"
 import { registerComponents } from "./catalogue.js"
-import { createFrameBehaviors, INSPECTOR_INLINE_WIDTH, isNarrow } from "./frame.js"
+import { createFrameBehaviors, INSPECTOR_INLINE_WIDTH, isNarrow } from "../components/Frame.js"
 import { tuiTheme } from "./theme.js"
 
 // Function: createAppComponent
@@ -67,7 +67,7 @@ function createAppComponent(session, options = {}) {
 		}, 100)
 	})
 
-	const baseKeys = appBehaviors({ panel: true, quit }).keys
+	const baseKeys = appBehaviors({ quit }).keys
 	const frame = createFrameBehaviors({ theme: tuiTheme })
 
 	return ui
@@ -87,7 +87,6 @@ function createAppComponent(session, options = {}) {
 				const name = key?.name
 				const isQuestion = name === "?" || (name === "/" && key?.shift)
 				const busy =
-					unwrap(data.paletteOpen) ||
 					unwrap(data.confirm) ||
 					unwrap(data.filtering) ||
 					unwrap(data.bookmarkOpen) ||

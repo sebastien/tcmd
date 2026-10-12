@@ -22,7 +22,6 @@ export { createBehaviors as commandBarBehaviors } from "./CommandBar.js"
 export { createBehaviors as commandItemBehaviors } from "./CommandItem.js"
 export { createBehaviors as commandArgRowBehaviors } from "./CommandArgRow.js"
 export { createBehaviors as commandPanelBehaviors } from "./CommandPanel.js"
-export { createBehaviors as commandPaletteBehaviors } from "./CommandPalette.js"
 export { createBehaviors as confirmBehaviors } from "./Confirm.js"
 export { createBehaviors as crumbBehaviors } from "./Crumb.js"
 export { createBehaviors as entryDetailBehaviors } from "./EntryDetail.js"
@@ -30,12 +29,12 @@ export { createBehaviors as fileListBehaviors } from "./FileList.js"
 export { createBehaviors as filePreviewBehaviors } from "./FilePreview.js"
 export { createBehaviors as fileRowBehaviors } from "./FileRow.js"
 export { createBehaviors as filterBarBehaviors } from "./FilterBar.js"
-export { createBehaviors as paletteRowBehaviors } from "./PaletteRow.js"
+export { createBehaviors as helpBehaviors } from "./Help.js"
 export { createBehaviors as summaryBehaviors } from "./Summary.js"
 
 // Helpers
 export { formatCounts, formatDisk, formatMode, formatSize, formatTime } from "./format.js"
-export { iconFor, iconsEnabled } from "./icons.js"
-export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, paletteRows, panelArgRows, panelOpRows } from "./rows.js"
+export { iconFor, iconsEnabled, sourceMarker } from "./icons.js"
+export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, panelArgRows, panelOpRows } from "./rows.js"
 
 // EOF

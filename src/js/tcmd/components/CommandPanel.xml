@@ -12,10 +12,13 @@
 			<scrollbox flexGrow="2">
 				<box out="opRows" flexDirection="column"></box>
 			</scrollbox>
-			<!-- Vertical rule between the operation list and the argument sidebar. -->
+			<!-- Vertical rule between the entry list and the argument sidebar. -->
 			<box width="1" out:border="sideRule" out:borderColor="ruleFg"></box>
 			<scrollbox ref="args" flexGrow="3" out:scrollTop="argScrollTop">
-				<box out="argRows" flexDirection="column"></box>
+				<box flexDirection="column">
+					<text when="argsEmpty" out="argsEmptyText" out:fg="labelFg" paddingLeft="1" wrapMode="none"></text>
+					<box out="argRows" flexDirection="column"></box>
+				</box>
 			</scrollbox>
 		</box>
 		<!-- Horizontal rule above the assembled command preview. -->

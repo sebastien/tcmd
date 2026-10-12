@@ -4,14 +4,20 @@
 // Created: 2026-10-09
 
 // Module: tcmd/core/panel
-// The command panel (Commando): a structured view over the operation registry.
-// It lists the operations alphabetically — ranked by match importance once a
-// query filters them (see `filterPanelOperations`) — and, for the selected
-// one, its arguments bound from
-// the live context — a selection argument shows the SRC/DST pane's marked paths
-// (falling back to the cursor entry) and lets the user toggle individual items;
-// a destination argument resolves to the DST pane's directory; textual
-// arguments (a name, a buffer label, a shell command) are typed in place.
+// The command panel (Commando): the one entry point for everything the
+// application can do. It lists two namespaces in one column, marked apart so
+// they can be told at a glance — CLI operations (`copy`, `delete`, `run`, the
+// `core/operations` registry) first, then the TinyCmd actions (`Open file`,
+// `Bookmark`, `Preview`, the `core/commands` registry). Both are ranked by
+// match importance once a query filters them (see `filterPanelEntries`).
+//
+// For the selected CLI operation, the panel binds its arguments from the live
+// context — a selection argument shows the SRC/DST pane's marked paths (falling
+// back to the cursor entry) and lets the user toggle individual items; a
+// destination argument resolves to the DST pane's directory; textual arguments
+// (a name, a buffer label, a shell command) are typed in place. A TinyCmd
+// action takes no arguments, so its draft is empty and Enter just dispatches
+// it.
 //
 // The selection the user tweaks is *transient*: it lives in the draft bindings
 // (`session.panelDraft`), never in the real pane marks. When the draft runs,
@@ -28,57 +34,105 @@ import { basename, parent } from "./path.js"
 import { getOperations, pathToken } from "./operations.js"
 
 // Constant: PANEL_FOCUS
-// The two columns the panel's focus ring moves through: "ops" (the operation
-// list, where typing filters) and "args" (an argument row, where Space toggles
-// and a textual argument owns the keyboard).
+// The two columns the panel's focus ring moves through: "ops" (the entry list,
+// where typing filters) and "args" (an argument row, where Space toggles and a
+// textual argument owns the keyboard).
 const PANEL_FOCUS = { OPS: "ops", ARGS: "args" }
 
-// Function: panelOperations
-// The operations the panel lists: every visible registry entry that carries a
-// structured `args` signature (the ones that take arguments).
-function panelOperations() {
-	return getOperations().filter((op) => !op.hidden && Array.isArray(op.args))
+// Constant: PANEL_SOURCES
+// The two namespaces the panel lists, in display order: the CLI operations,
+// then the TinyCmd actions.
+const PANEL_SOURCES = ["cli", "app"]
+
+// Constant: PANEL_NOISE
+// Action ids the panel never lists: raw cursor movement already lives on the
+// arrow keys and would only be noise.
+const PANEL_NOISE = /^nav\./
+
+// Function: panelCliEntries
+// One panel entry per visible CLI operation.
+function panelCliEntries() {
+	return getOperations()
+		.filter((op) => !op.hidden)
+		.map((op) => ({
+			source: "cli",
+			id: `op:${op.name}`,
+			name: op.name,
+			summary: `${op.signature ?? ""}`.replace(/^\S+\s*/, ""),
+			signature: op.signature ?? "",
+			risk: op.risk ?? null,
+			matchNames: [op.name, ...(op.aliases ?? [])],
+			op,
+		}))
 }
 
-// Function: compareOperations
-// Alphabetical order by name, the panel's default ordering.
-function compareOperations(a, b) {
+// Function: panelAppEntries
+// One panel entry per TinyCmd action. Their id doubles as a search term, so
+// `file.` finds `file.open` as well as `Open file` does.
+function panelAppEntries(commands) {
+	return (commands ?? [])
+		.filter((command) => !PANEL_NOISE.test(command.id))
+		.map((command) => ({
+			source: "app",
+			id: `cmd:${command.id}`,
+			name: command.title ?? command.id,
+			summary: command.keys ? `[${command.keys}]` : "",
+			signature: "",
+			risk: null,
+			matchNames: [command.title ?? command.id, command.id],
+			command,
+		}))
+}
+
+// Function: panelEntries
+// The entries the panel lists: the CLI operations, then the TinyCmd actions
+// (the `core/commands` registry rows, passed in so this module stays free of a
+// dependency on it).
+function panelEntries(commands) {
+	return [...panelCliEntries(), ...panelAppEntries(commands)]
+}
+
+// Function: compareEntries
+// The panel's default ordering: within a namespace alphabetically by name,
+// CLI operations before TinyCmd actions.
+function compareEntries(a, b) {
+	const bySource = PANEL_SOURCES.indexOf(a?.source) - PANEL_SOURCES.indexOf(b?.source)
+	if (bySource !== 0) return bySource
 	return `${a?.name ?? ""}`.localeCompare(`${b?.name ?? ""}`)
 }
 
-// Function: operationScore
-// The match importance of an operation for a query: the best fzy score across
-// its name and aliases, or `-Infinity` when neither matches (only the
-// signature does). Signature hits stay listable but rank below any name
-// match.
-function operationScore(op, query) {
+// Function: entryScore
+// The match importance of an entry for a query: the best fzy score across its
+// names, or `-Infinity` when none matches (only the signature does).
+function entryScore(entry, query) {
 	let best = -Infinity
-	for (const name of [op.name, ...(op.aliases ?? [])]) {
-		if (hasMatch(query, name)) best = Math.max(best, score(query, name))
+	for (const name of entry.matchNames ?? []) {
+		const haystack = `${name}`.toLowerCase()
+		if (hasMatch(query, haystack)) best = Math.max(best, score(query, haystack))
 	}
 	return best
 }
 
-// Function: filterPanelOperations
-// Narrows the operation list by a typed query and orders it: no query lists
-// every operation alphabetically; a query ranks the matches by importance
-// (the fzy score of the best name/alias match, so `open` outranks `copy` for
-// `op`), ties broken alphabetically. A query that only matches an operation's
-// signature (`buf` -> `sel [+|-][BUF] PATH...`) keeps it listable, at the
-// bottom.
-function filterPanelOperations(operations, query) {
-	const list = operations ?? []
+// Function: filterPanelEntries
+// Narrows the entry list by a typed query and orders it: no query lists the
+// CLI operations alphabetically, then the TinyCmd actions alphabetically; a
+// query ranks the matches by importance (the fzy score of the best name match,
+// so `open` outranks `copy` for `op`), ties keeping CLI before TinyCmd and then
+// alphabetical. A query that only matches an operation's signature (`buf` ->
+// `sel [+|-][BUF] PATH...`) keeps it listable, at the bottom.
+function filterPanelEntries(entries, query) {
+	const list = entries ?? []
 	const q = `${query ?? ""}`.trim().toLowerCase()
-	if (!q) return [...list].sort(compareOperations)
+	if (!q) return [...list].sort(compareEntries)
 	const ranked = []
-	for (const op of list) {
-		const rank = operationScore(op, q)
-		const signatureMatch = `${op.signature ?? ""}`.toLowerCase().includes(q)
+	for (const entry of list) {
+		const rank = entryScore(entry, q)
+		const signatureMatch = `${entry.signature ?? ""}`.toLowerCase().includes(q)
 		if (rank === -Infinity && !signatureMatch) continue
-		ranked.push({ op, score: rank })
+		ranked.push({ entry, score: rank })
 	}
-	ranked.sort((a, b) => (a.score !== b.score ? b.score - a.score : compareOperations(a.op, b.op)))
-	return ranked.map((match) => match.op)
+	ranked.sort((a, b) => (a.score !== b.score ? b.score - a.score : compareEntries(a.entry, b.entry)))
+	return ranked.map((match) => match.entry)
 }
 
 // Function: resolvePaneId
@@ -162,9 +216,11 @@ function bindArg(session, arg, index) {
 }
 
 // Function: bindArgs
-// Binds every argument of `op` to the live context.
-function bindArgs(session, op) {
-	return (op?.args ?? []).map((arg, index) => bindArg(session, arg, index))
+// Binds every argument of the selected entry to the live context. Only a CLI
+// operation carries an `args` signature, so a TinyCmd action yields an empty
+// draft.
+function bindArgs(session, entry) {
+	return (entry?.op?.args ?? []).map((arg, index) => bindArg(session, arg, index))
 }
 
 // Function: selectedPaths
@@ -364,14 +420,15 @@ export { decodePathToken, pathToken } from "./operations.js"
 
 export {
 	PANEL_FOCUS,
+	PANEL_SOURCES,
 	argvFor,
 	bindArgs,
 	bindingAt,
-	filterPanelOperations,
+	filterPanelEntries,
 	isTextualRow,
 	missingArg,
 	panelCommand,
-	panelOperations,
+	panelEntries,
 	panelRowList,
 	panelRunnable,
 	panelSummary,

@@ -79,11 +79,8 @@
 		</box>
 	</box>
 
-	<commandpalette when="paletteOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="20"
-	                in:open="paletteOpen" in:mode="paletteMode" in:query="paletteQuery"
-	                in:items="paletteItems" in:selected="paletteIndex"></commandpalette>
 	<commandpanel when="panelOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="22"
-	              in:open="panelOpen" in:operation="panelOperation" in:items="panelItems"
+	              in:open="panelOpen" in:entry="panelEntry" in:items="panelItems"
 	              in:opCursor="panelOpIndex" in:rows="panelRows" in:argCursor="panelRowIndex"
 	              in:focus="panelFocus" in:textual="panelTextual" in:argRow="panelCursorRow"
 	              in:command="panelCommand" in:runnable="panelRunnable"

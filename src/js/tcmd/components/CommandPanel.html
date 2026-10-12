@@ -1,0 +1,25 @@
+<section class="command-panel" when="open" role="dialog" aria-modal="true" aria-label="Command panel" tabindex="-1">
+	<div class="command-dialog">
+		<header out="title"></header>
+		<label class="panel-query-line">
+			<span out="sign"></span>
+			<input class="panel-query" type="text" inout="query" aria-label="Filter operations" />
+		</label>
+		<div class="panel-columns">
+			<ul class="panel-ops" aria-label="Commands" out="opRows"></ul>
+			<div class="panel-args-column">
+				<p class="panel-args-empty" when="argsEmpty" out="argsEmptyText"></p>
+				<ul class="panel-args" aria-label="Arguments" out="argRows"></ul>
+			</div>
+		</div>
+		<div class="panel-runs" out:data-runnable="runnableState">
+			<span out="previewLabel"></span>
+			<pre out="preview"></pre>
+		</div>
+		<label class="panel-value-line" when="fieldVisible">
+			<span out="fieldPrompt"></span>
+			<input class="panel-value" type="text" inout="value" aria-label="Argument value" />
+		</label>
+		<footer out="footer"></footer>
+	</div>
+</section>

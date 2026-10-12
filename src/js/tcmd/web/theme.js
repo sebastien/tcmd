@@ -14,6 +14,7 @@ const webTheme = {
 	currentClass: "is-current",
 	dirClass: "is-dir",
 	errorClass: "is-error",
+	focusedClass: "is-focused",
 	rootClass: "is-root",
 	selectedClass: "is-selected",
 }

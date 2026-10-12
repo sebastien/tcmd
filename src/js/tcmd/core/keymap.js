@@ -28,15 +28,13 @@ const DEFAULT_KEYMAP = [
 	{ key: "space", command: "list.mark" },
 	{ key: "b", command: "bookmark.record" },
 	{ key: "g", command: "bookmark.jump" },
-	{ key: "m", command: "panel.toggle" },
 	{ key: ":", command: "panel.open" },
-	{ key: "!", command: "palette.run" },
+	{ key: "!", command: "panel.shell" },
 	{ key: "/", command: "filter.start" },
 	{ key: "r", ctrl: true, command: "pane.reload" },
 	{ key: "v", command: "view.togglePreview" },
 	{ key: "o", shift: true, command: "file.open" },
 	{ key: "e", shift: true, command: "file.edit" },
-	{ key: "p", ctrl: true, command: "palette.toggle" },
 	{ key: "q", command: "app.quit" },
 ]
 
