@@ -1,8 +1,16 @@
-<aside class="preview" when="show" out:title="headerTitle">
-	<header out="headerTitle"></header>
-	<pre when="hasText" out="previewText" class="preview-text"></pre>
-	<pre when="hasCard" out="cardText" class="preview-card"></pre>
-	<pre when="hasEntryCard" out="entryText" class="preview-card"></pre>
-	<pre when="isEmpty" out="emptyText" class="preview-card"></pre>
+<!-- The inspector: a card/text body for a file, and a directory column
+     (breadcrumbs + cursorable listing) for a directory, so a previewed
+     directory reads as a pane. The body and the column share the frame, and
+     the whole column is clickable to take focus. -->
+<aside class="preview" when="show" out:title="headerTitle" on:click="paneId!pane:activate">
+	<header when="showBody" out="headerTitle"></header>
+	<div class="pane-header" when="isDirPane">
+		<div out="dirCrumbsView|Breadcrumbs"></div>
+	</div>
+	<div class="preview-list" when="isDirPane" data-slot="list" out="dirListView|FileList"></div>
+	<pre when="showText" out="previewText" class="preview-text"></pre>
+	<pre when="showCard" out="cardText" class="preview-card"></pre>
+	<pre when="showEntryCard" out="entryText" class="preview-card"></pre>
+	<pre when="showEmpty" out="emptyText" class="preview-card"></pre>
 	<footer class="preview-actions" out="actions"></footer>
 </aside>

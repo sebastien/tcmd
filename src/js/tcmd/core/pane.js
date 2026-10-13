@@ -22,6 +22,23 @@ const PANE_BUFFERS = { left: "A", right: "B" }
 // destination (DST).
 const PANE_LABELS = { left: "SRC", right: "DST" }
 
+// Function: currentPaneId
+// The id of the pane that owns the current directory: the focused pane while
+// focus is on source/destination, the anchor pane otherwise.
+function currentPaneId(session) {
+	return session.currentId?.value ?? session.active?.value ?? "left"
+}
+
+// Function: currentPane
+// The pane that owns the current directory: the focused pane while focus is
+// on source/destination, the anchor pane while it is on an auxiliary column
+// (see `core/session`). Path-changing commands — open, up, history,
+// breadcrumbs, relative arguments — target it; only cursor movement follows
+// the focused column. `core/commands` keeps `pane()` for the latter.
+function currentPane(session) {
+	return session.panes[currentPaneId(session)] ?? session.panes.left
+}
+
 // Function: createPane
 // Creates a pane bound to a filesystem adapter at `path`.
 //
@@ -71,4 +88,4 @@ function createPane({ fs, path: initialPath } = {}) {
 	return pane
 }
 
-export { PANE_BUFFERS, PANE_LABELS, createPane }
+export { PANE_BUFFERS, PANE_LABELS, createPane, currentPane, currentPaneId }

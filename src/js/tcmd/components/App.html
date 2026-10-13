@@ -5,7 +5,16 @@
 		<p out="minSizeHint"></p>
 	</section>
 	<main class="panes" when="!tooSmall">
-		<section class="pane pane-left" out:class="leftPaneClass" on:click="leftId!pane:activate">
+		<section class="pane pane-parent" when="showParentPane" out:class="parentPaneClass" on:click="parentId!pane:activate">
+			<div class="pane-header">
+				<div when="!parentFilterOn" out="parentCrumbsView|Breadcrumbs"></div>
+				<div out="parentFilterView|FilterBar"></div>
+			</div>
+			<div data-slot="list" out="parentListView|FileList"></div>
+			<div out="parentDetailView|EntryDetail"></div>
+			<div out="parentSummaryView|Summary"></div>
+		</section>
+		<section class="pane pane-left" when="showLeftPane" out:class="leftPaneClass" on:click="leftId!pane:activate">
 			<div class="pane-header">
 				<div when="!leftFilterOn" out="leftCrumbsView|Breadcrumbs"></div>
 				<div out="leftFilterView|FilterBar"></div>
@@ -14,7 +23,7 @@
 			<div out="leftDetailView|EntryDetail"></div>
 			<div out="leftSummaryView|Summary"></div>
 		</section>
-		<section class="pane pane-right" out:class="rightPaneClass" on:click="rightId!pane:activate">
+		<section class="pane pane-right" when="showRightPane" out:class="rightPaneClass" on:click="rightId!pane:activate">
 			<div class="pane-header">
 				<div when="!rightFilterOn" out="rightCrumbsView|Breadcrumbs"></div>
 				<div out="rightFilterView|FilterBar"></div>

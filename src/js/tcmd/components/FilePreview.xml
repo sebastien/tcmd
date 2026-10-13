@@ -1,10 +1,23 @@
+<!-- The inspector: a card/text body for a file, and a directory column
+     (breadcrumbs + cursorable listing) for a directory, so a previewed
+     directory reads as a pane. The body and the column share the border and
+     the footer, and the whole column is clickable to take focus. -->
 <box when="show" out:title="headerTitle" out:titleColor="previewTitleColor" border borderStyle="rounded"
-     flexDirection="column" flexGrow="1" overflow="hidden">
-	<scrollbox flexGrow="1">
-		<text when="hasText" out="previewText" out:fg="textFg"></text>
-		<text when="hasCard" out="cardText" out:fg="dimFg"></text>
-		<text when="hasEntryCard" out="entryText" out:fg="dimFg"></text>
-		<text when="isEmpty" out="emptyText" out:fg="dimFg"></text>
+     flexDirection="column" flexGrow="1" overflow="hidden" on:click="paneId!pane:activate">
+	<box when="isDirPane" flexDirection="row" height="1" paddingLeft="1" overflow="hidden">
+		<box flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
+			<breadcrumbs in:segments="dirSegments" in:paneId="paneId" height="1"></breadcrumbs>
+		</box>
+	</box>
+	<box when="isDirPane" height="1" out:border="headRule" out:borderColor="headRuleFg"></box>
+	<filelist when="isDirPane" in:entries="dirEntries" in:cursor="dirCursor" in:marked="dirMarked"
+	          in:active="dirActive" in:paneId="paneId" in:loading="dirLoading"></filelist>
+	<scrollbox when="showBody" flexGrow="1">
+		<text when="showText" out="previewText" out:fg="textFg"></text>
+		<text when="showCard" out="cardText" out:fg="dimFg"></text>
+		<text when="showEntryCard" out="entryText" out:fg="dimFg"></text>
+		<text when="showEmpty" out="emptyText" out:fg="dimFg"></text>
 	</scrollbox>
+	<box height="1" out:border="footRule" out:borderColor="footRuleFg"></box>
 	<box height="1"><text out="actions" out:fg="actionsFg"></text></box>
 </box>

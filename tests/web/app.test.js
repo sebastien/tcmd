@@ -7,6 +7,7 @@
 
 import { beforeAll, describe, expect, test } from "bun:test"
 import { createPane, createSession, load } from "../../src/js/tcmd/core/index.js"
+import { VERSION } from "../../src/js/tcmd/components/Frame.js"
 import { createMockFs } from "../helpers/mock-fs.js"
 import { cell } from "select/state/cells"
 import { createHttpFs } from "../../src/js/tcmd/web/http.js"
@@ -75,6 +76,11 @@ describe("web app", () => {
 		try {
 			// CommandBar/FileList/Breadcrumbs all come from reactive session cells.
 			expect(host.textContent).toContain("[Switch ⇥]")
+			// The identity bar carries the view mode and version on the right,
+			// the mode word wearing the class its gradient hangs off.
+			expect(host.querySelector(".app-header-status").textContent).toBe(`commander · ${VERSION}`)
+			expect(host.querySelector(".app-header-mode").textContent).toBe("commander")
+			expect(host.querySelector(".app-header-mode").className).toBe("app-header-mode mode-commander")
 			expect(host.textContent).toContain("notes.txt")
 			expect(host.textContent).toContain("tester/")
 			expect(host.querySelectorAll(".file-row.is-current").length).toBeGreaterThan(0)
@@ -257,7 +263,12 @@ describe("web app", () => {
 		const size = cell({ width: 120, height: 24 })
 		const { host, instance, session } = await mountApp({ size })
 		try {
-			expect(host.querySelector('[data-slot="inspector"] .preview').textContent).toContain("directory: tester/")
+			// The inspector previews the first entry (a directory) as a pane:
+			// its breadcrumb header over the directory's own listing.
+			const inspector = host.querySelector('[data-slot="inspector"] .preview')
+			expect(inspector.textContent).toContain("/home/tester")
+			expect(inspector.querySelector(".file-list").textContent).toContain("notes.txt")
+			expect(inspector.textContent).not.toContain("directory: tester/")
 			press(host, "?")
 			await settle()
 			const help = host.querySelector(".help").textContent
@@ -285,6 +296,36 @@ describe("web app", () => {
 			size.set({ width: 120, height: 24 })
 			await settle()
 			expect(host.querySelector(".panes")).not.toBeNull()
+		} finally {
+			instance.unmount()
+		}
+	})
+
+	test("t switches to the explorer: a parent column, a wider current, a directory preview", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			expect(host.querySelector(".pane-parent")).toBeNull()
+			press(host, "t")
+			await settle()
+			expect(session.viewMode.value).toBe("explorer")
+			expect(host.querySelector(".app-header-status").textContent).toBe(`explorer · ${VERSION}`)
+			expect(host.querySelector(".app-header-mode").className).toBe("app-header-mode mode-explorer")
+			// First column: the parent of the current directory, a full pane.
+			const parent = host.querySelector(".pane-parent")
+			expect(parent).not.toBeNull()
+			expect(parent.querySelector(".file-list").textContent).toContain("home/")
+			// Second column: the current pane, carrying the extra width; the
+			// destination pane is not part of this view.
+			expect(host.querySelector(".pane-left.is-major")).not.toBeNull()
+			expect(host.querySelector(".pane-right")).toBeNull()
+			// Third column: the previewed directory reads as a pane, and its
+			// rows take focus when clicked.
+			const inspector = host.querySelector('[data-slot="inspector"] .preview')
+			expect(inspector.querySelector(".file-list").textContent).toContain("notes.txt")
+			const row = inspector.querySelector(".file-row")
+			row.dispatchEvent(new host.ownerDocument.defaultView.MouseEvent("click", { bubbles: true }))
+			await settle()
+			expect(session.active.value).toBe("preview")
 		} finally {
 			instance.unmount()
 		}

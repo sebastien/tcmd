@@ -10,7 +10,7 @@
 		<!-- Identity bar: the one visible trace of TinyCmd itself (the host
 		     aside, everything else on screen is the user's files). "Tiny"
 		     shimmers blue letter by letter, "Cmd" shimmers orange. -->
-		<box flexDirection="row" height="1" paddingLeft="1" overflow="hidden">
+		<box flexDirection="row" height="1" paddingLeft="1" paddingRight="1" overflow="hidden">
 			<text out="brandT" out:fg="brandTFg" wrapMode="none"></text>
 			<text out="brandI" out:fg="brandIFg" wrapMode="none"></text>
 			<text out="brandN" out:fg="brandNFg" wrapMode="none"></text>
@@ -19,6 +19,23 @@
 			<text out="brandM" out:fg="brandMFg" wrapMode="none"></text>
 			<text out="brandD" out:fg="brandDFg" wrapMode="none"></text>
 			<text out="topBar" out:fg="topBarFg" wrapMode="none"></text>
+			<box flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden"></box>
+			<!-- The view mode, letter by letter so each carries its gradient:
+			     explorer shimmers along the Tiny blues, commander along the
+			     Cmd oranges (see `modeGradient` in Frame.js). The trailing
+			     slots of the shorter word are empty and take no column. -->
+			<box flexDirection="row" flexShrink="0" overflow="hidden">
+				<text when="modeHas0" out="modeL0" out:fg="modeFg0" wrapMode="none"></text>
+				<text when="modeHas1" out="modeL1" out:fg="modeFg1" wrapMode="none"></text>
+				<text when="modeHas2" out="modeL2" out:fg="modeFg2" wrapMode="none"></text>
+				<text when="modeHas3" out="modeL3" out:fg="modeFg3" wrapMode="none"></text>
+				<text when="modeHas4" out="modeL4" out:fg="modeFg4" wrapMode="none"></text>
+				<text when="modeHas5" out="modeL5" out:fg="modeFg5" wrapMode="none"></text>
+				<text when="modeHas6" out="modeL6" out:fg="modeFg6" wrapMode="none"></text>
+				<text when="modeHas7" out="modeL7" out:fg="modeFg7" wrapMode="none"></text>
+				<text when="modeHas8" out="modeL8" out:fg="modeFg8" wrapMode="none"></text>
+				<text out="topBarStatus" out:fg="topBarStatusFg" wrapMode="none"></text>
+			</box>
 		</box>
 
 		<!-- Minimum-size gate: below the breakpoint the workspace is unusable. -->
@@ -27,10 +44,29 @@
 			<text out="minSizeHint" out:fg="dimFg"></text>
 		</box>
 
-		<!-- Two boxed panes plus the inline inspector. -->
+		<!-- Columns: commander tiles source and destination; explorer leads
+		     with the parent mirror so the current pane sits in the middle,
+		     slightly wider than its neighbours. The inspector completes the
+		     three columns in either mode. -->
 		<box when="!tooSmall" flexDirection="column" flexGrow="1" overflow="hidden">
 			<box flexDirection="row" flexGrow="1" overflow="hidden">
-				<box flexDirection="column" flexGrow="1" border borderStyle="single"
+				<box when="showParentPane" flexDirection="column" flexGrow="1" flexBasis="0" border borderStyle="single"
+				     out:border="leftBorder" out:borderColor="parentBorderFg"
+				     on:click="parentId!pane:activate">
+					<box flexDirection="row" height="1" paddingLeft="1" overflow="hidden">
+						<box when="!parentFilterOn" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
+							<breadcrumbs in:segments="parentSegments" in:paneId="parentId" height="1"></breadcrumbs>
+						</box>
+						<filterbar in:query="parentFilter" in:paneId="parentId" in:filtering="filtering" in:entries="parentEntries"></filterbar>
+					</box>
+					<box height="1" out:border="headRule" out:borderColor="parentHeadRuleFg"></box>
+					<filelist in:entries="parentEntries" in:cursor="parentCursor" in:marked="parentMarked"
+					          in:active="parentActive" in:paneId="parentId" in:loading="parentLoading"
+					          in:viewport="listViewport"></filelist>
+					<entrydetail in:entry="parentEntry" in:marked="parentMarked" height="2"></entrydetail>
+					<summary in:entries="parentEntries" in:disk="parentDisk" height="1"></summary>
+				</box>
+				<box when="showLeftPane" flexDirection="column" flexBasis="0" out:flexGrow="leftGrow" border borderStyle="single"
 				     out:border="leftBorder" out:borderColor="leftBorderFg"
 				     on:click="leftId!pane:activate">
 					<box flexDirection="row" height="1" paddingLeft="1" overflow="hidden">
@@ -46,7 +82,7 @@
 					<entrydetail in:entry="leftEntry" in:marked="leftMarked" height="2"></entrydetail>
 					<summary in:entries="leftEntries" in:disk="leftDisk" height="1"></summary>
 				</box>
-				<box flexDirection="column" flexGrow="1" border borderStyle="single"
+				<box when="showRightPane" flexDirection="column" flexBasis="0" out:flexGrow="rightGrow" border borderStyle="single"
 				     out:border="rightBorder" out:borderColor="rightBorderFg"
 				     on:click="rightId!pane:activate">
 					<box flexDirection="row" height="1" paddingLeft="1" overflow="hidden">
@@ -63,7 +99,11 @@
 					<summary in:entries="rightEntries" in:disk="rightDisk" height="1"></summary>
 				</box>
 				<filepreview when="showInspectorInline" in:preview="preview" in:show="showInspectorInline"
-				             in:entry="appEntry" flexGrow="1"></filepreview>
+				             in:entry="appEntry" in:paneId="previewId"
+				             in:dirSegments="previewSegments" in:dirEntries="previewEntries"
+				             in:dirCursor="previewCursor" in:dirMarked="previewMarked"
+				             in:dirActive="previewActive" in:dirLoading="previewLoading"
+				             flexGrow="1" flexBasis="0"></filepreview>
 			</box>
 			<commandbar in:items="commandBarItems" in:notice="notice" in:leftError="leftError"
 			            in:rightError="rightError" in:active="active"
@@ -75,7 +115,10 @@
 	<box when="showViewer" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="10"
 	     alignItems="center" justifyContent="center">
 		<box width="80%" height="90%">
-			<filepreview in:preview="preview" in:show="showViewer" in:entry="appEntry"></filepreview>
+			<filepreview in:preview="preview" in:show="showViewer" in:entry="appEntry" in:paneId="previewId"
+			             in:dirSegments="previewSegments" in:dirEntries="previewEntries"
+			             in:dirCursor="previewCursor" in:dirMarked="previewMarked"
+			             in:dirActive="previewActive" in:dirLoading="previewLoading"></filepreview>
 		</box>
 	</box>
 

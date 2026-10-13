@@ -140,6 +140,103 @@ describe("commands", () => {
 		expect(session.showPreview.value).toBe(false)
 	})
 
+	test("view.toggleMode flips between the commander and the explorer", async () => {
+		const session = makeSession()
+		await load(session)
+		expect(session.viewMode.value).toBe("commander")
+		session.dispatch("view.toggleMode")
+		expect(session.viewMode.value).toBe("explorer")
+		session.dispatch("view.toggleMode")
+		expect(session.viewMode.value).toBe("commander")
+	})
+
+	// A session over a tree with two sibling directories, so the parent column
+	// has something to descend into other than the pane it follows.
+	function makeExplorerSession() {
+		const fs = createMockFs({
+			"/": [{ name: "work", isDir: true }],
+			"/work": [
+				{ name: "docs", isDir: true },
+				{ name: "src", isDir: true },
+			],
+			"/work/docs": [{ name: "a.txt", text: "a", size: 1 }],
+			"/work/src": [{ name: "b.txt", text: "b", size: 1 }],
+		})
+		return createSession({ fs, left: createPane({ fs, path: "/work/docs" }), right: createPane({ fs, path: "/" }) })
+	}
+
+	test("the explorer's parent column mirrors the current directory", async () => {
+		const session = makeExplorerSession()
+		await load(session)
+		session.dispatch("view.toggleMode")
+		expect(session.panes.parent.path.value).toBe("/work")
+		// Descending keeps the mirror on the new parent.
+		await session.panes.left.navigate("/work/src")
+		expect(session.panes.parent.path.value).toBe("/work")
+		// Outside explorer the column is not shown and focus is not parked on
+		// it either.
+		session.dispatch("pane.activate", { paneId: "parent" })
+		expect(session.active.value).toBe("parent")
+		expect(session.currentId.value).toBe("left")
+		session.dispatch("view.toggleMode")
+		expect(session.active.value).toBe("left")
+	})
+
+	test("opening from the parent column descends the pane it follows", async () => {
+		const session = makeExplorerSession()
+		await load(session)
+		session.dispatch("view.toggleMode")
+		session.dispatch("pane.activate", { paneId: "parent" })
+		const index = session.panes.parent.entries.value.findIndex((entry) => entry.name === "src")
+		expect(index).toBeGreaterThan(0)
+		session.panes.parent.cursor.set(index)
+		await session.dispatch("pane.enter")
+		expect(session.panes.left.path.value).toBe("/work/src")
+		// The mirror stays on the parent of wherever the current pane landed.
+		expect(session.panes.parent.path.value).toBe("/work")
+		// Stepping up moves the current pane too, never the mirror itself.
+		session.dispatch("pane.up")
+		expect(session.panes.left.path.value).toBe("/work")
+		expect(session.panes.parent.path.value).toBe("/")
+	})
+
+	test("filter.start stays on a column with a filter field and falls back otherwise", async () => {
+		const session = makeExplorerSession()
+		await load(session)
+		session.dispatch("view.toggleMode")
+		// The parent column is a full pane: it keeps focus and its own filter.
+		session.dispatch("pane.activate", { paneId: "parent" })
+		session.dispatch("filter.start")
+		expect(session.active.value).toBe("parent")
+		expect(session.filtering.value).toBe("parent")
+		// The inspector column has no filter field: focus goes back to the
+		// pane it shows before keystrokes are captured.
+		session.dispatch("pane.activate", { paneId: "preview" })
+		session.dispatch("filter.start")
+		expect(session.active.value).toBe("left")
+		expect(session.filtering.value).toBe("left")
+	})
+
+	test("pane.toggle cycles the columns the current view mode shows", async () => {
+		const session = makeExplorerSession()
+		await load(session)
+		// Commander: source ⇄ destination.
+		session.dispatch("pane.toggle")
+		expect(session.active.value).toBe("right")
+		session.dispatch("pane.toggle")
+		expect(session.active.value).toBe("left")
+
+		session.dispatch("view.toggleMode")
+		// Explorer, rightward with a wrap: current → preview → parent →
+		// current.
+		session.dispatch("pane.toggle")
+		expect(session.active.value).toBe("preview")
+		session.dispatch("pane.toggle")
+		expect(session.active.value).toBe("parent")
+		session.dispatch("pane.toggle")
+		expect(session.active.value).toBe("left")
+	})
+
 	test("unknown commands are ignored", () => {
 		const session = makeSession()
 		expect(session.dispatch("nope")).toBeNull()

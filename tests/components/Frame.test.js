@@ -1,8 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { createFrameBehaviors, INSPECTOR_INLINE_WIDTH } from "../../src/js/tcmd/components/Frame.js"
+import {
+	createFrameBehaviors,
+	INSPECTOR_INLINE_WIDTH,
+	MODE_SLOTS,
+	modeWord,
+	VERSION,
+} from "../../src/js/tcmd/components/Frame.js"
 
 const theme = {
 	textHeadingFg: "title",
+	textSecondaryFg: "dim",
 	brandTinyFrom: "#7aa2f7",
 	brandTinyTo: "#7dcfff",
 	brandCmdFrom: "#ff9e64",
@@ -37,6 +44,37 @@ describe("components Frame", () => {
 		// Mono (no brand colours): every letter falls back to the default.
 		const mono = createFrameBehaviors({ theme: { textHeadingFg: undefined } })
 		for (const letter of ["T", "C"]) expect(mono[`brand${letter}Fg`]()).toBeUndefined()
+	})
+
+	test("the identity bar draws the mode word in its brand gradient", () => {
+		const behaviors = createFrameBehaviors({ theme })
+		const letters = (data) =>
+			Array.from({ length: MODE_SLOTS }, (_, i) => behaviors[`modeL${i}`](null, data)).join("")
+		const shines = (data) =>
+			Array.from({ length: MODE_SLOTS }, (_, i) => behaviors[`modeFg${i}`](null, data))
+		// Absent mode data means the commander workspace, drawn along the Cmd
+		// oranges — endpoints included, like the brand words, and every letter
+		// its own colour so the word reads as a gradient.
+		const commander = shines({})
+		expect(letters({})).toBe("commander")
+		expect(commander[0]).toBe(theme.brandCmdFrom)
+		expect(commander[MODE_SLOTS - 1]).toBe(theme.brandCmdTo)
+		expect(new Set(commander).size).toBe(MODE_SLOTS)
+		// Explorer shimmers along the Tiny blues; its shorter word leaves the
+		// last slot empty, and an empty text node takes no column.
+		const explorer = shines({ viewMode: "explorer" })
+		expect(letters({ viewMode: "explorer" })).toBe("explorer")
+		expect(explorer[0]).toBe(theme.brandTinyFrom)
+		expect(explorer[7]).toBe(theme.brandTinyTo)
+		expect(new Set(explorer.slice(0, 8)).size).toBe(8)
+		expect(behaviors.modeL8(null, { viewMode: "explorer" })).toBe("")
+		expect(behaviors.modeFg8(null, { viewMode: "explorer" })).toBeUndefined()
+		expect(modeWord(undefined)).toBe("commander")
+		expect(modeWord("explorer")).toBe("explorer")
+		// The version trail carries its leading space, so it follows the word
+		// directly.
+		expect(behaviors.topBarStatus(null, {})).toBe(` · ${VERSION}`)
+		expect(behaviors.topBarStatusFg()).toBe("dim")
 	})
 
 	test("the minimum-size gate fires below the breakpoint", () => {

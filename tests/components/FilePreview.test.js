@@ -40,24 +40,45 @@ describe("FilePreview", () => {
 		expect(previewTitle(null)).toBe("preview")
 	})
 
-	test("inspector shows a metadata card, an empty state and a header", () => {
+	test("inspector shows a directory column, a card, an empty state and a header", () => {
 		const behaviors = createBehaviors(behaviorEnv)
 		const dir = { name: "docs", path: "/docs", isDir: true, size: 0 }
-		// Directory under the cursor, no preview payload: the entry card shows.
-		expect(behaviors.hasEntryCard(null, { preview: null, entry: dir })).toBe(true)
-		expect(behaviors.hasCard(null, { preview: null, entry: dir })).toBe(false)
+		// Directory under the cursor, no `stat` card: the directory column
+		// takes the body instead of the metadata card.
+		expect(behaviors.isDirPane(null, { preview: null, entry: dir })).toBe(true)
+		expect(behaviors.showEntryCard(null, { preview: null, entry: dir })).toBe(false)
 		expect(behaviors.entryText(null, { preview: null, entry: dir })).toContain("directory: docs/")
 		expect(behaviors.headerTitle(null, { preview: null, entry: dir })).toBe("docs/  <DIR>")
 		// A non-previewable file also gets a card, not a blank inspector.
 		const bin = { name: "app.bin", path: "/app.bin", isDir: false, size: 4096, ext: "bin" }
-		expect(behaviors.hasEntryCard(null, { preview: null, entry: bin })).toBe(true)
+		expect(behaviors.isDirPane(null, { preview: null, entry: bin })).toBe(false)
+		expect(behaviors.showEntryCard(null, { preview: null, entry: bin })).toBe(true)
 		expect(behaviors.entryText(null, { preview: null, entry: bin })).toContain("file: app.bin")
 		// Nothing at all: the designed empty state.
 		expect(behaviors.isEmpty(null, { preview: null, entry: null })).toBe(true)
 		expect(behaviors.headerTitle(null, { preview: null, entry: null })).toBe("inspector")
-		// A real preview wins over the entry.
+		// A real preview wins over the entry — including on a directory, whose
+		// `stat` card keeps the body.
 		const preview = { kind: "text", title: "a.txt", size: 10, text: "hi", ext: "txt" }
 		expect(behaviors.headerTitle(null, { preview, entry: dir })).toBe("a.txt  <TXT>")
-		expect(behaviors.hasEntryCard(null, { preview, entry: dir })).toBe(false)
+		expect(behaviors.showEntryCard(null, { preview, entry: dir })).toBe(false)
+		expect(behaviors.isDirPane(null, { preview: { kind: "directory", title: "docs", text: null }, entry: dir })).toBe(false)
+	})
+
+	test("the header names the symlink's traversal and its target's kind", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		// Before the async read lands, the header already says where the link
+		// goes — and badges the *target's* extension, not the link's name.
+		const fileLink = { name: "ln", path: "/ln", isDir: false, isSymlink: true, target: "real.txt", ext: "dat" }
+		expect(behaviors.headerTitle(null, { preview: null, entry: fileLink })).toBe("ln -> real.txt  <TXT>")
+		const dirLink = { name: "ln", path: "/ln", isDir: true, isSymlink: true, target: "real-dir", ext: null }
+		expect(behaviors.headerTitle(null, { preview: null, entry: dirLink })).toBe("ln/ -> real-dir  <DIR>")
+		// Once the preview lands its own title carries the traversal.
+		expect(
+			behaviors.headerTitle(null, {
+				preview: { kind: "text", title: "ln -> real.txt", text: "hi", ext: "txt" },
+				entry: null,
+			}),
+		).toBe("ln -> real.txt  <TXT>")
 	})
 })

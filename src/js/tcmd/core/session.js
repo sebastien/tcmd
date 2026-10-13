@@ -7,14 +7,22 @@
 // A Session wires two panes plus cross-pane UI state (active pane, preview,
 // command panel, bookmarks) into one dispatchable model. Everything reactive
 // is a cell or derived cell; views subscribe, commands mutate.
+//
+// On top of the two (source/destination) panes the session owns two auxiliary
+// panes: `parent` mirrors the parent of the pane holding the current
+// directory, `preview` mirrors the directory the inspector is showing. They
+// are real panes — own listing, cursor, marks — so the explorer view and the
+// directory preview are clickable and keyboard-navigable like any other pane,
+// while path changes still land on the pane that owns the current directory
+// (see `currentId` / `core/commands#currentPane`).
 
 import { cell, derived, effect } from "select/state/cells"
 import { createBookmarks } from "./bookmarks.js"
 import { createDispatch, getAppCommands, getCommandBarItems } from "./commands.js"
 import { createNullOs } from "./os.js"
 import { PANEL_FOCUS, bindArgs, filterPanelEntries, isTextualRow, panelCommand, panelEntries, panelRowList, panelRunnable, rowAt, withArgValue } from "./panel.js"
-import { basename, join } from "./path.js"
-import { PANE_BUFFERS } from "./pane.js"
+import { basename, extname, join, parent as parentPath } from "./path.js"
+import { createPane, PANE_BUFFERS } from "./pane.js"
 import { hasMatch, score } from "../vendor/fzy.js"
 
 const PREVIEW_BYTES = 65536
@@ -33,20 +41,64 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	session.fs = fs
 	session.os = os ?? createNullOs()
 	session.panes = { left, right }
+	// Auxiliary panes: the explorer's parent column and the inspector's
+	// directory column. Both start on a valid path so a refresh before their
+	// first sync can never read a blank one.
+	session.panes.parent = createPane({ fs, path: parentPath(left.path.value) ?? left.path.value })
+	session.panes.preview = createPane({ fs, path: left.path.value })
 	// Shown in the header title; empty when the environment has no hostname.
 	session.host = host ?? ""
 	// Bookmark model (named paths). The store defaults to in-memory.
 	session.bookmarks = bookmarks ?? createBookmarks()
+	// View mode: the two-pane "commander" workspace, or the three-column
+	// "explorer" (parent · current · preview). `view.toggleMode` (`t`) flips
+	// it; the workspace chrome in `components/Frame` reads it to decide which
+	// columns exist.
+	session.viewMode = cell("commander")
 	session.active = cell("left")
-	// The active pane's current directory, tracked by the header title.
-	session.activePath = derived([session.active, left.path, right.path], ([active, l, r]) =>
-		active === "left" ? l : r,
+	// The source/destination pane focus last was on. The auxiliary columns
+	// are attached to it, so `currentId` survives focus moving into them.
+	session.anchor = cell("left")
+	// The pane that owns the current directory: the focused pane when focus
+	// is on a source/destination pane, the anchor otherwise. Everything that
+	// changes a *path* (open, up, back, breadcrumbs, the command panel's
+	// relative arguments) targets it; cursor-only movement targets the
+	// focused pane.
+	session.currentId = derived([session.active, session.anchor], ([active, anchor]) =>
+		active === "left" || active === "right" ? active : anchor,
+	)
+	// The current pane's directory, tracked by the header title and by the
+	// parent column's mirror.
+	session.activePath = derived([session.currentId, left.path, right.path], ([current, l, r]) =>
+		current === "left" ? l : r,
 	)
 	session.showPreview = cell(true)
 	session.notice = cell(null)
 	session.confirm = cell(null)
 	// The pane whose filter input currently owns the keyboard, or null.
 	session.filtering = cell(null)
+
+	// Focus remembers which source/destination pane it came from.
+	effect([session.active], ([active]) => {
+		if (active === "left" || active === "right") session.anchor.set(active)
+	})
+	// The parent column only exists in explorer mode: leaving the mode hands
+	// focus back to the pane it was following.
+	effect([session.viewMode], ([mode]) => {
+		if (mode !== "explorer" && session.active.value === "parent") {
+			session.active.set(session.currentId.value)
+		}
+	})
+	// The parent column mirrors the parent of the current directory. It never
+	// moves on its own: opening, stepping up or following a breadcrumb in it
+	// retargets the current pane instead (see `core/commands`).
+	effect([session.activePath, session.viewMode], ([path, mode]) => {
+		if (mode !== "explorer" || !path) return
+		// The filesystem root has no parent; mirror itself rather than read a
+		// blank path.
+		const target = parentPath(path) ?? path
+		if (session.panes.parent.path.value !== target) void session.panes.parent.navigate(target)
+	})
 
 	// Bookmark overlay: `bookmarkMode` is "name" while recording (an input for
 	// the new bookmark's name) or "list" while jumping (a fuzzy picker).
@@ -91,16 +143,31 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	session.rightCursorEntry = derived([right.entries, right.cursor, right.cursorStat], ([entries, cursor, stat]) =>
 		entrySummary(stat ?? entries[cursor]),
 	)
+	// The same detail line for the explorer's parent column.
+	const parent = session.panes.parent
+	session.parentCursorEntry = derived([parent.entries, parent.cursor, parent.cursorStat], ([entries, cursor, stat]) =>
+		entrySummary(stat ?? entries[cursor]),
+	)
 
-	// Preview target: a `view`/`stat` pin, or the active pane's cursor entry.
+	// Preview target: a `view`/`stat` pin, or the current pane's cursor entry.
+	// Focus on an auxiliary column does not move it: the preview keeps
+	// following the pane that owns the directory.
 	session.previewTarget = cell(null)
 	session.previewEntry = derived(
-		[session.active, session.leftCursorEntry, session.rightCursorEntry, session.previewTarget],
-		([active, l, r, target]) => target ?? (active === "left" ? l : r),
+		[session.currentId, session.leftCursorEntry, session.rightCursorEntry, session.previewTarget],
+		([current, l, r, target]) => target ?? (current === "left" ? l : r),
 	)
 
 	// Moving either cursor resumes following the cursor in the preview.
 	effect([session.leftCursorEntry, session.rightCursorEntry], () => session.previewTarget.set(null))
+
+	// The preview column mirrors the directory being previewed, so a
+	// directory reads as a pane in every view mode. It never moves on its
+	// own for the same reason as the parent column.
+	effect([session.previewEntry], ([entry]) => {
+		if (!entry?.isDir) return
+		if (session.panes.preview.path.value !== entry.path) void session.panes.preview.navigate(entry.path)
+	})
 
 	session._previewToken = 0
 
@@ -112,13 +179,17 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 			session.preview.set(null)
 			return
 		}
-		const kind = entry.isDir ? "directory" : previewKind(entry)
+		// The preview follows symlinks: its title names the traversal and its
+		// kind comes from what the link points at, not from the link's own
+		// name (a `notes -> README.md` previews as markdown).
+		const source = previewSource(entry)
+		const kind = entry.isDir ? "directory" : previewKind({ ext: source.ext })
 		if (entry.details) {
 			session.preview.set({
 				kind,
-				title: basename(entry.path),
+				title: source.title,
 				size: entry.size,
-				ext: entry.ext,
+				ext: source.ext,
 				details: entry.details,
 				text: null,
 			})
@@ -134,9 +205,9 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 		if (token !== session._previewToken) return
 		session.preview.set({
 			kind,
-			title: basename(entry.path),
+			title: source.title,
 			size: entry.size,
-			ext: entry.ext,
+			ext: source.ext,
 			text: head === null || hasBinaryByte(head) ? null : head,
 		})
 	})
@@ -282,11 +353,12 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 }
 
 // Function: load
-// Reads the initial listing for both panes and the persisted bookmarks.
+// Reads the initial listing for every column — the two panes plus the two
+// mirrors, which start on a valid path and so may never navigate — and the
+// persisted bookmarks.
 async function load(session) {
 	await Promise.all([
-		session.panes.left.refresh(),
-		session.panes.right.refresh(),
+		...Object.values(session.panes).map((pane) => pane.refresh()),
 		session.bookmarks.load?.(),
 	])
 }
@@ -307,7 +379,22 @@ function entrySummary(entry) {
 		gid: entry.gid,
 		owner: entry.owner,
 		ext: entry.ext,
+		// The symlink's raw target, so the preview and the header can name
+		// where the link goes.
+		target: entry.target ?? null,
 	}
+}
+
+// Function: previewSource
+// What the preview renders *through* a symlink: `title` names the traversal
+// (`notes -> ../real/notes`) so it is visible in the header, and `ext` is the
+// target's extension, so a link previews with the kind of what it points at
+// rather than the kind of its own name. Plain entries pass through unchanged.
+function previewSource(entry) {
+	const target = entry?.isSymlink && entry.target ? `${entry.target}` : null
+	if (!target || !entry?.path) return { title: basename(entry?.path ?? ""), ext: entry?.ext ?? null }
+	const ext = extname(target) ?? entry.ext ?? null
+	return { title: `${basename(entry.path)} -> ${target}`, ext }
 }
 
 // Function: previewKind
@@ -328,4 +415,4 @@ function hasBinaryByte(text) {
 	return false
 }
 
-export { createSession, load }
+export { createSession, load, previewSource }

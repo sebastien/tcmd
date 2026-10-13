@@ -38,6 +38,11 @@ describe("keymap", () => {
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "m" })).toBeNull()
 	})
 
+	test("t toggles view modes", () => {
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "t" })).toBe("view.toggleMode")
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "t", shift: true })).toBeNull()
+	})
+
 	test("binds every entry to a command id", () => {
 		for (const binding of DEFAULT_KEYMAP) {
 			expect(binding.key.length).toBeGreaterThan(0)

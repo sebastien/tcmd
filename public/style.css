@@ -64,6 +64,8 @@ body {
 /* Header --------------------------------------------------------------- */
 
 .app-header {
+	display: flex;
+	align-items: baseline;
 	flex: none;
 	padding: 0.1rem 0.6rem;
 	border-bottom: 1px solid var(--border);
@@ -71,6 +73,42 @@ body {
 	color: var(--text);
 	font-weight: 600;
 	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Right-hand trail: the view mode and version, dimmer than the brand. */
+.app-header-status {
+	flex: none;
+	margin-left: auto;
+	padding-left: 0.75rem;
+	color: var(--text-dim);
+	font-weight: 400;
+}
+
+/* The mode word shimmers like the brand: explorer along the Tiny blues,
+   commander along the Cmd oranges. */
+.app-header-mode {
+	font-weight: 600;
+}
+
+.app-header-mode.mode-explorer {
+	background: linear-gradient(90deg, var(--brand-tiny-from), var(--brand-tiny-to));
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+}
+
+.app-header-mode.mode-commander {
+	background: linear-gradient(90deg, var(--brand-cmd-from), var(--brand-cmd-to));
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+}
+
+/* The brand and host give way (ellipsis) instead of pushing the trail off. */
+.app-header > span:not(.app-header-status) {
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
@@ -113,6 +151,12 @@ body {
 
 .pane.is-active {
 	border-color: var(--accent);
+}
+
+/* Explorer mode: the middle (current) column carries the extra width, the
+   parent and preview columns stay even. */
+.pane.is-major {
+	flex-grow: 1.35;
 }
 
 .pane-header {
@@ -394,6 +438,21 @@ body {
 	text-overflow: ellipsis;
 }
 
+/* The inspector's directory column: breadcrumbs over the listing, laid out
+   like a pane header so a previewed directory reads as a pane. */
+.preview > .pane-header {
+	flex: none;
+	border-bottom: 1px solid var(--border);
+	padding-left: 0;
+	padding-right: 0;
+}
+
+.preview-list {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+}
+
 .preview-text,
 .preview-card {
 	flex: 1;
@@ -412,7 +471,9 @@ body {
 
 .preview-actions {
 	flex: none;
-	padding-top: 0.3rem;
+	/* The rule that separates the shortcuts from the contents above them. */
+	border-top: 1px solid var(--border);
+	padding-top: 0.35rem;
 	color: var(--text-dim);
 	font-size: 11px;
 }

@@ -5,6 +5,7 @@
 // does not churn the test while real regressions do.
 
 import { describe, expect, test } from "bun:test"
+import { VERSION } from "../../src/js/tcmd/components/Frame.js"
 import { makeSetup as makeSetupTui, settle } from "../helpers/tui-setup.js"
 
 const TREE = {
@@ -15,9 +16,11 @@ const TREE = {
 	"/home": [
 		{ name: "documents", isDir: true },
 		{ name: "notes.txt", text: "hello\nworld\nthird line\n", size: 26 },
+		{ name: "notes-link", isSymlink: true, target: "notes.txt" },
 		{ name: "tiny.txt", text: "tiny", size: 4 },
 		{ name: "archive.tar.gz", text: "x", size: 10485760 },
 	],
+	"/home/documents": [{ name: "report.txt", text: "draft\n", size: 6 }],
 	"/home/tester": [{ name: "notes.txt", text: "hello\nworld\n", size: 12 }],
 	"/empty": [],
 	"/etc": [{ name: "hosts", text: "127.0.0.1 localhost\n", size: 19 }],
@@ -38,6 +41,8 @@ describe("golden frames", () => {
 			// The identity bar names the app; the pane boxes tile below it.
 			const lines = frame.split("\n")
 			expect(lines[0]).toContain("TinyCmd")
+			// The view mode and version ride the right-hand end of the bar.
+			expect(lines[0].trimEnd()).toEndWith(`commander · ${VERSION}`)
 			const lineWidths = widths(frame).filter((w) => w > 0)
 			expect(Math.max(...lineWidths)).toBe(120)
 			for (const width of lineWidths) expect(width).toBeLessThanOrEqual(120)
@@ -49,10 +54,18 @@ describe("golden frames", () => {
 			// The pane headers lead with the path — no role label.
 			expect(frame).not.toContain("SRC")
 			expect(frame).not.toContain("DST")
-			// The inline inspector holds the first entry (a directory) as a card.
+			// The inline inspector previews the first entry (a directory) as a
+			// pane: its own breadcrumb header over its listing, not a card.
 			expect(frame).toContain("documents/")
-			expect(frame).toContain("directory: documents/")
+			expect(frame).toContain("╭─documents/  <DIR>")
+			expect(frame).toContain("/home/documents")
+			expect(frame).toContain("report.txt")
+			expect(frame).not.toContain("directory: documents/")
 			expect(frame).toContain(" [Open O] [Edit E]")
+			// A rule separates the inspector's contents from its shortcuts.
+			const footer = lines.findIndex((line) => line.includes("[Open O] [Edit E]"))
+			expect(footer).toBeGreaterThan(1)
+			expect(lines[footer - 1]).toContain("─")
 			// The status bar shows bracket shorthands on the left, inside the
 			// frame — no Powerline pill caps.
 			const bar = frame.split("\n").find((line) => line.includes("[Open ⏎]"))
@@ -60,6 +73,8 @@ describe("golden frames", () => {
 			expect(bar).toContain("[Open ⏎]")
 			// The pane headers keep a leading space before the path.
 			expect(frame).toContain(" /home")
+			// A symlink row prints its target, `ls -l` style.
+			expect(frame).toContain("notes-link -> notes.txt")
 			// No scrollbar chrome: the content is tracked by keepVisible.
 			expect(frame).not.toContain("█")
 		} finally {
@@ -93,6 +108,50 @@ describe("golden frames", () => {
 			expect(frame).toContain("need 64x16, have 50x12")
 			// No panes leak through the gate.
 			expect(frame).not.toContain("notes.txt")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	// Box widths on a top-border line, in column order. The explorer's middle
+	// column is the one that grows, so the geometry is the regression check.
+	function columnWidths(frame) {
+		const border = frame.split("\n")[1]
+		return [...border.matchAll(/[┌╭]([^┌╭╮┐╯╰]*)[┐╮]/g)].map((match) => match[1].length)
+	}
+
+	test("`t` toggles the three-column explorer: parent, wider current, preview", async () => {
+		const { setup, session } = await makeSetup(120, 30)
+		try {
+			// Commander: source and destination share the row evenly (the
+			// layout rounds to the nearest column, so "evenly" is ±1).
+			const commander = columnWidths(setup.captureCharFrame())
+			expect(commander.length).toBe(3)
+			expect(Math.abs(commander[0] - commander[1])).toBeLessThanOrEqual(1)
+
+			setup.mockInput.pressKey("t")
+			await settle(setup)
+			expect(session.viewMode.value).toBe("explorer")
+			expect(session.panes.parent.path.value).toBe("/")
+
+			const explorer = setup.captureCharFrame()
+			expect(explorer.split("\n")[0].trimEnd()).toEndWith(`explorer · ${VERSION}`)
+			const widths = columnWidths(explorer)
+			// Parent mirror, current directory, directory preview.
+			expect(widths.length).toBe(3)
+			expect(widths[1]).toBeGreaterThan(widths[0])
+			expect(widths[1]).toBeGreaterThan(widths[2])
+			// The two mirrors stay even beside the middle column.
+			expect(Math.abs(widths[0] - widths[2])).toBeLessThanOrEqual(2)
+			// Each column carries its own path header, and the third one is
+			// the previewed directory's listing rather than a card.
+			expect(explorer).toContain("/home/documents")
+			expect(explorer).toContain("report.txt")
+			expect(explorer).not.toContain("directory: documents/")
+
+			setup.mockInput.pressKey("t")
+			await settle(setup)
+			expect(session.viewMode.value).toBe("commander")
 		} finally {
 			setup.renderer.destroy()
 		}

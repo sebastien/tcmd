@@ -13,6 +13,42 @@
 
 import { unwrap } from "select/state/cells"
 import { commandBarMarksItem, commandBarRowCount, commandBarStatus } from "./CommandBar.js"
+import pkg from "../../../../package.json" with { type: "json" }
+
+// Constant: VERSION
+// The published version, read from package.json so the identity bar can never
+// drift from what ships.
+const VERSION = `${pkg?.version ?? ""}`
+
+// Constant: MODE_SLOTS
+// Per-letter slots the identity bar draws the view-mode word through, one
+// `<text>` each so every letter can carry its own gradient colour (the same
+// trick the `TinyCmd` brand uses). Sized for the longest mode name; a shorter
+// one leaves the trailing slots empty, and an empty text node takes no column.
+const MODE_SLOTS = "commander".length
+
+// Function: modeWord
+// The view-mode name as it reads in the identity bar.
+function modeWord(viewMode) {
+	return viewMode === "explorer" ? "explorer" : "commander"
+}
+
+// Function: modeGradient
+// The `[from, to]` brand pair a mode word shimmers along: explorer takes the
+// Tiny blues, commander the Cmd oranges, so the mode reads as part of the
+// logo rather than as trailing status text.
+function modeGradient(env, viewMode) {
+	return viewMode === "explorer"
+		? [env.theme.brandTinyFrom, env.theme.brandTinyTo]
+		: [env.theme.brandCmdFrom, env.theme.brandCmdTo]
+}
+
+// Function: versionTrail
+// The identity bar's version tail, ` · 0.1.3`. It carries its leading space
+// so it follows the mode word's slots directly in both renderers.
+function versionTrail() {
+	return VERSION ? ` · ${VERSION}` : ""
+}
 
 // Below this the two-pane workspace is replaced by a resize hint.
 const MIN_WIDTH = 64
@@ -39,6 +75,21 @@ function sizeOf(data, self) {
 function isNarrow(data, self) {
 	const size = sizeOf(data, self)
 	return Boolean(size && (size.width ?? 0) > 0 && size.width < INSPECTOR_INLINE_WIDTH)
+}
+
+// Function: isExplorer
+// True when the workspace is the three-column explorer view. Absent
+// `viewMode` data (tests, host-less bindings) means the two-pane commander.
+function isExplorer(data) {
+	return unwrap(data?.viewMode) === "explorer"
+}
+
+// Function: currentColumnId
+// The id of the column holding the current directory: the focused pane when
+// focus is on source/destination, the anchor pane otherwise. (`core/pane` has
+// the same question over a session; this one reads the view's data bag.)
+function currentColumnId(data) {
+	return `${unwrap(data?.currentId) ?? unwrap(data?.active) ?? "left"}`
 }
 
 // Function: commandBarRowsFor
@@ -105,6 +156,31 @@ function shineOf(letters, from, to) {
 function createFrameBehaviors(env) {
 	const tiny = shineOf("Tiny", env.theme.brandTinyFrom, env.theme.brandTinyTo)
 	const cmd = shineOf("Cmd", env.theme.brandCmdFrom, env.theme.brandCmdTo)
+	// The mode word, letter by letter: `modeL<i>` is the letter, `modeFg<i>`
+	// its gradient colour — the same per-letter trick the `TinyCmd` brand
+	// uses, since a terminal has no gradient to draw. The run is cached per
+	// word (there are only two), and both behaviors read the live `viewMode`,
+	// so flipping `t` redraws it in the other brand's colours.
+	const modeRuns = new Map()
+	const modeRun = (data) => {
+		const viewMode = unwrap(data?.viewMode)
+		const word = modeWord(viewMode)
+		let run = modeRuns.get(word)
+		if (!run) {
+			run = shineOf(word, ...modeGradient(env, viewMode))
+			modeRuns.set(word, run)
+		}
+		return run
+	}
+	const modeSlots = {}
+	for (let i = 0; i < MODE_SLOTS; i++) {
+		// The `when` gate matters: an empty text node still claims a column in
+		// the row, so the slots past the end of a shorter word are dropped
+		// from the layout instead of padding it.
+		modeSlots[`modeHas${i}`] = (_self, data) => modeRun(data)[i] !== undefined
+		modeSlots[`modeL${i}`] = (_self, data) => modeRun(data)[i]?.letter ?? ""
+		modeSlots[`modeFg${i}`] = (_self, data) => modeRun(data)[i]?.fg
+	}
 	return {
 		// Identity bar: "Tiny" shimmers along the brand blues, "Cmd" along a
 		// brighter orange than the mark accent, and the host trail follows in
@@ -129,6 +205,12 @@ function createFrameBehaviors(env) {
 			return host ? ` - ${host} ` : " "
 		},
 		topBarFg: () => env.theme.textHeadingFg,
+		// Right-aligned trail: the version, following the gradiented mode word
+		// (`modeL*`) slot by slot. Dimmer than the brand, so the row still
+		// reads left to right.
+		topBarStatus: () => versionTrail(),
+		topBarStatusFg: () => env.theme.textSecondaryFg,
+		...modeSlots,
 
 		// Responsive gates. `uiSize` is absent in tests and the web, so the
 		// workspace renders normally there.
@@ -159,6 +241,16 @@ function createFrameBehaviors(env) {
 		// filter is being edited or applied.
 		leftFilterOn: (_self, data) => Boolean(unwrap(data.leftFilter)),
 		rightFilterOn: (_self, data) => Boolean(unwrap(data.rightFilter)),
+		parentFilterOn: (_self, data) => Boolean(unwrap(data.parentFilter)),
+
+		// Which columns the workspace draws. Commander tiles source and
+		// destination; explorer drops destination for the parent of the
+		// current directory, which leads the row so the current pane stays in
+		// the middle. The inspector column follows `showInspectorInline` and
+		// completes the three columns in either mode.
+		showParentPane: (_self, data) => isExplorer(data),
+		showLeftPane: (_self, data) => !isExplorer(data) || currentColumnId(data) === "left",
+		showRightPane: (_self, data) => !isExplorer(data) || currentColumnId(data) === "right",
 
 		// The inline inspector shows when the preview is on and the viewport is
 		// wide enough; otherwise `v` opens the fullscreen viewer.
@@ -179,5 +271,20 @@ function createFrameBehaviors(env) {
 	}
 }
 
-export { commandBarLines, createFrameBehaviors, INSPECTOR_INLINE_WIDTH, isNarrow, MIN_HEIGHT, MIN_WIDTH, sizeOf }
+export {
+	commandBarLines,
+	createFrameBehaviors,
+	currentColumnId,
+	INSPECTOR_INLINE_WIDTH,
+	isExplorer,
+	isNarrow,
+	MIN_HEIGHT,
+	MIN_WIDTH,
+	MODE_SLOTS,
+	modeGradient,
+	modeWord,
+	sizeOf,
+	versionTrail,
+	VERSION,
+}
 // EOF

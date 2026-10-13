@@ -11,7 +11,10 @@
 TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
 
 - Browse files in two panes (the left is the source, the right the
-  destination)
+  destination), or in the three-column explorer — the parent directory, the
+  current directory (slightly wider) and the preview — with `t` toggling
+  between the two views. Clicking any column, preview included, gives it the
+  focus.
 - Named bookmarks: `b` records the cursor entry (or the pane directory) under
   a name defaulting to its basename, remembering whether it is a file or a
   directory; `g` opens a fzf-style picker over bookmark names and paths. A
@@ -24,7 +27,13 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   with its namespace by a Nerd Font glyph (a `cli`/`app` tag without one), with
   editable arguments and a resolved-command preview. `!` lands straight on the
   shell command.
-- Keyboard and mouse navigation, inline file previews
+- Keyboard and mouse navigation, inline file previews — a previewed directory
+  renders as a pane (its breadcrumbs over its own listing), in both views
+- Symlinks are shown *and* followed: a link row prints `name -> target`
+  (`notes.md -> notes.txt`, `docs/ -> ../shared`), a link to a directory is a
+  directory (it sorts, opens and previews as one), and the preview reads
+  through it — the header reads `notes.md -> notes.txt  <TXT>` and the kind
+  comes from the target's extension, not the link's name
 - Bookmarks and quick find (later milestones)
 
 References: [Marta.sh](https://marta.sh) for the UI, [fman.io](https://fman.io)
@@ -51,7 +60,8 @@ bun run tcmd /tmp ~  # open specific directories
 
 Keys: `↑/↓` move (`^↑/^↓` jump a few lines), `Enter/→` open, `←/Bksp` parent,
 `Esc`/`⇧Esc` history back/forward, `Tab`/`⇧Tab` switch panes
-(`⇧Tab` goes back), `Space` mark, `b` bookmark the cursor entry (or the pane
+(`⇧Tab` goes back), `t` toggle the commander/explorer view, `Space` mark, `b`
+bookmark the cursor entry (or the pane
 directory) under a basename-defaulted name, `g` jump to a bookmark, `:` open the
 command panel (the one entry point: CLI operations and TinyCmd actions, their
 arguments, and the live resolved command), `v` preview (fullscreen viewer when
@@ -59,7 +69,10 @@ the terminal is narrow), `O`/`E` open/edit the previewed file, `/` fuzzy-filter
 the active pane (`Enter` keeps it, `Esc` clears), `!` open the panel on the
 shell command, `^R` reload, `?` key reference, `q` quit.
 
-The workspace opens with a slim identity bar (`TinyCmd - HOST`) over an
+The workspace opens with a slim identity bar (`TinyCmd - HOST`) — the view
+mode and version trailing at its right, the mode word drawn letter by letter
+along the logo's own gradients (`explorer` in the Tiny blues, `commander` in
+the Cmd oranges) and the version dim after it — over an
 unframed tiling of pane boxes (the two middle edges sit side by
 side) labelled **SRC** (left, source) / **DST** (right, destination), with a
 header row (label + clickable breadcrumbs — collapsed to first letters like
@@ -83,6 +96,24 @@ shorthand (`[Open ⏎]`) wrapping over as many rows as the width demands — the
 marked count trails the list, and a notice or error swaps the keys for a
 one-line status. Below 64×16
 the app shows a resize hint instead of the workspace.
+
+### View modes
+
+`t` flips the workspace between two modes:
+
+- **commander** (the default) tiles source and destination;
+- **explorer** drops the destination for the parent of the current directory,
+  so the three columns read parent · current · preview — a Miller chain with
+  the current column slightly wider than its neighbours.
+
+The parent and preview columns are mirrors: they own their cursor, filter and
+marks, but opening an entry, stepping up or following one of their breadcrumbs
+moves the pane they follow, which is what keeps the mirror in step (in the
+explorer the previewed directory *is* the current column's own child, so the
+chain never drifts). `Tab` cycles through the columns the current mode shows,
+and clicking any column — the preview included — gives it the focus. A
+previewed directory always renders as a pane, in both modes: its breadcrumbs
+over its own listing, instead of a directory card.
 
 ### Web version
 
@@ -150,10 +181,10 @@ src/js/tcmd/
     entries.js   filter/sort over file entries (dirs first)
     selection.js cursor/mark arithmetic
     directory.js one pane's directory: path, entries, view, cursor, marks
-    pane.js      one directory, proxying its cells
+    pane.js      one directory, proxying its cells + currentPane resolution
     bookmarks.js named bookmarks (path + file/dir kind) + the memory/file stores
     panel.js     command panel: CLI ops + TinyCmd actions, args bound from context
-    session.js   two panes + active pane, preview, panel, dispatch
+    session.js   two panes + parent/preview mirrors, view mode, active pane, preview, panel, dispatch
     keymap.js    key chords -> command ids
     commands.js  command registry; commands are `run(session, payload)`
     operations.js CLI operations (copy/move/delete/erase/stat/sel/…)

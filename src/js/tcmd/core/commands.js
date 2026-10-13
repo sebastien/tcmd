@@ -18,6 +18,7 @@
 import { basename, parent as parentOf } from "./path.js"
 import { PANEL_FOCUS, argvFor, bindingAt, missingArg, rowAt, withToggledItem } from "./panel.js"
 import { clampCursor, moveCursor } from "./selection.js"
+import { currentPane } from "./pane.js"
 import { runLine } from "./script.js"
 import { getOperation, runOperation } from "./operations.js"
 
@@ -141,7 +142,21 @@ const commands = [
 		bar: true,
 		primary: true,
 		run(session) {
-			return pane(session).open()
+			// The entry under the *focused* pane's cursor decides where the
+			// current directory goes: a directory descends into it. On an
+			// auxiliary column (parent/preview) that means the current pane
+			// follows the selection, which is what keeps the mirror in step.
+			const focused = pane(session)
+			const entry = focused.currentEntry()
+			if (!entry) return
+			const current = currentPane(session)
+			if (entry.isDir) return current.navigate(entry.path)
+			// A file outside the current pane pins the inspector on it.
+			if (focused !== current) {
+				session.previewTarget.set(entry)
+				session.showPreview.set(true)
+			}
+			return undefined
 		},
 	},
 	{
@@ -151,7 +166,10 @@ const commands = [
 		kind: "ui",
 		bar: true,
 		run(session) {
-			return pane(session).up()
+			// Stepping up always moves the current directory: the parent
+			// column mirrors it, so navigating that column itself would
+			// break the mirror.
+			return currentPane(session).up()
 		},
 	},
 	{
@@ -160,7 +178,7 @@ const commands = [
 		keys: "Esc",
 		kind: "ui",
 		run(session) {
-			return pane(session).back()
+			return currentPane(session).back()
 		},
 	},
 	{
@@ -169,7 +187,7 @@ const commands = [
 		keys: "⇧Esc",
 		kind: "ui",
 		run(session) {
-			return pane(session).forward()
+			return currentPane(session).forward()
 		},
 	},
 	{
@@ -189,7 +207,23 @@ const commands = [
 		kind: "ui",
 		bar: true,
 		run(session) {
-			session.active.set(session.active.value === "left" ? "right" : "left")
+			// Cycle through the columns the current view mode shows:
+			// source ⇄ destination in commander, parent → current → preview
+			// in explorer. Focus parked on a column that is not in the cycle
+			// (the inspector in commander) lands on the other side.
+			const current = session.currentId.value
+			const order =
+				session.viewMode.value === "explorer"
+					? session.showPreview.value
+						? ["parent", current, "preview"]
+						: ["parent", current]
+					: ["left", "right"]
+			const at = order.indexOf(session.active.value)
+			const next =
+				at >= 0
+					? order[(at + 1) % order.length]
+					: order.find((paneId) => paneId !== current) ?? order[0]
+			session.active.set(next)
 		},
 	},
 	{
@@ -303,7 +337,7 @@ const commands = [
 			const items = session.bookmarkItems.value
 			const item = items[clampCursor(session.bookmarkIndex.value, items.length)]
 			if (!item) return
-			const target = session.panes[session.active.value]
+			const target = currentPane(session)
 			const path = item.path
 			// Resolve the kind when it is unknown (legacy path-only bookmark).
 			let isDir = item.isDir
@@ -359,9 +393,11 @@ const commands = [
 		kind: "ui",
 		hidden: true,
 		run(session, payload) {
-			const target = payload?.paneId ? session.panes[payload.paneId] : pane(session)
+			// A breadcrumb click focuses its column, then lands the current
+			// directory there: the auxiliary columns mirror it, so their
+			// crumbs navigate the pane they follow.
 			activate(session, payload?.paneId)
-			return target.navigate(payload?.path)
+			return currentPane(session).navigate(payload?.path)
 		},
 	},
 	{
@@ -372,6 +408,20 @@ const commands = [
 		bar: true,
 		run(session) {
 			session.showPreview.set(!session.showPreview.value)
+		},
+	},
+	{
+		id: "view.toggleMode",
+		title: "Explorer view",
+		keys: "t",
+		kind: "ui",
+		bar: true,
+		run(session) {
+			// Flip the workspace between the two-pane commander and the
+			// three-column explorer (parent · current · preview). Focus on a
+			// column that does not exist in the target mode is handed back to
+			// the pane it was following (see the guard effect in the session).
+			session.viewMode.set(session.viewMode.value === "explorer" ? "commander" : "explorer")
 		},
 	},
 	{
@@ -396,7 +446,7 @@ const commands = [
 				session.notice.set({ kind: "warning", text: "no file to edit" })
 				return
 			}
-			return session.os.edit(entry.path).then(() => session.panes[session.active.value].refresh())
+			return session.os.edit(entry.path).then(() => currentPane(session).refresh())
 		},
 	},
 	// Command panel (`:`): the one entry point, over both the CLI operations
@@ -613,6 +663,10 @@ const commands = [
 		kind: "ui",
 		bar: true,
 		run(session) {
+			// A column with no filter field (the inspector, or a column the
+			// current mode does not show) hands focus to the pane it follows
+			// before the input starts capturing keystrokes.
+			if (!hasFilterField(session, session.active.value)) activate(session, session.currentId.value)
 			session.filtering.set(session.active.value)
 		},
 	},
@@ -751,8 +805,33 @@ function fail(session, error) {
 	return null
 }
 
+// Function: isColumnPane
+// Whether the focused column is backed by a rendered pane. The parent column
+// only exists in explorer mode (focus is handed back on leaving it); the
+// inspector column only while it previews a directory — over a file it is a
+// read-only card with no listing to drive.
+function isColumnPane(session, paneId) {
+	if (paneId !== "preview") return paneId !== "parent" || session.viewMode.value === "explorer"
+	return Boolean(session.showPreview.value) && Boolean(session.previewEntry.value?.isDir) && !session.preview.value
+}
+
+// Function: hasFilterField
+// Whether the focused column renders a filter input. The inspector column
+// never does — its header is the preview title — so `/` hands focus to the
+// pane it shows before capturing keystrokes, the same way a nav key falls
+// back to it.
+function hasFilterField(session, paneId) {
+	return paneId !== "preview" && isColumnPane(session, paneId)
+}
+
+// Function: pane
+// The pane cursor movement, marks and reload act on: the focused column's
+// pane when it has one, else the current pane (so the inspector over a file
+// keeps scrolling the directory it is showing).
 function pane(session) {
-	return session.panes[session.active.value]
+	const focused = session.panes[session.active.value]
+	if (!focused || !isColumnPane(session, session.active.value)) return currentPane(session)
+	return focused
 }
 
 // Function: activate

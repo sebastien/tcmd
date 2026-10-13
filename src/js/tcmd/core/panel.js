@@ -29,7 +29,7 @@
 // `core/commands` assemble and run.
 
 import { hasMatch, score } from "../vendor/fzy.js"
-import { PANE_BUFFERS, PANE_LABELS } from "./pane.js"
+import { currentPaneId, PANE_BUFFERS, PANE_LABELS } from "./pane.js"
 import { basename, parent } from "./path.js"
 import { getOperations, pathToken } from "./operations.js"
 
@@ -137,11 +137,12 @@ function filterPanelEntries(entries, query) {
 
 // Function: resolvePaneId
 // Maps an argument role to a pane id: "source" -> SRC (left), "dest" -> DST
-// (right), anything else -> the active pane.
+// (right), anything else -> the pane holding the current directory (never an
+// auxiliary column: operations run against the directory being browsed).
 function resolvePaneId(session, role) {
 	if (role === "source") return "left"
 	if (role === "dest") return "right"
-	return session.active.value
+	return currentPaneId(session)
 }
 
 // Function: paneSelectionPaths
@@ -210,7 +211,8 @@ function bindArg(session, arg, index) {
 		return { ...common, paneId: "right", textual: true, items: [], value: path }
 	}
 	if (arg.kind === "buffer") {
-		return { ...common, items: [], value: `+${PANE_BUFFERS[session.active.value] ?? "A"}` }
+		const label = PANE_BUFFERS[session.currentId?.value ?? session.active.value] ?? "A"
+		return { ...common, items: [], value: `+${label}` }
 	}
 	return { ...common, items: [], value: "" }
 }

@@ -27,7 +27,7 @@
 // - "raw": the rest of the line, unparsed (a shell command).
 
 import { basename, extname, join, normalize } from "./path.js"
-import { PANE_BUFFERS } from "./pane.js"
+import { currentPane, currentPaneId, PANE_BUFFERS } from "./pane.js"
 
 // Constant: PATHS_PREFIX
 // The prefix of a self-contained path-list token the command panel encodes
@@ -191,7 +191,7 @@ const operations = [
 			if (!tokens.length) throw new Error("sel needs at least one path")
 			const paths = expandAll(session, tokens)
 			const target = findBuffer(session, buffer)
-			const label = buffer ? `${buffer}`.toUpperCase() : PANE_BUFFERS[session.active.value] ?? PANE_BUFFERS.left
+			const label = buffer ? `${buffer}`.toUpperCase() : PANE_BUFFERS[currentPaneId(session)] ?? PANE_BUFFERS.left
 			const marks = new Set(target.marked.value)
 			for (const path of paths) {
 				if (sign === "-") marks.delete(path)
@@ -286,7 +286,7 @@ const operations = [
 		async run(session, args) {
 			const command = `${args[0] ?? ""}`.trim()
 			if (!command) throw new Error("run needs a command")
-			const cwd = session.panes[session.active.value]?.path.value
+			const cwd = currentPane(session).path.value
 			await session.os.run(command, { cwd })
 			await refreshPanes(session)
 			return `ran ${command}`
@@ -360,7 +360,7 @@ function expandArg(session, token) {
 		return [rest ? join(session.fs.home(), rest) : session.fs.home()]
 	}
 	if (text.startsWith("/")) return [normalize(text)]
-	const base = session.panes[session.active.value]?.path.value ?? session.fs.cwd()
+	const base = currentPane(session).path.value ?? session.fs.cwd()
 	return [join(base, text)]
 }
 
@@ -378,7 +378,9 @@ async function isDir(session, path) {
 }
 
 async function refreshPanes(session) {
-	await Promise.all([session.panes.left.refresh(), session.panes.right.refresh()])
+	// Every rendered column: the two panes, plus the explorer's parent mirror
+	// and the directory the inspector is showing.
+	await Promise.all(Object.values(session.panes).map((pane) => pane.refresh()))
 }
 
 async function previewTarget(session, path, details) {
@@ -414,7 +416,7 @@ function parseSelection(args) {
 // default, or the pane whose buffer label matches `name` (`A` = source/left,
 // `B` = destination/right).
 function findBuffer(session, name) {
-	const active = session.panes[session.active.value] ?? session.panes.left
+	const active = currentPane(session)
 	if (!name) return active
 	const target = `${name}`.toUpperCase()
 	for (const paneId of Object.keys(session.panes)) {

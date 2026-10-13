@@ -5,7 +5,11 @@
 The TUI is an unframed workspace: a slim identity bar on top, the panes and
 inspector, and the command bar — nothing boxed around them. The identity bar
 reads `TinyCmd - HOST` (just `TinyCmd` without a host); the active paths live
-in the pane crumbs. Inside:
+in the pane crumbs. Its right-hand end carries the view mode and version: the
+mode word is drawn letter by letter so every letter can carry its own gradient
+colour — `explorer` along the Tiny blues, `commander` along the Cmd oranges,
+the same two runs the logo shimmers along — and the version follows, dim,
+after it. Inside:
 
 - Top bar: the TinyCmd identity (and host).
 - Two panes, each its own single-line box, plus an optional inspector.
@@ -13,6 +17,30 @@ in the pane crumbs. Inside:
   as the width demands; the active pane's marked count trails the list, and a
   notice or error replaces the keys with a one-line status.
 - Below the breakpoint the workspace is replaced by a resize hint.
+
+### View modes
+
+`t` (`view.toggleMode`) flips the workspace between two modes; the columns
+each one shows are the only ones that exist, so focus can never park on an
+invisible column.
+
+- **commander** (default): source and destination, tiled evenly, plus the
+  inspector.
+- **explorer**: the destination is replaced by the *parent* of the current
+  directory, so the columns read parent · current · preview — a Miller chain
+  laid out left to right. The current column is the middle one and carries
+  slightly more width (`flexGrow` 1.35 against 1 for its neighbours); the
+  columns share `flexBasis: 0` so the whole row is distributed by those
+  growers rather than by the content each column would claim.
+
+The parent and preview columns are *mirrors*: the parent tracks the parent of
+the current directory, the preview tracks the directory being previewed. Each
+is a real pane — own breadcrumbs, filter, cursor, marks, detail and summary —
+but only its cursor and filter are its own: opening an entry, stepping up,
+following one of its breadcrumbs or running a relative command moves the pane
+it follows, which is what keeps the mirror in step. `Tab` cycles the visible
+columns (parent → current → preview → parent in explorer, source ⇄ destination
+in commander), and clicking a column body or one of its rows makes it active.
 
 Each pane draws all four edges (the two middle edges sit side by side), so each
 pane's border can highlight independently. The active pane's box border and
@@ -30,7 +58,14 @@ Each pane is a single-line box containing:
   left pane is the source, the right the destination (the command panel's
   argument summaries name them `SRC`/`DST`);
 - one header rule, separating the header row from the listing;
-- contents (scrollable, cursorable);
+- contents (scrollable, cursorable); a symlink row prints its target after the
+  name — `notes.md -> notes.txt`, `docs/ -> ../shared` — so a link reads as
+  what it points at. The link's target resolves throughout: a link to a
+  directory is a directory (it sorts, opens and previews as one), a link to a
+  file carries the target's size, and the inspector reads through it: its
+  header names the traversal (`notes.md -> notes.txt  <TXT>`) and its kind
+  comes from the target's extension rather than the link's name. A broken link
+  shows its target and previews as an empty card;
 - one entry-detail line (a separator rule on top): the selected entry's
   `date · type · size · rights`, on a single row with the rights right-aligned.
   It follows the pane cursor and stays blank when the listing is empty; the
@@ -41,9 +76,10 @@ Each pane is a single-line box containing:
   in both panes.
 
 The inspector is context-aware: text files show their leading content, other
-kinds show a metadata card, and a directory shows a directory card rather than
-an empty box. It sits beside the panes at ≥100 columns and becomes a fullscreen
-viewer (`v`) below that.
+kinds show a metadata card, and a directory shows *its own listing* — the same
+column shape as a pane (breadcrumbs over a cursorable, clickable listing), in
+both view modes, so a previewed directory is never a dead card. It sits beside
+the panes at ≥100 columns and becomes a fullscreen viewer (`v`) below that.
 
 ```text
   TinyCmd - devbox

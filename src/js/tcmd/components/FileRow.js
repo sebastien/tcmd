@@ -8,7 +8,8 @@
 // markedRow, active, paneId }`, the same bag shape in both engines.
 // `currentRow`/`markedRow` are plain per-row booleans snapshotted by the
 // `fileRows` builder (see `rows.js`); `active` is the pane-focus cell, read
-// with `unwrap` at the point of use.
+// with `unwrap` at the point of use. A symlink row carries its target in the
+// name (`notes -> ../real/notes`, see `rowName`).
 //
 // Environment: `cursorBg`, `cursorInactiveBg`, `currentClass`,
 // `accentSecondaryFg`, `accentFg`, `linkFg`, `dirFg`, `devFg`, `fileFg`,
@@ -20,10 +21,13 @@ import { iconFor } from "./icons.js"
 
 // Function: rowName
 // The entry name with the directory slash (the icon is its own slot, so it
-// can be dimmer than the name — see `rowIcon`).
+// can be dimmer than the name — see `rowIcon`), and, for a symlink, the
+// `-> target` tail `ls -l` prints. The name cell truncates, so a narrow pane
+// drops the target before the name itself.
 function rowName(entry) {
 	if (!entry) return ""
-	return entry.isDir ? `${entry.name}/` : entry.name
+	const name = entry.isDir ? `${entry.name}/` : entry.name
+	return entry.target ? `${name} -> ${entry.target}` : name
 }
 
 // Function: rowIcon

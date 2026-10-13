@@ -222,6 +222,73 @@ describe("session", () => {
 		expect(session.bookmarkItems.value.map((row) => row.name)).toEqual(["notes"])
 	})
 
+	test("the preview column mirrors the previewed directory", async () => {
+		const session = makeSession()
+		await load(session)
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		// The cursor starts on the `tester/` directory, so the third column
+		// lists it rather than showing a card.
+		expect(session.previewEntry.value?.isDir).toBe(true)
+		expect(session.panes.preview.path.value).toBe("/home/tester")
+		// Moving onto a file stops the column from following, but does not
+		// clear the directory it was showing.
+		session.panes.left.cursor.set(1)
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(session.previewEntry.value?.isDir).toBe(false)
+		expect(session.panes.preview.path.value).toBe("/home/tester")
+	})
+
+	test("focus on an auxiliary column keeps the header on the current directory", async () => {
+		const session = makeSession()
+		await load(session)
+		session.dispatch("view.toggleMode")
+		session.dispatch("pane.activate", { paneId: "parent" })
+		expect(session.active.value).toBe("parent")
+		expect(session.currentId.value).toBe("left")
+		expect(session.activePath.value).toBe("/home")
+		expect(session.previewEntry.value).toEqual(session.leftCursorEntry.value)
+	})
+
+	test("the preview follows symlinks to their target", async () => {
+		const fs = createMockFs({
+			"/": [{ name: "home", isDir: true }],
+			"/home": [
+				{ name: "real-dir", isDir: true },
+				{ name: "notes.txt", text: "real content\n", size: 13 },
+				{ name: "link.txt", isSymlink: true, target: "notes.txt" },
+				{ name: "link-dir", isSymlink: true, target: "real-dir" },
+			],
+			"/home/real-dir": [{ name: "inside.txt", text: "inside", size: 6 }],
+		})
+		const session = createSession({ fs, left: createPane({ fs, path: "/home" }), right: createPane({ fs, path: "/" }) })
+		await load(session)
+		const index = (name) => session.panes.left.entries.value.findIndex((entry) => entry.name === name)
+		const flush = async () => {
+			for (let i = 0; i < 4; i++) await Promise.resolve()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		}
+
+		// A link to a file previews the *target's* content, classified by the
+		// target's extension, with the traversal named in the title.
+		session.panes.left.cursor.set(index("link.txt"))
+		await flush()
+		expect(session.previewEntry.value.isSymlink).toBe(true)
+		expect(session.preview.value.kind).toBe("text")
+		expect(session.preview.value.title).toBe("link.txt -> notes.txt")
+		expect(session.preview.value.ext).toBe("txt")
+		expect(session.preview.value.text).toContain("real content")
+
+		// A link to a directory previews as a directory: the preview column
+		// follows it and lists what it points at.
+		session.panes.left.cursor.set(index("link-dir"))
+		await flush()
+		expect(session.previewEntry.value.isDir).toBe(true)
+		expect(session.preview.value).toBeNull()
+		expect(session.panes.preview.path.value).toBe("/home/link-dir")
+		await flush()
+		expect(session.panes.preview.entries.value.map((entry) => entry.name)).toEqual(["inside.txt"])
+	})
+
 	test("pane identity: labels are SRC/DST and buffers A/B", () => {
 		expect(PANE_LABELS).toEqual({ left: "SRC", right: "DST" })
 		expect(PANE_BUFFERS).toEqual({ left: "A", right: "B" })

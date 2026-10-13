@@ -19,6 +19,12 @@
 // - `trash(paths)`, `erase(paths)`: Promise<void> - delete, with/without trash
 // - `touch(path)`: Promise<void> - create or bump mtime
 // - `home()`, `cwd()`: string - well-known directories
+//
+// A listing entry additionally reports symlinks as what they point at:
+// `isSymlink` keeps the entry's own identity, `target` is the raw `readlink`
+// text (relative as written, null otherwise), and `isDir`/`size` follow the
+// link — so a link to a directory sorts, opens and previews as a directory,
+// and a link to a file carries the target's size.
 
 import fs from "node:fs/promises"
 import nodeFs from "node:fs"
@@ -70,6 +76,9 @@ function toEntry(name, dirPath, isDir, stats) {
 		path: pathJoin(dirPath, name),
 		isDir,
 		isSymlink: Boolean(stat.isSymlink),
+		// The raw `readlink` text — relative when the link was written that
+		// way — so the listing and the preview can show where it points.
+		target: stat.target ?? null,
 		isDevice: Boolean(stat.isDevice),
 		size: isDir ? 0 : stat.size ?? 0,
 		mtimeMs: stat.mtimeMs ?? 0,
@@ -100,8 +109,15 @@ function createNodeFs() {
 				const d = dirents[i]
 				const full = pathJoin(path, d.name)
 				const stats = await statSafe(full)
-				entries[i] = toEntry(d.name, path, d.isDirectory(), {
-					isSymlink: d.isSymbolicLink(),
+				const isLink = d.isSymbolicLink()
+				// The dirent type describes the link itself, not what it
+				// points at: resolve through the followed stat so a link to a
+				// directory is listed (sorted, opened, previewed) as one. A
+				// broken link has no stats and stays a plain entry.
+				const isDir = d.isDirectory() || (isLink && Boolean(stats?.isDir))
+				entries[i] = toEntry(d.name, path, isDir, {
+					isSymlink: isLink,
+					target: isLink ? await readLinkSafe(full) : null,
 					isDevice: isDeviceNode(d),
 					size: stats?.size ?? 0,
 					mtimeMs: stats?.mtimeMs ?? 0,
@@ -232,6 +248,17 @@ async function statSafe(path) {
 			gid: stats.gid,
 			owner: await resolveOwner(stats.uid, stats.gid),
 		}
+	} catch (error) {
+		return null
+	}
+}
+
+// Function: readLinkSafe
+// The raw `readlink` text of `path`, or null when it is not a link (or the
+// link cannot be read). Relative targets stay relative, as written.
+async function readLinkSafe(path) {
+	try {
+		return await fs.readlink(path)
 	} catch (error) {
 		return null
 	}

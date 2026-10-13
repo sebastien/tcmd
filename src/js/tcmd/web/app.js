@@ -48,9 +48,18 @@ function normalizeKey(event) {
 // Child data keeps the session cells (as `in:` slots do in the TUI), so the
 // child instances subscribe and update granularly; behaviors read cells with
 // `unwrap` at the point of use.
+
+// The classes one pane column carries: focus (`is-active`) and, in explorer
+// mode, the extra width of the middle (`is-major`) column.
+function paneClass(data, paneId) {
+	const active = unwrap(data.active) === paneId
+	const major = unwrap(data.viewMode) === "explorer" && `${unwrap(data.currentId)}` === paneId
+	return [active && webTheme.activeClass, major && "is-major"].filter(Boolean).join(" ") || null
+}
+
 function webViewBehaviors() {
 	return {
-		headerView: (_self, data) => ({ host: data.appHost, path: data.appPath }),
+		headerView: (_self, data) => ({ host: data.appHost, path: data.appPath, mode: data.viewMode }),
 		bookmarkView: (_self, data) => ({
 			items: data.bookmarkItems,
 			mode: data.bookmarkMode,
@@ -88,10 +97,41 @@ function webViewBehaviors() {
 			active: data.leftActive,
 			loading: data.leftLoading,
 		}),
-		leftPaneClass: (_self, data) => (unwrap(data.active) === "left" ? webTheme.activeClass : null),
+		leftPaneClass: (_self, data) => paneClass(data, "left"),
 		leftSummaryView: (_self, data) => ({
 			entries: data.leftEntries,
 			disk: data.leftDisk,
+			width: data.paneWidth,
+		}),
+		// The explorer's first column: the parent of the current directory,
+		// a full pane of its own (header, filter, listing, detail, summary).
+		parentCrumbsView: (_self, data) => ({
+			segments: data.parentSegments,
+			paneId: data.parentId,
+		}),
+		parentDetailView: (_self, data) => ({
+			entry: data.parentEntry,
+			marked: data.parentMarked,
+			width: data.paneWidth,
+		}),
+		parentFilterView: (_self, data) => ({
+			query: data.parentFilter,
+			paneId: data.parentId,
+			filtering: data.filtering,
+			entries: data.parentEntries,
+		}),
+		parentListView: (_self, data) => ({
+			entries: data.parentEntries,
+			cursor: data.parentCursor,
+			marked: data.parentMarked,
+			paneId: data.parentId,
+			active: data.parentActive,
+			loading: data.parentLoading,
+		}),
+		parentPaneClass: (_self, data) => paneClass(data, "parent"),
+		parentSummaryView: (_self, data) => ({
+			entries: data.parentEntries,
+			disk: data.parentDisk,
 			width: data.paneWidth,
 		}),
 		panelView: (_self, data) => ({
@@ -116,6 +156,15 @@ function webViewBehaviors() {
 			preview: data.preview,
 			show: true,
 			entry: data.appEntry,
+			paneId: data.previewId,
+			// The directory column: the inspector pane's own listing, so a
+			// previewed directory reads and behaves like a pane.
+			dirSegments: data.previewSegments,
+			dirEntries: data.previewEntries,
+			dirCursor: data.previewCursor,
+			dirMarked: data.previewMarked,
+			dirActive: data.previewActive,
+			dirLoading: data.previewLoading,
 		}),
 		rightCrumbsView: (_self, data) => ({
 			segments: data.rightSegments,
@@ -136,7 +185,7 @@ function webViewBehaviors() {
 			active: data.rightActive,
 			loading: data.rightLoading,
 		}),
-		rightPaneClass: (_self, data) => (unwrap(data.active) === "right" ? webTheme.activeClass : null),
+		rightPaneClass: (_self, data) => paneClass(data, "right"),
 		rightSummaryView: (_self, data) => ({
 			entries: data.rightEntries,
 			disk: data.rightDisk,
@@ -170,6 +219,7 @@ function createWebApp(session, options = {}) {
 			viewerOpen: viewer,
 			paneWidth,
 			leftSegments: crumbs(session.panes.left),
+			parentSegments: crumbs(session.panes.parent),
 			rightSegments: crumbs(session.panes.right),
 		}))
 		.does({

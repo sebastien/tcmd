@@ -18,8 +18,14 @@ import appXml from "../components/App.xml" with { type: "text" }
 import { elideCrumbs } from "../components/format.js"
 import { appBehaviors, appEvents, appInit } from "../components/index.js"
 import { registerComponents } from "./catalogue.js"
-import { createFrameBehaviors, INSPECTOR_INLINE_WIDTH, isNarrow } from "../components/Frame.js"
+import { createFrameBehaviors, currentColumnId, INSPECTOR_INLINE_WIDTH, isExplorer, isNarrow } from "../components/Frame.js"
 import { tuiTheme } from "./theme.js"
+
+// Constant: CURRENT_GROW
+// How much wider the explorer's middle (current) column is than its
+// neighbours — enough to read as the working pane, not enough to starve the
+// parent and preview columns.
+const CURRENT_GROW = 1.35
 
 // Function: createAppComponent
 // Builds the root component bound to a `session`.
@@ -57,6 +63,9 @@ function createAppComponent(session, options = {}) {
 	const rightCrumbs = derived([session.panes.right.segments, crumbWidth], ([segments, width]) =>
 		elideCrumbs(segments, width),
 	)
+	const parentCrumbs = derived([session.panes.parent.segments, crumbWidth], ([segments, width]) =>
+		elideCrumbs(segments, width),
+	)
 
 	const quit = options.quit ?? ((self) => {
 		// Destroying the renderer from within a keypress deadlocks the native
@@ -78,6 +87,7 @@ function createAppComponent(session, options = {}) {
 			helpOpen: help,
 			viewerOpen: viewer,
 			leftSegments: leftCrumbs,
+			parentSegments: parentCrumbs,
 			rightSegments: rightCrumbs,
 		}))
 		.does({
@@ -124,11 +134,23 @@ function createAppComponent(session, options = {}) {
 				unwrap(data.active) === "left" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
 			rightBorderFg: (_self, data) =>
 				unwrap(data.active) === "right" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
+			parentBorderFg: (_self, data) =>
+				unwrap(data.active) === "parent" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
 			// The header rule carries the same focus tint as the pane border.
 			leftHeadRuleFg: (_self, data) =>
 				unwrap(data.active) === "left" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
 			rightHeadRuleFg: (_self, data) =>
 				unwrap(data.active) === "right" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
+			parentHeadRuleFg: (_self, data) =>
+				unwrap(data.active) === "parent" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
+			// In explorer the current column takes the extra width; in
+			// commander both panes share the row evenly. The columns carry
+			// `flexBasis="0"` so the whole row is distributed by these
+			// growers instead of by the content each column would claim.
+			leftGrow: (_self, data) =>
+				isExplorer(data) && currentColumnId(data) === "left" ? CURRENT_GROW : 1,
+			rightGrow: (_self, data) =>
+				isExplorer(data) && currentColumnId(data) === "right" ? CURRENT_GROW : 1,
 		})
 		.sub(appEvents({ quit }))
 		.using(appXml)

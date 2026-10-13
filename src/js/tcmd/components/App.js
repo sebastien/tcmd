@@ -23,14 +23,18 @@ import { PANEL_FOCUS } from "../core/panel.js"
 function createInit(session) {
 	const left = session.panes.left
 	const right = session.panes.right
+	const parent = session.panes.parent ?? {}
+	const preview = session.panes.preview ?? {}
 	// Pane-focus flags so the listing can render the cursor differently in the
 	// inactive pane. Shared by both engines.
 	const leftActive = derived([session.active], ([active]) => active === "left")
 	const rightActive = derived([session.active], ([active]) => active === "right")
+	const parentActive = derived([session.active], ([active]) => active === "parent")
+	const previewActive = derived([session.active], ([active]) => active === "preview")
 	return () => ({
 		active: session.active,
-		// The preview target entry, so the inspector can show a directory card
-		// even when there is no text/card preview.
+		// The preview target entry, so the inspector can show a directory
+		// column even when there is no text/card preview.
 		appEntry: session.previewEntry,
 		appHost: session.host,
 		appPath: session.activePath,
@@ -42,6 +46,7 @@ function createInit(session) {
 		bookmarkTarget: session.bookmarkTarget,
 		commandBarItems: session.commandBarItems,
 		confirm: session.confirm,
+		currentId: session.currentId,
 		dispatch: session.dispatch,
 		filtering: session.filtering,
 		leftActive,
@@ -71,7 +76,28 @@ function createInit(session) {
 		panelRunnable: session.panelRunnable,
 		panelTextual: session.panelTextual,
 		panelValue: session.panelValue,
+		// The explorer's first column: the parent of the current directory.
+		parentActive,
+		parentCursor: parent.cursor,
+		parentDisk: parent.disk,
+		parentEntries: parent.entries,
+		parentEntry: session.parentCursorEntry,
+		parentError: parent.error,
+		parentFilter: parent.filter,
+		parentId: "parent",
+		parentLoading: parent.loading,
+		parentMarked: parent.marked,
+		parentSegments: parent.segments,
 		preview: session.preview,
+		// The third column: the directory the inspector previews, so it reads
+		// as a pane. Over a file the inspector stays a card and these idle.
+		previewActive,
+		previewCursor: preview.cursor,
+		previewEntries: preview.entries,
+		previewId: "preview",
+		previewLoading: preview.loading,
+		previewMarked: preview.marked,
+		previewSegments: preview.segments,
 		rightActive,
 		rightCursor: right.cursor,
 		rightDisk: right.disk,
@@ -84,6 +110,7 @@ function createInit(session) {
 		rightMarked: right.marked,
 		rightSegments: right.segments,
 		showPreview: session.showPreview,
+		viewMode: session.viewMode,
 	})
 }
 
@@ -225,7 +252,12 @@ function createBehaviors(env) {
 			// filter (or on Shift-Esc) the keymap decides — Esc steps back
 			// through the pane's directory history.
 			if (key?.name === "escape" && !key.shift) {
-				const filter = active === "left" ? unwrap(data.leftFilter) : unwrap(data.rightFilter)
+				const filters = {
+					left: data.leftFilter,
+					parent: data.parentFilter,
+					right: data.rightFilter,
+				}
+				const filter = unwrap(filters[active])
 				if (filter) {
 					data.dispatch("filter.clear")
 					return

@@ -21,6 +21,19 @@ describe("FileRow", () => {
 		expect(rowIcon(DIR, false)).toBe("")
 	})
 
+	test("a symlink shows the target it points at", () => {
+		// The `ls -l` tail, after the name (and its directory slash, when the
+		// link resolves to a directory).
+		expect(rowName({ ...LINK, target: "../real/notes.txt" })).toBe("ln -> ../real/notes.txt")
+		expect(
+			rowName({ isDir: true, isSymlink: true, name: "docs", path: "/docs", size: 0, target: "../shared" }),
+		).toBe("docs/ -> ../shared")
+		// An entry with no target (a plain file, or a host that does not
+		// resolve links) keeps its plain name.
+		expect(rowName(LINK)).toBe("ln")
+		expect(rowName(FILE)).toBe("a.txt")
+	})
+
 	test("behaviors read plain cursor and marks", () => {
 		const behaviors = createBehaviors(behaviorEnv)
 		expect(behaviors.rowName(null, { item: DIR })).toBe("sub/")
