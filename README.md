@@ -108,10 +108,15 @@ the app shows a resize hint instead of the workspace.
   the current column slightly wider than its neighbours.
 
 The parent and preview columns are mirrors: they own their cursor, filter and
-marks, but opening an entry, stepping up or following one of their breadcrumbs
-moves the pane they follow, which is what keeps the mirror in step (in the
-explorer the previewed directory *is* the current column's own child, so the
-chain never drifts). The parent mirror's cursor also follows the current
+marks, but opening an entry, stepping up, following one of their breadcrumbs or
+clicking one of their rows moves the pane they follow, which is what keeps the
+mirror in step (in the explorer the previewed directory *is* the current
+column's own child, so the chain never drifts). A click on the parent column
+makes the clicked directory the current one — or, for a file, opens its
+directory with the file selected and previewed — while a click inside the
+previewed directory promotes that directory to current with the clicked entry
+selected (focus stays on the column that was clicked). The parent mirror's
+cursor also follows the current
 directory: it lands on the entry the current pane shows, so the chain always
 highlights where it is. `Tab` cycles through the columns the current mode shows,
 and clicking any column — the preview included — gives it the focus. A

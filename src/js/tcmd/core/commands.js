@@ -369,13 +369,24 @@ const commands = [
 	},
 	{
 		id: "list.cursor",
-		title: "Set cursor",
+		title: "Select row",
 		kind: "ui",
 		hidden: true,
 		run(session, payload) {
 			const target = payload?.paneId ? session.panes[payload.paneId] : pane(session)
 			activate(session, payload?.paneId)
-			target.cursor.set(clampCursor(payload?.index ?? 0, target.entries.value.length))
+			const index = payload?.index ?? 0
+			target.cursor.set(clampCursor(index, target.entries.value.length))
+			// In the explorer the parent and preview columns are mirrors: a
+			// click on one of their rows retargets the current directory
+			// instead of only moving that column's cursor (see
+			// `retargetFromParent` / `retargetFromPreview`). Focus stays on the
+			// clicked column; the pane body's own `pane:activate` agrees.
+			if (session.viewMode.value !== "explorer") return
+			if (payload?.paneId === "parent") return retargetFromParent(session, target, index)
+			if (payload?.paneId === "preview" && isColumnPane(session, "preview")) {
+				return retargetFromPreview(session, target, index)
+			}
 		},
 	},
 	{
@@ -840,6 +851,45 @@ function pane(session) {
 function activate(session, paneId) {
 	if (!paneId || !session.panes[paneId]) return
 	if (session.active.value !== paneId) session.active.set(paneId)
+}
+
+// Function: retargetFromParent
+// A click on a row of the explorer's parent column retargets the current
+// directory: a directory becomes it, a file opens its containing directory
+// with the file selected so the inspector previews it. Both moves are
+// recorded, so Esc steps back to where the click came from.
+function retargetFromParent(session, parent, index) {
+	const entries = parent.entries.value
+	const entry = entries[clampCursor(index, entries.length)]
+	if (!entry) return
+	const current = currentPane(session)
+	if (entry.isDir) return current.navigate(entry.path)
+	return current
+		.navigate(parent.path.value, { cursorPath: entry.path })
+		.then(() => pinPreview(session, current))
+}
+
+// Function: retargetFromPreview
+// A click on a row of the explorer's preview column promotes the previewed
+// directory to the current one, selecting the clicked entry: a directory then
+// previews its own contents (the next click descends further), a file previews
+// as a card.
+function retargetFromPreview(session, preview, index) {
+	const entries = preview.entries.value
+	const entry = entries[clampCursor(index, entries.length)]
+	if (!entry) return
+	const current = currentPane(session)
+	return current.navigate(preview.path.value, { cursorPath: entry.path }).then(() => {
+		if (!entry.isDir) pinPreview(session, current)
+	})
+}
+
+// Function: pinPreview
+// Points the inspector at the pane's cursor entry, so a file a click just
+// revealed previews even if the follow effect lags the navigation.
+function pinPreview(session, pane) {
+	session.previewTarget.set(pane.currentEntry() ?? null)
+	session.showPreview.set(true)
 }
 
 function bump(session, delta) {

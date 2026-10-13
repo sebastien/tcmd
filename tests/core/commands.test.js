@@ -161,6 +161,7 @@ describe("commands", () => {
 				{ name: "archive", isDir: true },
 				{ name: "docs", isDir: true },
 				{ name: "src", isDir: true },
+				{ name: "readme.md", text: "root readme", size: 11 },
 			],
 			"/work/archive": [{ name: "old.txt", text: "old", size: 3 }],
 			"/work/docs": [{ name: "a.txt", text: "a", size: 1 }],
@@ -251,6 +252,56 @@ describe("commands", () => {
 		await session.panes.left.navigate("/work/src")
 		expect(session.panes.parent.path.value).toBe("/work")
 		expect(session.panes.parent.history.stack.length).toBe(depth)
+	})
+
+	test("clicking a parent directory makes it the current directory", async () => {
+		const session = makeExplorerSession()
+		await load(session)
+		session.dispatch("view.toggleMode")
+		const index = session.panes.parent.entries.value.findIndex((entry) => entry.name === "src")
+		await session.dispatch("list.cursor", { paneId: "parent", index })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		// A directory click descends the pane the mirror follows, and the
+		// focus stays on the column that was clicked.
+		expect(session.panes.left.path.value).toBe("/work/src")
+		expect(session.active.value).toBe("parent")
+		expect(session.panes.parent.path.value).toBe("/work")
+		expect(session.panes.parent.currentEntry()?.name).toBe("src")
+	})
+
+	test("clicking a parent file opens its directory and selects the file", async () => {
+		const session = makeExplorerSession()
+		await load(session)
+		session.dispatch("view.toggleMode")
+		const index = session.panes.parent.entries.value.findIndex((entry) => entry.name === "readme.md")
+		await session.dispatch("list.cursor", { paneId: "parent", index })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		// A file cannot be current: its directory becomes current, the file is
+		// selected there, and the mirror steps up to that directory's parent.
+		expect(session.panes.left.path.value).toBe("/work")
+		expect(session.panes.left.currentEntry()?.name).toBe("readme.md")
+		expect(session.active.value).toBe("parent")
+		expect(session.panes.parent.path.value).toBe("/")
+	})
+
+	test("clicking an item in the preview promotes the previewed directory", async () => {
+		const session = makeExplorerSession()
+		await load(session)
+		session.dispatch("view.toggleMode")
+		// Put the current pane at /work with `docs` under the cursor, so the
+		// inspector previews `/work/docs` as a directory pane.
+		await session.panes.left.navigate("/work")
+		const docsIndex = session.panes.left.entries.value.findIndex((entry) => entry.name === "docs")
+		session.panes.left.cursor.set(docsIndex)
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(session.previewEntry.value?.isDir).toBe(true)
+		// Clicking a row of the previewed directory makes it current and
+		// selects the clicked entry, without stealing focus.
+		await session.dispatch("list.cursor", { paneId: "preview", index: 0 })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(session.panes.left.path.value).toBe("/work/docs")
+		expect(session.panes.left.currentEntry()?.name).toBe("a.txt")
+		expect(session.active.value).toBe("preview")
 	})
 
 	test("back restores the focused column that initiated the move", async () => {

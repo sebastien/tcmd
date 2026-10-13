@@ -325,7 +325,11 @@ describe("web app", () => {
 			const row = inspector.querySelector(".file-row")
 			row.dispatchEvent(new host.ownerDocument.defaultView.MouseEvent("click", { bubbles: true }))
 			await settle()
+			// Clicking a row of the previewed directory promotes it to current
+			// and selects the clicked entry; focus stays on the preview column.
 			expect(session.active.value).toBe("preview")
+			expect(session.panes.left.path.value).toBe("/home/tester")
+			expect(session.panes.left.currentEntry()?.name).toBe("notes.txt")
 		} finally {
 			instance.unmount()
 		}
