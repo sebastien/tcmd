@@ -66,13 +66,11 @@ function createInit(session) {
 		panelDraft: session.panelDraft,
 		panelCursorRow: session.panelCursorRow,
 		panelEntry: session.panelEntry,
-		panelFieldIndex: session.panelFieldIndex,
-		panelFields: session.panelFields,
-		panelCompletion: session.panelCompletion,
 		panelFiltered: session.panelFiltered,
 		panelFocus: session.panelFocus,
 		panelOpIndex: session.panelOpIndex,
 		panelItems: session.panelItems,
+		panelLabelWidth: session.panelLabelWidth,
 		panelOpen: session.panelOpen,
 		panelPicking: session.panelPicking,
 		panelQuery: session.panelQuery,
@@ -127,14 +125,13 @@ function createInit(session) {
 }
 
 // Function: fieldOwnsKeys
-// True when one of the panel's inputs owns the keyboard: the command-name
-// field (`PANEL_FOCUS.OPS`) or an inline textual argument field
-// (`PANEL_FOCUS.FIELD`). While an input owns the keyboard the shared handler
-// leaves text editing to it — typing, Backspace, Delete, caret movement — and
-// its `on:enter` publishes `panel:confirm`. The context column (selection rows)
-// has no input pressed, so the handler handles those keys itself.
+// True when one of the panel's inputs owns the keyboard: the command filter
+// (`PANEL_FOCUS.OPS`) or a textual argument's value field (`panelTextual`).
+// While an input owns the keyboard the shared handler leaves text editing to
+// it — typing, Backspace, Delete, caret movement. A plain argument row or an
+// item row has no input pressed, so the handler handles the key itself.
 function fieldOwnsKeys(data, focus) {
-	return focus === PANEL_FOCUS.OPS || focus === PANEL_FOCUS.FIELD
+	return focus === PANEL_FOCUS.OPS || Boolean(unwrap(data.panelTextual))
 }
 
 // Function: createBehaviors
@@ -203,13 +200,11 @@ function createBehaviors(env) {
 					return
 				}
 				if (key?.name === "up") {
-					if (focus === PANEL_FOCUS.ARGS) data.dispatch("panel.prevArg")
-					else if (focus !== PANEL_FOCUS.FIELD) data.dispatch("panel.up")
+					data.dispatch(focus === PANEL_FOCUS.ARGS ? "panel.prevArg" : "panel.up")
 					return
 				}
 				if (key?.name === "down") {
-					if (focus === PANEL_FOCUS.ARGS) data.dispatch("panel.nextArg")
-					else if (focus !== PANEL_FOCUS.FIELD) data.dispatch("panel.down")
+					data.dispatch(focus === PANEL_FOCUS.ARGS ? "panel.nextArg" : "panel.down")
 					return
 				}
 				if (key?.name === "o" && key.ctrl) {
@@ -347,15 +342,16 @@ function createEvents(env = {}) {
 			if (event.data) data.dispatch(event.data)
 		},
 		"panel:select": (_self, data, event) => {
-			// Clicking an operation row moves the cursor to it; clicking an
-			// argument/item row focuses the argument column (toggling an item);
-			// clicking a picker row chooses it (descending into a directory).
+			// Clicking a command row moves the cursor to it (a group header is
+			// inert); clicking an argument/item row focuses the right pane
+			// (toggling an item); clicking a picker row chooses it.
 			const items = unwrap(data.panelItems) ?? []
-			const index = items.findIndex((row) => row.id === event.data)
-			if (index >= 0) {
-				data.dispatch("panel.setOp", { index })
+			const item = items.find((row) => row.id === event.data)
+			if (item?.type === "op") {
+				data.dispatch("panel.setOp", { index: item.entryIndex })
 				return
 			}
+			if (item) return
 			const rows = unwrap(data.panelRows) ?? []
 			const rowIndex = rows.findIndex((row) => row.key === event.data)
 			if (rowIndex < 0) return
@@ -369,14 +365,6 @@ function createEvents(env = {}) {
 			data.dispatch("panel.focusArg")
 			data.dispatch("panel.setRow", { index: rowIndex })
 			if (row?.type === "item") data.dispatch("panel.toggleItem")
-		},
-		"panel:field": (_self, data, event) => {
-			// Clicking an inline field focuses it.
-			data.dispatch("panel.focusField", { argIndex: event.data })
-		},
-		"panel:name": (_self, data) => {
-			// Clicking the command name focuses its field.
-			data.dispatch("panel.focusName")
 		},
 		"panel:confirm": (_self, data) => {
 			// Published by a focused panel input's `on:enter`; the key handler

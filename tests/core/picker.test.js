@@ -25,15 +25,8 @@ async function makeSession(viewMode = "explorer") {
 	return { fs, session }
 }
 
-// Positions the panel cursor on an argument (its inline field, or its context
-// header row), then browses it.
+// Positions the panel cursor on an argument header by name, then browses it.
 async function browseArg(session, name) {
-	const field = session.panelFields.value.find((candidate) => candidate.name === name)
-	if (field) {
-		session.dispatch("panel.focusField", { argIndex: field.argIndex })
-		await session.dispatch("panel.browse")
-		return
-	}
 	const rowIndex = session.panelRows.value.findIndex(
 		(row) => row.type === "arg" && row.name === name,
 	)

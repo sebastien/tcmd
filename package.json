@@ -1,6 +1,6 @@
 {
 	"name": "@ssebastien/tcmd",
-	"version": "0.1.3",
+	"version": "0.1.4",
 	"description": "TinyCommand: a midnight-commander-like CLI and desktop tool",
 	"type": "module",
 	"main": "./src/js/tcmd/index.js",

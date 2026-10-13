@@ -18,8 +18,9 @@ async function openPicker(setup, session) {
 	session.dispatch("panel.open")
 	const index = session.panelFiltered.value.findIndex((entry) => entry.name === "copy")
 	session.dispatch("panel.setOp", { index })
-	const field = session.panelFields.value.find((candidate) => candidate.name === "TO")
-	session.dispatch("panel.focusField", { argIndex: field.argIndex })
+	const rowIndex = session.panelRows.value.findIndex((row) => row.type === "arg" && row.name === "TO")
+	session.dispatch("panel.focusArg")
+	session.dispatch("panel.setRow", { index: rowIndex })
 	await session.dispatch("panel.browse")
 	await settle(setup)
 }

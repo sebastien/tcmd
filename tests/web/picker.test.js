@@ -58,8 +58,9 @@ async function browse(session, name, argName) {
 	const index = session.panelFiltered.value.findIndex((entry) => entry.name === name)
 	session.dispatch("panel.setOp", { index })
 	await settle()
-	const field = session.panelFields.value.find((candidate) => candidate.name === argName)
-	session.dispatch("panel.focusField", { argIndex: field.argIndex })
+	const rowIndex = session.panelRows.value.findIndex((row) => row.type === "arg" && row.name === argName)
+	session.dispatch("panel.focusArg")
+	session.dispatch("panel.setRow", { index: rowIndex })
 	await session.dispatch("panel.browse")
 	await settle()
 }

@@ -22,15 +22,16 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   and previewed in its directory.
 - Operations over the current panes: copy, move, delete/erase, stat, touch,
   selection buffers, edit/view/open and shell commands
-- Command panel (`:`), the one entry point, laid out like a command line: a `>`
-  prompt with the command name (typing filters and ghost-completes the entry),
-  one inline field per textual argument, and — dim, right under it — the
-  resolved command the draft expands to. Below sit the entry list and the
-  context (selection bindings, `[x]`/`[ ]` items). `Tab` completes the name then
-  walks name → fields → context rows; `Enter` runs a complete command or jumps
-  to the next missing field. Each row marks its namespace by a Nerd Font glyph
-  (a `cli`/`app` tag without one). `!` lands straight on the shell command. A
-  destination/path argument browses the filesystem in an inline file picker
+- Command panel (`:`), the one entry point, a two-pane palette: the left pane
+  filters (`:xxx`) over the CLI operations (copy, move, rename, delete… — the
+  internal TinyCmd actions live on their own keys, not the panel). The right
+  pane lists the selected command's arguments under its name — each row an
+  aligned label and its value in a boxed field (a text field to fill in), or a
+  checkbox (multiple) / radio (single) list of the selected paths wrapped in its
+  own border, with a lone path shown read-only — and the resolved command at its
+  foot. `Tab` cycles the filter and the argument rows; `Enter` runs a complete
+  command or jumps to the next missing argument. `!` lands straight on the shell
+  command. A destination/path argument browses the filesystem in a file picker
   (`⌃O`): explorer mode has no destination pane, so a move or copy there asks
   where to. A `rename` operation replaces a literal `FIND` with `REPLACE` across
   the selection — one file replaces its whole name — previewing each

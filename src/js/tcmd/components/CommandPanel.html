@@ -1,19 +1,16 @@
 <section class="command-panel" when="open" role="dialog" aria-modal="true" aria-label="Command panel" tabindex="-1">
 	<div class="command-dialog">
 		<header out="title"></header>
-		<div class="panel-command-line">
-			<span out="sign"></span>
-			<input class="panel-query" when="nameFocused" type="text" inout="query" aria-label="Command" />
-			<span class="panel-name-text" when="!nameFocused" out="nameText" on:click="panel:name"></span>
-			<span class="panel-ghost" when="ghostVisible" out="ghost"></span>
-			<span class="panel-fields" out="fieldRows"></span>
-		</div>
-		<div class="panel-runs" out:data-runnable="runnableState">
-			<pre out="preview"></pre>
-		</div>
 		<div class="panel-columns">
-			<ul class="panel-ops" aria-label="Commands" out="opRows"></ul>
+			<div class="panel-command-column">
+				<label class="panel-query-line">
+					<span out="sign"></span>
+					<input class="panel-query" type="text" inout="query" aria-label="Filter commands" />
+				</label>
+				<ul class="panel-ops" aria-label="Commands" out="opRows"></ul>
+			</div>
 			<div class="panel-args-column">
+				<p class="panel-command-name" out="commandName"></p>
 				<div class="panel-picker" when="picking">
 					<p class="panel-picker-path" out="pickerPath"></p>
 					<label class="panel-picker-line">
@@ -22,8 +19,9 @@
 					</label>
 				</div>
 				<p class="panel-args-empty" when="argsEmpty" out="argsEmptyText"></p>
-				<ul class="panel-args" aria-label="Context" out="argRows"></ul>
+				<ul class="panel-args" aria-label="Arguments" out="argRows"></ul>
 				<p class="panel-args-empty" when="pickerEmpty" out="pickerEmptyText"></p>
+				<div class="panel-runs" out:data-runnable="runnableState"><pre out="preview"></pre></div>
 			</div>
 		</div>
 		<footer out="footer"></footer>

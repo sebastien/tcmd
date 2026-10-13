@@ -62,8 +62,7 @@ function connectEffects(session, root, { size, help, viewer }) {
 		if (session.panelOpen.value) {
 			if (session.panelPicking.value) return root.querySelector(".panel-picker-query")
 			if (session.panelFocus.value === "ops") return root.querySelector(".panel-query")
-			if (session.panelFocus.value === "field") return root.querySelector(".panel-value")
-			return root.querySelector(".command-panel")
+			return root.querySelector(session.panelTextual.value ? ".panel-value" : ".command-panel")
 		}
 		if (session.bookmarkOpen.value) return root.querySelector(".bookmark-query")
 		if (session.filtering.value) return root.querySelector(`.pane-${session.filtering.value} .filter-input`)

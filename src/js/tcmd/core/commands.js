@@ -16,7 +16,7 @@
 // - `hidden`: true for internal commands that never show in the panel.
 
 import { basename, parent as parentOf } from "./path.js"
-import { PANEL_FOCUS, argvFor, bindingAt, fieldIndexOf, missingBinding, rowAt, withArgValue, withToggledItem } from "./panel.js"
+import { PANEL_FOCUS, argvFor, bindingAt, missingBinding, rowAt, withArgValue, withToggledItem } from "./panel.js"
 import { clampCursor, moveCursor } from "./selection.js"
 import { currentPane } from "./pane.js"
 import { runLine } from "./script.js"
@@ -55,7 +55,7 @@ const BOOKMARK_LIST_KEYS = [
 // Command-bar hints while the command panel is open.
 const PANEL_HINT_KEYS = [
 	{ id: null, title: "Command", keys: "↑/↓" },
-	{ id: null, title: "Field", keys: "⇥" },
+	{ id: null, title: "Arg", keys: "⇥" },
 	{ id: null, title: "Browse", keys: "^O" },
 	{ id: null, title: "Toggle", keys: "Spc" },
 	{ id: null, title: "Run", keys: "↵", primary: true },
@@ -554,57 +554,32 @@ const commands = [
 	},
 	{
 		id: "panel.tab",
-		title: "Next field or command",
+		title: "Next argument or command",
 		kind: "ui",
 		hidden: true,
 		run(session, payload) {
-			// Forward Tab first completes the command name when the typed query
-			// is a prefix of the selected entry (the ghost suffix); a second
-			// Tab jumps to the next missing argument, and once nothing is
-			// missing it walks the focus ring — the command name, each inline
-			// textual field, then each context row — wrapping at both ends.
-			// Shift-Tab walks it backwards.
+			// Tab cycles the focus ring: the command filter then each argument
+			// header, wrapping at both ends (an item row is reached with the
+			// arrows). Shift-Tab walks it backwards.
 			const delta = payload?.delta === -1 ? -1 : 1
-			if (delta > 0 && session.panelFocus.value === PANEL_FOCUS.OPS) {
-				const draft = session.panelDraft.value
-				if (session.panelCompletion.value) {
-					session.panelQuery.set(`${session.panelEntry.value?.name ?? ""}`)
-					return
-				}
-				const missing = missingBinding(draft)
-				if (missing) {
-					focusBinding(session, draft, missing)
-					return
-				}
+			const rows = session.panelRows.value
+			const headers = []
+			for (let i = 0; i < rows.length; i++) if (rows[i].type === "arg") headers.push(i)
+			if (!headers.length) return
+			if (session.panelFocus.value === PANEL_FOCUS.OPS) {
+				session.panelRowIndex.set(delta > 0 ? headers[0] : headers[headers.length - 1])
+				session.panelFocus.set(PANEL_FOCUS.ARGS)
+				return
 			}
-			const stops = panelStops(session)
-			if (!stops.length) return
-			const at = currentStop(session, stops)
-			const next = at < 0 ? 0 : (at + delta + stops.length) % stops.length
-			focusStop(session, stops[next])
-		},
-	},
-	{
-		id: "panel.focusField",
-		title: "Focus a command field",
-		kind: "ui",
-		hidden: true,
-		run(session, payload) {
-			const argIndex = payload?.argIndex
-			if (argIndex === undefined) return
-			const fieldIndex = fieldIndexOf(session.panelDraft.value, argIndex)
-			if (fieldIndex < 0) return
-			session.panelFocus.set(PANEL_FOCUS.FIELD)
-			session.panelFieldIndex.set(fieldIndex)
-		},
-	},
-	{
-		id: "panel.focusName",
-		title: "Focus the command name",
-		kind: "ui",
-		hidden: true,
-		run(session) {
-			session.panelFocus.set(PANEL_FOCUS.OPS)
+			const at = headers.indexOf(session.panelRowIndex.value)
+			if (delta > 0) {
+				if (at === -1 || at >= headers.length - 1) session.panelFocus.set(PANEL_FOCUS.OPS)
+				else session.panelRowIndex.set(headers[at + 1])
+			} else if (at <= 0) {
+				session.panelFocus.set(PANEL_FOCUS.OPS)
+			} else {
+				session.panelRowIndex.set(headers[at - 1])
+			}
 		},
 	},
 	{
@@ -669,13 +644,14 @@ const commands = [
 			if (!row) return
 			const draft = session.panelDraft.value
 			if (row.type === "item") {
-				session.panelDraft.set(withToggledItem(draft, row.argIndex, row.itemIndex))
+				session.panelDraft.set(withToggledItem(draft, row.argIndex, row.itemIndex, row.multi !== false))
 				return
 			}
 			// An argument header toggles its whole selection: select all when
-			// some are off, clear when all are on.
+			// some are off, clear when all are on. A single-path argument is a
+			// radio list, so its header has nothing to toggle.
 			const binding = bindingAt(draft, row.argIndex)
-			if (!binding || binding.kind !== "selection") return
+			if (!binding || binding.kind !== "selection" || binding.multi !== true) return
 			const all = (binding.items ?? []).length > 0 && (binding.items ?? []).every((item) => item.selected)
 			const items = (binding.items ?? []).map((item) => ({ ...item, selected: !all }))
 			session.panelDraft.set(draft.map((b) => (b.index === row.argIndex ? { ...b, items } : b)))
@@ -794,12 +770,6 @@ const commands = [
 		async run(session) {
 			const entry = session.panelEntry.value
 			if (!entry) return
-			// A TinyCmd action takes no arguments: dispatch it and close.
-			if (entry.source === "app") {
-				await session.dispatch(entry.command.id)
-				closePanel(session)
-				return "ran"
-			}
 			const op = entry.op
 			const draft = session.panelDraft.value
 			// An incomplete command does not fail: a blank destination/path
@@ -813,7 +783,7 @@ const commands = [
 					session.panelPendingRun.set(true)
 					return openPicker(session, missing.index, missing)
 				}
-				focusBinding(session, draft, missing)
+				focusBinding(session, missing)
 				return
 			}
 			const status = await runOperation(session, op, argvFor(draft))
@@ -923,13 +893,6 @@ function getCommand(id) {
 		if (commands[i].id === id) return commands[i]
 	}
 	return null
-}
-
-// Function: getAppCommands
-// The TinyCmd actions the command panel lists: user-visible UI actions, which
-// `core/panel` tags as the `app` namespace next to the CLI operations.
-function getAppCommands() {
-	return commands.filter((command) => !command.hidden && (command.kind ?? "ui") === "ui")
 }
 
 // Function: getCommandBarItems
@@ -1070,76 +1033,26 @@ function closeBookmark(session) {
 	session.bookmarkOpen.set(false)
 }
 
-// Function: panelStops
-// The panel's focus ring as a flat, ordered list: the command-name field, then
-// each inline textual field, then each context row (a selection header or
-// item). Tab and Shift-Tab walk it; Enter jumps to the first missing stop.
-function panelStops(session) {
-	const stops = [{ focus: PANEL_FOCUS.OPS }]
-	const fields = session.panelFields.value ?? []
-	for (let i = 0; i < fields.length; i++) stops.push({ focus: PANEL_FOCUS.FIELD, fieldIndex: i })
-	const rows = session.panelRows.value ?? []
-	for (let i = 0; i < rows.length; i++) stops.push({ focus: PANEL_FOCUS.ARGS, rowIndex: i })
-	return stops
-}
-
-// Function: currentStop
-// The index of the stop the focus ring currently rests on, or -1.
-function currentStop(session, stops) {
-	const focus = session.panelFocus.value
-	const fieldIndex = session.panelFieldIndex.value
-	const rowIndex = session.panelRowIndex.value
-	return stops.findIndex(
-		(stop) =>
-			stop.focus === focus &&
-			(stop.focus !== PANEL_FOCUS.FIELD || stop.fieldIndex === fieldIndex) &&
-			(stop.focus !== PANEL_FOCUS.ARGS || stop.rowIndex === rowIndex),
-	)
-}
-
-// Function: focusStop
-// Moves the focus ring onto a stop.
-function focusStop(session, stop) {
-	session.panelFocus.set(stop.focus)
-	if (stop.focus === PANEL_FOCUS.FIELD) session.panelFieldIndex.set(stop.fieldIndex ?? 0)
-	if (stop.focus === PANEL_FOCUS.ARGS) session.panelRowIndex.set(stop.rowIndex ?? 0)
-}
-
 // Function: focusedBinding
-// The draft binding the cursor is on: the inline field at `panelFieldIndex`, or
-// the context row at `panelRowIndex`. Null on the command name.
+// The draft binding under the right pane's cursor (an argument header or one
+// of its item rows), or null on the command filter.
 function focusedBinding(session) {
-	const draft = session.panelDraft.value
-	if (session.panelFocus.value === PANEL_FOCUS.FIELD) {
-		const field = session.panelFields.value[session.panelFieldIndex.value]
-		return field ? bindingAt(draft, field.argIndex) : null
-	}
-	if (session.panelFocus.value === PANEL_FOCUS.ARGS) {
-		const row = rowAt(session.panelRows.value, session.panelRowIndex.value)
-		return row ? bindingAt(draft, row.argIndex) : null
-	}
-	return null
+	if (session.panelFocus.value !== PANEL_FOCUS.ARGS) return null
+	const row = rowAt(session.panelRows.value, session.panelRowIndex.value)
+	return row ? bindingAt(session.panelDraft.value, row.argIndex) : null
 }
 
 // Function: firstPickableBinding
 // The first browsable (`picker`) binding of the draft, so `^O` works from the
-// command-name field too.
+// command filter too.
 function firstPickableBinding(session) {
 	return (session.panelDraft.value ?? []).find((binding) => binding.picker === true) ?? null
 }
 
 // Function: focusBinding
-// Moves the focus ring onto the binding Enter found missing: its inline field
-// when it is textual, else its context header row.
-function focusBinding(session, draft, binding) {
-	if (binding.textual) {
-		const fieldIndex = fieldIndexOf(draft, binding.index)
-		if (fieldIndex >= 0) {
-			session.panelFocus.set(PANEL_FOCUS.FIELD)
-			session.panelFieldIndex.set(fieldIndex)
-			return
-		}
-	}
+// Moves the cursor onto the argument header row of the binding Enter found
+// missing.
+function focusBinding(session, binding) {
 	const rowIndex = (session.panelRows.value ?? []).findIndex(
 		(row) => row.type === "arg" && row.argIndex === binding.index,
 	)
@@ -1156,7 +1069,6 @@ function openPanel(session, options = {}) {
 	session.panelQuery.set("")
 	session.panelOpIndex.set(0)
 	session.panelRowIndex.set(0)
-	session.panelFieldIndex.set(0)
 	session.panelFocus.set(PANEL_FOCUS.OPS)
 	session.panelPicking.set(false)
 	session.panelPickerArg.set(-1)
@@ -1171,16 +1083,8 @@ function openPanel(session, options = {}) {
 	if (index < 0) throw new Error(`command panel has no entry named "${options.name}"`)
 	session.panelOpIndex.set(index)
 	if (options.focus === PANEL_FOCUS.ARGS) {
-		// `!` wants the operation's first inline field (its CMD) to own the
-		// keyboard; fall back to the context column when it has none.
-		const fields = session.panelFields.value
-		if (fields.length) {
-			session.panelFocus.set(PANEL_FOCUS.FIELD)
-			session.panelFieldIndex.set(0)
-		} else {
-			session.panelFocus.set(PANEL_FOCUS.ARGS)
-			session.panelRowIndex.set(0)
-		}
+		session.panelFocus.set(PANEL_FOCUS.ARGS)
+		session.panelRowIndex.set(0)
 	}
 }
 
@@ -1261,7 +1165,6 @@ export {
 	barRow,
 	closePanel,
 	createDispatch,
-	getAppCommands,
 	getCommand,
 	getCommandBarItems,
 	getCommands,

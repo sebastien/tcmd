@@ -207,31 +207,26 @@ describe("golden frames", () => {
 			expect(frame).toContain(" Command · bookmark ")
 			expect(frame).toContain("copy FROM TO")
 			expect(frame).toContain("FROM")
-			// The selection summary names the pane the paths come from.
-			expect(frame).toContain("SRC")
-			// An item row shows its basename in full and its parent directory.
-			expect(frame).toContain("[x] documents")
-			expect(frame).toContain("/home")
+			// bookmark's PATH is a single path: it renders as a pre-filled,
+			// read-only path, not a list.
+			expect(frame).toContain("/home/documents")
 			// Each operation row advertises the arguments it takes.
 			expect(frame).toContain("[NAME] [PATH]")
-			// CLI operations lead the TinyCmd actions, and each carries its
-			// namespace glyph (a terminal prompt, a bolt).
-			expect(frame).toContain("\u{ebca} bookmark")
-			expect(frame).toContain("\u{f0e7} Back")
-			// A vertical rule divides the entry list from the context column:
-			// the rows carry a "│" between the two columns.
+			// A vertical rule divides the command list from the argument pane:
+			// the rows carry a "│" between the two panes.
 			expect(frame).toMatch(/bookmark[^\n]*│/)
-			// The resolved command sits dim, right under the command row.
-			const lines = frame.split("\n")
-			const cmd = lines.findIndex((line) => line.includes("›"))
-			expect(cmd).toBeGreaterThan(0)
-			expect(lines[cmd + 1]).toContain("bookmark /home/documents")
-			// The inline NAME field is on the command row itself.
-			expect(lines[cmd]).toContain("NAME")
-			// The filter prompt is the header row.
-			expect(frame).toContain("›")
+			// The list is flat: the CLI operations only, no group headers and
+			// no internal TinyCmd actions.
+			expect(frame).not.toContain("System")
+			expect(frame).not.toContain("Commands")
+			expect(frame).not.toContain("Open file")
+			// The right pane heads with the command name and foots with the
+			// resolved command.
+			expect(frame).toContain("bookmark /home/documents")
+			// The filter prompt is the colon in the left pane.
+			expect(frame).toContain(":")
 			// The panel keys are advertised in its own footer.
-			expect(frame).toContain("type to command")
+			expect(frame).toContain("type to filter")
 			// The command bar underneath switches to the panel hints.
 			expect(frame).toContain("Toggle")
 		} finally {
@@ -239,31 +234,19 @@ describe("golden frames", () => {
 		}
 	})
 
-	test("a TinyCmd action in the panel binds no arguments and says so", async () => {
+	test("the panel lists only the CLI operations, ranked by match", async () => {
 		const { setup, session } = await makeSetup(120, 30)
 		try {
 			setup.mockInput.pressKey(":")
 			await settle(setup)
 			await setup.mockInput.typeText("open")
 			await settle(setup)
-			// `open` (CLI), `Open` (the pane action) and the two actions whose
-			// id ends in `.open` all match; the CLI operation leads, and every
-			// row carries its namespace glyph.
-			expect(session.panelItems.value.map((item) => item.id)).toEqual([
-				"op:open",
-				"cmd:pane.enter",
-				"cmd:file.open",
-				"cmd:panel.open",
-			])
-			session.dispatch("panel.setOp", { index: 1 })
-			await settle(setup)
-			expect(session.panelEntry.value.name).toBe("Open")
+			// Only the CLI operation matches; the internal actions are gone.
+			expect(session.panelItems.value.map((item) => item.id)).toEqual(["op:open"])
 			const frame = setup.captureCharFrame()
-			expect(frame).toContain(" Command · Open ")
-			expect(frame).toContain("no arguments")
-			// The "runs" line shows the action's title: nothing to assemble.
-			expect(session.panelCommand.value).toBe("Open")
-			expect(session.panelRunnable.value).toBe(true)
+			expect(frame).toContain(" Command · open ")
+			expect(frame).toContain("open PATH...")
+			expect(frame).not.toContain("Open file")
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -282,18 +265,14 @@ describe("golden frames", () => {
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain(" Command · edit ")
 			expect(frame).not.toContain("bookmark [NAME]")
-			// The resolved line sits right under the command row.
+			// The resolved line sits at the foot of the argument pane.
 			expect(frame).toContain("edit /home/documents")
-			// Tab walks the ring: the context header, then its item, then wraps
-			// back to the command name (edit has a selection and no textual
-			// field).
+			// Tab walks the ring: the PATH header, then back to the filter
+			// (edit has a single selection argument).
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			expect(session.panelFocus.value).toBe("args")
 			expect(session.panelRowIndex.value).toBe(0)
-			setup.mockInput.pressKey("\t")
-			await settle(setup)
-			expect(session.panelRowIndex.value).toBe(1)
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			expect(session.panelFocus.value).toBe("ops")
@@ -305,14 +284,17 @@ describe("golden frames", () => {
 	test("toggling an argument item is transient and flips the marker", async () => {
 		const { setup, session } = await makeSetup(120, 30)
 		try {
+			// Mark two paths so FROM is a list (a single path is read-only).
+			session.panes.left.cursor.set(0)
+			session.panes.left.toggleMark()
+			session.panes.left.cursor.set(1)
+			session.panes.left.toggleMark()
 			setup.mockInput.pressKey(":")
 			await settle(setup)
-			// Filter to `copy` so its FROM selection owns the context rows.
+			// Filter to `copy` so its FROM selection owns the argument rows.
 			await setup.mockInput.typeText("copy")
 			await settle(setup)
-			// Tab to the TO field, then to the FROM header, then toggle it off.
-			setup.mockInput.pressKey("\t")
-			await settle(setup)
+			// Tab to the FROM header, then toggle its whole selection off.
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			setup.mockInput.pressKey(" ")
@@ -321,7 +303,7 @@ describe("golden frames", () => {
 			expect(frame).toContain("[ ] documents")
 			expect(frame).toContain("SRC · 0 selected")
 			// The real pane marks are untouched.
-			expect(session.panes.left.marked.value.size).toBe(0)
+			expect(session.panes.left.marked.value.size).toBe(2)
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -358,7 +340,7 @@ describe("golden frames", () => {
 			// The raw CMD field owns the keyboard, so typing goes straight in;
 			// the filter stays empty so the full list keeps its ordering.
 			expect(session.panelQuery.value).toBe("")
-			expect(session.panelFocus.value).toBe("field")
+			expect(session.panelFocus.value).toBe("args")
 			expect(session.panelTextual.value).toBe(true)
 			await setup.mockInput.typeText("echo hi")
 			await settle(setup)

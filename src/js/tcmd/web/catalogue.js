@@ -18,7 +18,6 @@ import bookmarkListHtml from "../components/BookmarkList.html" with { type: "tex
 import bookmarkRowHtml from "../components/BookmarkRow.html" with { type: "text" }
 import commandBarHtml from "../components/CommandBar.html" with { type: "text" }
 import commandArgRowHtml from "../components/CommandArgRow.html" with { type: "text" }
-import commandFieldHtml from "../components/CommandField.html" with { type: "text" }
 import commandPanelHtml from "../components/CommandPanel.html" with { type: "text" }
 import commandItemHtml from "../components/CommandItem.html" with { type: "text" }
 import confirmHtml from "../components/Confirm.html" with { type: "text" }
@@ -42,7 +41,6 @@ import {
 	commandBarBehaviors,
 	commandBarMarksItem,
 	commandArgRowBehaviors,
-	commandFieldBehaviors,
 	commandItemBehaviors,
 	commandItemRows,
 	commandPanelBehaviors,
@@ -57,7 +55,6 @@ import {
 	filterBarBehaviors,
 	helpBehaviors,
 	panelArgRows,
-	panelFieldRows,
 	panelOpRows,
 	summaryBehaviors,
 } from "../components/index.js"
@@ -87,10 +84,6 @@ function createComponents() {
 	const commandArgRow = bind(ui, "CommandArgRow", commandArgRowHtml, commandArgRowBehaviors({
 		...webTheme,
 		icons: false,
-	}))
-	const commandField = bind(ui, "CommandField", commandFieldHtml, commandFieldBehaviors({
-		...webTheme,
-		focusedClass: "is-focused",
 	}))
 	const crumb = bind(ui, "Crumb", crumbHtml, crumbBehaviors(webTheme))
 	const fileRow = bind(ui, "FileRow", fileRowHtml, fileRowBehaviors(webTheme))
@@ -124,7 +117,6 @@ function createComponents() {
 			...webTheme,
 			opRows: panelOpRows(commandArgRow),
 			argRows: panelArgRows(commandArgRow),
-			fieldRows: panelFieldRows(commandField),
 		})),
 		Confirm: bind(ui, "Confirm", confirmHtml, confirmBehaviors(webTheme)),
 		EntryDetail: bind(ui, "EntryDetail", entryDetailHtml, entryDetailBehaviors({ ...webTheme, width: paneWidth, elide })),

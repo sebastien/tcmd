@@ -4,20 +4,17 @@
 // Created: 2026-10-09
 
 // Module: tcmd/core/panel
-// The command panel (Commando): the one entry point for everything the
-// application can do. It lists two namespaces in one column, marked apart so
-// they can be told at a glance — CLI operations (`copy`, `delete`, `run`, the
-// `core/operations` registry) first, then the TinyCmd actions (`Open file`,
-// `Bookmark`, `Preview`, the `core/commands` registry). Both are ranked by
-// match importance once a query filters them (see `filterPanelEntries`).
+// The command panel (Commando): the one entry point for the CLI operations
+// (`copy`, `move`, `rename`, `delete`, `run` — the `core/operations` registry).
+// They are listed flat in one column, ranked by match importance once a query
+// filters them (see `filterPanelEntries`). The internal TinyCmd actions are not
+// listed here — they live on their own keys.
 //
-// For the selected CLI operation, the panel binds its arguments from the live
+// For the selected operation, the panel binds its arguments from the live
 // context — a selection argument shows the SRC/DST pane's marked paths (falling
 // back to the cursor entry) and lets the user toggle individual items; a
 // destination argument resolves to the DST pane's directory; textual arguments
-// (a name, a buffer label, a shell command) are typed in place. A TinyCmd
-// action takes no arguments, so its draft is empty and Enter just dispatches
-// it.
+// (a name, a buffer label, a shell command) are typed in place.
 //
 // The selection the user tweaks is *transient*: it lives in the draft bindings
 // (`session.panelDraft`), never in the real pane marks. When the draft runs,
@@ -34,29 +31,19 @@ import { basename, parent } from "./path.js"
 import { getOperations, pathToken } from "./operations.js"
 
 // Constant: PANEL_FOCUS
-// The focus ring of the panel: "ops" is the command-name field (typing filters
-// and completes the entry), "field" is one of the inline textual-argument
-// fields on the command row (`panelFieldIndex` picks which), and "args" is the
-// context column (selection bindings, where Space toggles an item).
-const PANEL_FOCUS = { OPS: "ops", FIELD: "field", ARGS: "args" }
+// The two regions the panel's focus ring moves through: "ops" (the filter and
+// the command list on the left) and "args" (an argument row or item in the
+// right pane, where a textual argument owns the keyboard and Space toggles a
+// selection item).
+const PANEL_FOCUS = { OPS: "ops", ARGS: "args" }
 
-// Constant: PANEL_SOURCES
-// The two namespaces the panel lists, in display order: the CLI operations,
-// then the TinyCmd actions.
-const PANEL_SOURCES = ["cli", "app"]
-
-// Constant: PANEL_NOISE
-// Action ids the panel never lists: raw cursor movement already lives on the
-// arrow keys and would only be noise.
-const PANEL_NOISE = /^nav\./
-
-// Function: panelCliEntries
-// One panel entry per visible CLI operation.
-function panelCliEntries() {
+// Function: panelEntries
+// The entries the panel lists: the CLI operations. They are the only namespace
+// — the internal TinyCmd actions are reached by their own keys, not the panel.
+function panelEntries() {
 	return getOperations()
 		.filter((op) => !op.hidden)
 		.map((op) => ({
-			source: "cli",
 			id: `op:${op.name}`,
 			name: op.name,
 			summary: `${op.signature ?? ""}`.replace(/^\S+\s*/, ""),
@@ -67,38 +54,9 @@ function panelCliEntries() {
 		}))
 }
 
-// Function: panelAppEntries
-// One panel entry per TinyCmd action. Their id doubles as a search term, so
-// `file.` finds `file.open` as well as `Open file` does.
-function panelAppEntries(commands) {
-	return (commands ?? [])
-		.filter((command) => !PANEL_NOISE.test(command.id))
-		.map((command) => ({
-			source: "app",
-			id: `cmd:${command.id}`,
-			name: command.title ?? command.id,
-			summary: command.keys ? `[${command.keys}]` : "",
-			signature: "",
-			risk: null,
-			matchNames: [command.title ?? command.id, command.id],
-			command,
-		}))
-}
-
-// Function: panelEntries
-// The entries the panel lists: the CLI operations, then the TinyCmd actions
-// (the `core/commands` registry rows, passed in so this module stays free of a
-// dependency on it).
-function panelEntries(commands) {
-	return [...panelCliEntries(), ...panelAppEntries(commands)]
-}
-
 // Function: compareEntries
-// The panel's default ordering: within a namespace alphabetically by name,
-// CLI operations before TinyCmd actions.
+// The panel's default ordering: alphabetically by name.
 function compareEntries(a, b) {
-	const bySource = PANEL_SOURCES.indexOf(a?.source) - PANEL_SOURCES.indexOf(b?.source)
-	if (bySource !== 0) return bySource
 	return `${a?.name ?? ""}`.localeCompare(`${b?.name ?? ""}`)
 }
 
@@ -116,9 +74,8 @@ function entryScore(entry, query) {
 
 // Function: filterPanelEntries
 // Narrows the entry list by a typed query and orders it: no query lists the
-// CLI operations alphabetically, then the TinyCmd actions alphabetically; a
-// query ranks the matches by importance (the fzy score of the best name match,
-// so `open` outranks `copy` for `op`), ties keeping CLI before TinyCmd and then
+// operations alphabetically; a query ranks the matches by importance (the fzy
+// score of the best name match, so `open` outranks `copy` for `op`), ties
 // alphabetical. A query that only matches an operation's signature (`buf` ->
 // `sel [+|-][BUF] PATH...`) keeps it listable, at the bottom.
 function filterPanelEntries(entries, query) {
@@ -134,6 +91,21 @@ function filterPanelEntries(entries, query) {
 	}
 	ranked.sort((a, b) => (a.score !== b.score ? b.score - a.score : compareEntries(a.entry, b.entry)))
 	return ranked.map((match) => match.entry)
+}
+
+// Function: panelEntryRows
+// Projects the filtered entries into the flat list the command-list column
+// renders: one `op` row per entry, tagged with its index in the *entries* list
+// (what the cursor `panelOpIndex` addresses).
+function panelEntryRows(entries) {
+	return (entries ?? []).map((entry, index) => ({
+		type: "op",
+		id: entry.id,
+		entryIndex: index,
+		name: entry.name,
+		summary: entry.summary,
+		risk: entry.risk,
+	}))
 }
 
 // Function: resolvePaneId
@@ -206,6 +178,9 @@ function bindArg(session, arg, index) {
 		return {
 			...common,
 			paneId,
+			// A variadic selection accepts many marked paths (checkboxes); a
+			// single-path argument accepts one (a radio list).
+			multi: arg.variadic === true,
 			items: paneSelectionPaths(pane).map((path) => itemFor(entries, path)),
 			value: "",
 		}
@@ -230,9 +205,8 @@ function bindArg(session, arg, index) {
 }
 
 // Function: bindArgs
-// Binds every argument of the selected entry to the live context. Only a CLI
-// operation carries an `args` signature, so a TinyCmd action yields an empty
-// draft.
+// Binds every argument of the selected entry to the live context. Every
+// operation carries an `args` signature.
 function bindArgs(session, entry) {
 	return (entry?.op?.args ?? []).map((arg, index) => bindArg(session, arg, index))
 }
@@ -353,24 +327,29 @@ function panelSummary(binding) {
 }
 
 // Function: panelRowList
-// Flattens the draft into the rows the panel's *context* column renders: one
-// header row per selection argument, followed by one item row per marked path
-// (so individual paths can be toggled). Textual arguments (literal/raw/path/
-// dest/buffer) are edited inline on the command row instead, so they
-// contribute no context rows. Row focus is assigned by the view (comparing the
-// row index to the cursor), the same way list rows are; this stays pure and
-// index-stable.
+// Flattens the draft into the rows the panel's right-hand argument pane
+// renders: one header row per argument (its label and value/summary),
+// followed by one item row per selected path of a selection argument (so
+// individual paths can be toggled). A variadic selection shows checkboxes
+// (`[x]`/`[ ]`); a single-path one shows radios (`(•)`/`( )`). Row focus is
+// assigned by the view (comparing the row index to the cursor), the same way
+// list rows are; this stays pure and index-stable.
 function panelRowList(bindings) {
 	const rows = []
 	for (const binding of bindings ?? []) {
-		if (binding.textual) continue
+		const multi = binding.multi === true
+		const items = binding.items ?? []
+		// A selection that resolves to a single path is not a list: it renders
+		// as a pre-filled, read-only path (no checkbox/radio to pick from).
+		const single = items.length === 1
 		rows.push({
 			type: "arg",
 			key: `arg:${binding.index}`,
+			rowIndex: rows.length,
 			argIndex: binding.index,
 			itemIndex: -1,
 			name: binding.name,
-			summary: panelSummary(binding),
+			summary: single ? items[0].path : panelSummary(binding),
 			kind: binding.kind,
 			role: binding.role,
 			optional: binding.optional,
@@ -378,15 +357,20 @@ function panelRowList(bindings) {
 			textual: binding.textual,
 			picker: binding.picker === true,
 			mode: binding.mode ?? null,
+			multi,
+			readonly: single,
 			value: binding.value,
-			count: (binding.items ?? []).length,
+			count: items.length,
 		})
-		for (let i = 0; i < (binding.items ?? []).length; i++) {
-			const item = binding.items[i]
+		if (single) continue
+		for (let i = 0; i < items.length; i++) {
+			const item = items[i]
 			const selected = item.selected
+			const marker = multi ? (selected ? "[x]" : "[ ]") : selected ? "(•)" : "( )"
 			rows.push({
 				type: "item",
 				key: `item:${binding.index}:${item.path}`,
+				rowIndex: rows.length,
 				argIndex: binding.index,
 				itemIndex: i,
 				name: item.name,
@@ -394,53 +378,12 @@ function panelRowList(bindings) {
 				parent: item.parent ?? "",
 				isDir: item.isDir,
 				selected,
-				marker: selected ? "[x]" : "[ ]",
+				multi,
+				marker,
 			})
 		}
 	}
 	return rows
-}
-
-// Function: panelFieldList
-// The inline textual-argument fields on the command row, in signature order:
-// one per textual binding (literal/raw/path/dest/buffer). `fieldIndex` is the
-// field's position in the row (what the focus ring moves through); `argIndex`
-// is the binding it edits. Selection bindings are not fields — they live in
-// the context column.
-function panelFieldList(bindings) {
-	const fields = []
-	for (const binding of bindings ?? []) {
-		if (!binding.textual) continue
-		fields.push({
-			fieldIndex: fields.length,
-			argIndex: binding.index,
-			name: binding.name,
-			kind: binding.kind,
-			mode: binding.mode ?? null,
-			picker: binding.picker === true,
-			value: `${binding.value ?? ""}`,
-		})
-	}
-	return fields
-}
-
-// Function: fieldIndexOf
-// The field position (see `panelFieldList`) of the binding at `argIndex`, or
-// -1 when that binding is not a textual field.
-function fieldIndexOf(bindings, argIndex) {
-	const field = panelFieldList(bindings).find((candidate) => candidate.argIndex === argIndex)
-	return field ? field.fieldIndex : -1
-}
-
-// Function: panelCompletion
-// The ghost completion of the selected entry's name after the typed query: the
-// remaining characters when the query is a case-insensitive prefix of the
-// name, else "" (nothing to suggest).
-function panelCompletion(query, entry) {
-	const q = `${query ?? ""}`.trim().toLowerCase()
-	const name = `${entry?.name ?? ""}`
-	if (!q || !name || !name.toLowerCase().startsWith(q)) return ""
-	return name.slice(q.length)
 }
 
 // Function: rowAt
@@ -475,12 +418,13 @@ function isTextualRow(row) {
 
 // Function: withToggledItem
 // Returns a new draft with item `itemIndex` of argument `argIndex` toggled,
-// leaving the other bindings untouched.
-function withToggledItem(draft, argIndex, itemIndex) {
+// leaving the other bindings untouched. A single-path argument (`multi` false)
+// is a radio list: choosing one selects it alone.
+function withToggledItem(draft, argIndex, itemIndex, multi = true) {
 	return (draft ?? []).map((binding) => {
 		if (binding.index !== argIndex) return binding
 		const items = (binding.items ?? []).map((item, i) =>
-			i === itemIndex ? { ...item, selected: !item.selected } : item,
+			multi ? (i === itemIndex ? { ...item, selected: !item.selected } : item) : { ...item, selected: i === itemIndex },
 		)
 		return { ...binding, items }
 	})
@@ -506,20 +450,17 @@ export { decodePathToken, pathToken } from "./operations.js"
 
 export {
 	PANEL_FOCUS,
-	PANEL_SOURCES,
 	argvFor,
 	bindArg,
 	bindArgs,
 	bindingAt,
-	fieldIndexOf,
 	filterPanelEntries,
 	isTextualRow,
 	missingArg,
 	missingBinding,
 	panelCommand,
-	panelCompletion,
 	panelEntries,
-	panelFieldList,
+	panelEntryRows,
 	panelRowList,
 	panelRunnable,
 	panelSummary,

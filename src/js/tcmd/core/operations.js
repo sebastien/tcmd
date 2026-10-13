@@ -62,7 +62,7 @@ const operations = [
 		description: "Copy files and directories",
 		arity: { min: 2, max: 2 },
 		args: [
-			{ name: "FROM", kind: "selection", role: "source" },
+			{ name: "FROM", kind: "selection", role: "source", variadic: true },
 			{ name: "TO", kind: "dest" },
 		],
 		async run(session, args) {
@@ -89,7 +89,7 @@ const operations = [
 		risk: "caution",
 		arity: { min: 2, max: 2 },
 		args: [
-			{ name: "FROM", kind: "selection", role: "source" },
+			{ name: "FROM", kind: "selection", role: "source", variadic: true },
 			{ name: "TO", kind: "dest" },
 		],
 		async run(session, args) {

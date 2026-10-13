@@ -16,11 +16,11 @@ describe("CommandPanel", () => {
 		expect(behaviors.title(null, { entry: { name: "move" } })).toBe(" Command · move ")
 	})
 
-	test("shows a prompt before the command filter input", () => {
-		// The sign carries a trailing space so typed text doesn't crowd it.
-		expect(panelSign()).toBe("› ")
+	test("shows a colon prompt before the command filter input", () => {
+		// The prompt is the `:` that opens the panel.
+		expect(panelSign()).toBe(":")
 		const behaviors = createBehaviors(behaviorEnv)
-		expect(behaviors.sign()).toBe("› ")
+		expect(behaviors.sign()).toBe(":")
 	})
 
 	test("exposes the overlay tokens and the footer", () => {
@@ -58,20 +58,16 @@ describe("CommandPanel", () => {
 		expect(behaviors.runnableState(null, { runnable: false })).toBe("false")
 	})
 
-	test("the command row focuses its name field and suggests a completion", () => {
+	test("heads the argument pane with the command name and focuses the filter", () => {
 		const behaviors = createBehaviors(behaviorEnv)
-		expect(behaviors.nameFocused(null, { open: true, focus: "ops" })).toBe(true)
-		expect(behaviors.nameFocused(null, { open: true, focus: "field" })).toBe(false)
-		// A closed panel never focuses its hidden field.
-		expect(behaviors.nameFocused(null, { open: false, focus: "ops" })).toBe(false)
-		// The picker hides the name field.
-		expect(behaviors.nameFocused(null, { open: true, focus: "ops", picking: true })).toBe(false)
-		expect(behaviors.nameText(null, { query: "ren" })).toBe("ren")
-		expect(behaviors.ghostVisible(null, { open: true, focus: "ops", completion: "ame" })).toBe(true)
-		expect(behaviors.ghostVisible(null, { open: true, focus: "ops", completion: "" })).toBe(false)
-		expect(behaviors.ghostVisible(null, { open: true, focus: "field", completion: "ame" })).toBe(false)
-		expect(behaviors.ghost(null, { completion: "ame" })).toBe("ame")
-		expect(behaviors.nameWidth(null, { query: "ren" })).toBe(5)
+		expect(behaviors.commandName(null, { entry: { name: "rename" } })).toBe("rename")
+		expect(behaviors.commandName(null, {})).toBe("")
+		expect(behaviors.commandNameFg()).toBe("title")
+		// The filter input owns the keyboard unless the argument pane does.
+		expect(behaviors.queryFocused(null, { open: true, focus: "ops" })).toBe(true)
+		expect(behaviors.queryFocused(null, { open: true, focus: "args" })).toBe(false)
+		expect(behaviors.queryFocused(null, { open: false, focus: "ops" })).toBe(false)
+		expect(behaviors.queryFocused(null, { open: true, focus: "ops", picking: true })).toBe(false)
 	})
 
 	test("tracks the focused column", () => {

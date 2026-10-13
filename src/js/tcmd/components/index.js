@@ -21,7 +21,6 @@ export { createBehaviors as breadcrumbsBehaviors } from "./Breadcrumbs.js"
 export { createBehaviors as commandBarBehaviors } from "./CommandBar.js"
 export { createBehaviors as commandItemBehaviors } from "./CommandItem.js"
 export { createBehaviors as commandArgRowBehaviors } from "./CommandArgRow.js"
-export { createBehaviors as commandFieldBehaviors } from "./CommandField.js"
 export { createBehaviors as commandPanelBehaviors } from "./CommandPanel.js"
 export { createBehaviors as confirmBehaviors } from "./Confirm.js"
 export { createBehaviors as crumbBehaviors } from "./Crumb.js"
@@ -36,6 +35,6 @@ export { createBehaviors as summaryBehaviors } from "./Summary.js"
 // Helpers
 export { formatCounts, formatDisk, formatMode, formatSize, formatTime } from "./format.js"
 export { iconFor, iconsEnabled, sourceMarker } from "./icons.js"
-export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, panelArgRows, panelFieldRows, panelOpRows } from "./rows.js"
+export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, panelArgRows, panelOpRows } from "./rows.js"
 
 // EOF

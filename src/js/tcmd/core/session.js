@@ -18,9 +18,9 @@
 
 import { cell, derived, effect } from "select/state/cells"
 import { createBookmarks } from "./bookmarks.js"
-import { createDispatch, getAppCommands, getCommandBarItems } from "./commands.js"
+import { createDispatch, getCommandBarItems } from "./commands.js"
 import { createNullOs } from "./os.js"
-import { PANEL_FOCUS, argvFor, bindArgs, filterPanelEntries, panelCommand, panelCompletion, panelEntries, panelFieldList, panelRowList, panelRunnable, pickerRowList, rowAt, withArgValue } from "./panel.js"
+import { PANEL_FOCUS, argvFor, bindArgs, filterPanelEntries, isTextualRow, panelCommand, panelEntries, panelEntryRows, panelRowList, panelRunnable, pickerRowList, rowAt, withArgValue } from "./panel.js"
 import { basename, extname, join, parent as parentPath } from "./path.js"
 import { indexOfPath } from "./selection.js"
 import { createPane, PANE_BUFFERS } from "./pane.js"
@@ -152,12 +152,12 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// The path being recorded while in "name" mode.
 	session.bookmarkTarget = cell(null)
 
-	// Command panel (`:`): the one entry point, listing the CLI operations
-	// first and the TinyCmd actions after, with the selected operation's
-	// arguments bound from the live context. `panelQuery` filters the entry
-	// list by typed name; `panelOpIndex` selects an entry in that filtered
-	// list; `panelRowIndex` is the cursor in the flattened argument rows
-	// (headers + items); `panelFocus` is a `PANEL_FOCUS` token ("ops": typing
+	// Command panel (`:`): the one entry point, listing the CLI operations,
+	// with the selected operation's arguments bound from the live context.
+	// `panelQuery` filters the entry list by typed name; `panelOpIndex` selects
+	// an entry in that filtered list; `panelRowIndex` is the cursor in the
+	// flattened argument rows (headers + items); `panelFocus` is a
+	// `PANEL_FOCUS` token ("ops": typing
 	// filters entries, "args": an argument owns the keyboard). `panelDraft`
 	// holds the transient bindings the user tweaks — it never mutates the real
 	// pane marks.
@@ -165,12 +165,9 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	session.panelQuery = cell("")
 	session.panelOpIndex = cell(0)
 	session.panelRowIndex = cell(0)
-	// The inline textual-argument field the focus ring is on (an index into
-	// `panelFields`), when `panelFocus` is "field".
-	session.panelFieldIndex = cell(0)
 	session.panelFocus = cell(PANEL_FOCUS.OPS)
 	session.panelDraft = cell([])
-	session.panelEntries = cell(panelEntries(getAppCommands()))
+	session.panelEntries = cell(panelEntries())
 
 	// Picker sub-mode: while a `dest`/`path` argument is being browsed the
 	// panel's argument column shows the picker's listing instead of the
@@ -357,21 +354,15 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 		[session.panelDraft, session.panelPicking, session.pickerRows],
 		([draft, picking, picker]) => (picking ? picker : panelRowList(draft)),
 	)
-	// The inline textual-argument fields on the command row, and the ghost
-	// completion of the command name after the typed query. Empty while the
-	// panel is closed, so a hidden field can never own the keyboard.
-	session.panelFields = derived(
-		[session.panelDraft, session.panelOpen],
-		([draft, open]) => (open ? panelFieldList(draft) : []),
-	)
-	session.panelCompletion = derived(
-		[session.panelQuery, session.panelEntry],
-		([query, entry]) => panelCompletion(query, entry),
+	// The right pane's argument blocks (label + value/field, and a bordered
+	// item list per selection), and the label column width that aligns them.
+	session.panelLabelWidth = derived([session.panelDraft], ([draft]) =>
+		Math.max(4, ...(draft ?? []).map((binding) => `${binding.name ?? ""}`.length)),
 	)
 	// The assembled command line the draft maps to, and whether it is runnable.
 	// The preview answers "what will this run" as the shell would see it,
 	// prefixed with the entry name; a `«NAME»` marks a required argument still
-	// to fill. A TinyCmd action has no arguments, so it previews as its title.
+	// to fill.
 	session.panelCommand = derived(
 		[session.panelDraft, session.panelEntry],
 		([draft, entry]) => {
@@ -386,45 +377,30 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 		},
 	)
 	session.panelRunnable = derived([session.panelDraft], ([draft]) => panelRunnable(draft))
-	// The context cursor row (selection bindings only).
+	// The argument row under the right pane's cursor, and whether it is a
+	// textual argument (so the panel focuses its value field).
 	session.panelCursorRow = derived(
 		[session.panelRows, session.panelRowIndex],
 		([rows, row]) => rowAt(rows, row),
 	)
-	// True while an inline textual field owns the keyboard (the command name
-	// field is `PANEL_FOCUS.OPS`, a field is `PANEL_FOCUS.FIELD`).
-	session.panelTextual = derived([session.panelFocus], ([focus]) => focus === PANEL_FOCUS.FIELD)
-	// The text the focused inline field edits. An effect copies the focused
-	// field's value in whenever the focus lands on it, and another folds typing
-	// back into the transient draft so a value survives moving to another
-	// field.
+	session.panelTextual = derived([session.panelCursorRow], ([row]) => isTextualRow(row))
+	// The text the value field edits. A plain cell (the input writes through
+	// it); an effect copies the focused argument's value in whenever the cursor
+	// lands on a textual row, and another folds typing back into the transient
+	// draft so a value survives moving to another argument.
 	session.panelValue = cell("")
-	effect([session.panelFocus, session.panelFieldIndex, session.panelFields], () => {
-		if (session.panelFocus.value !== PANEL_FOCUS.FIELD) return
-		const field = session.panelFields.value[session.panelFieldIndex.value]
-		if (field) session.panelValue.set(field.value)
+	effect([session.panelCursorRow], ([row]) => {
+		if (isTextualRow(row)) session.panelValue.set(`${row.value ?? ""}`)
 	})
 	effect([session.panelValue], ([value]) => {
-		if (session.panelFocus.value !== PANEL_FOCUS.FIELD) return
-		const field = session.panelFields.value[session.panelFieldIndex.value]
-		if (!field) return
-		session.panelDraft.set(withArgValue(session.panelDraft.value, field.argIndex, value))
+		const row = session.panelCursorRow.value
+		if (isTextualRow(row)) {
+			session.panelDraft.set(withArgValue(session.panelDraft.value, row.argIndex, value))
+		}
 	})
 
-	// A picker-row projection for the entry list (left column), over the
-	// query-filtered entries. `summary` is the argument list a CLI operation
-	// shows — its signature with the leading name stripped — or the key
-	// shortcut of a TinyCmd action; `source` is the namespace marker the row
-	// renders.
-	session.panelItems = derived([session.panelFiltered], ([entries]) =>
-		entries.map((entry) => ({
-			id: entry.id,
-			name: entry.name,
-			summary: entry.summary,
-			risk: entry.risk,
-			source: entry.source,
-		})),
-	)
+	// The command-list column's rows: the filtered operations.
+	session.panelItems = derived([session.panelFiltered], ([entries]) => panelEntryRows(entries))
 
 	// Re-bind the panel draft when the panel opens or the selected entry
 	// changes. The panel is modal, so the pane context does not change
@@ -438,7 +414,6 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// Selecting another entry resets the argument cursor.
 	effect([session.panelEntry], () => {
 		session.panelRowIndex.set(0)
-		session.panelFieldIndex.set(0)
 	})
 	// Typing a query re-anchors the entry cursor on the first match.
 	effect([session.panelQuery], () => {

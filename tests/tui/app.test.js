@@ -176,7 +176,7 @@ describe("tui app", () => {
 		}
 	})
 
-	test("the panel opens, filters and runs a TinyCmd action", async () => {
+	test("the panel opens, filters and runs an operation", async () => {
 		const { setup, session } = await makeSetup(100, 20, { viewMode: "commander" })
 		try {
 			setup.mockInput.pressKey(":")
@@ -184,14 +184,14 @@ describe("tui app", () => {
 			expect(session.panelOpen.value).toBe(true)
 			expect(setup.captureCharFrame()).toContain("Command ·")
 
-			await setup.mockInput.typeText("switch")
+			await setup.mockInput.typeText("touch")
 			await settle(setup)
-			expect(session.panelItems.value.map((item) => item.id)).toEqual(["cmd:pane.toggle"])
+			expect(session.panelItems.value.map((item) => item.id)).toEqual(["op:touch"])
 
 			setup.mockInput.pressKey("\r")
 			await settle(setup)
+			await new Promise((resolve) => setTimeout(resolve, 20))
 			expect(session.panelOpen.value).toBe(false)
-			expect(session.active.value).toBe("right")
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -211,11 +211,8 @@ describe("tui app", () => {
 			await settle(setup)
 			expect(session.panelOpIndex.value).toBe(0)
 
-			// Tab walks the focus ring: the NAME field, then the context rows
-			// (the PATH header and its item), then back to the command name.
-			setup.mockInput.pressKey("\t")
-			await settle(setup)
-			expect(session.panelFocus.value).toBe("field")
+			// Tab walks the focus ring: the argument headers (NAME then PATH),
+			// then back to the filter.
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			expect(session.panelFocus.value).toBe("args")
@@ -280,7 +277,7 @@ describe("tui app", () => {
 			await settle(setup)
 			expect(session.panelOpen.value).toBe(true)
 			expect(session.panelEntry.value.name).toBe("run")
-			expect(session.panelFocus.value).toBe("field")
+			expect(session.panelFocus.value).toBe("args")
 			expect(session.panelTextual.value).toBe(true)
 			expect(setup.captureCharFrame()).toContain("Command · run")
 

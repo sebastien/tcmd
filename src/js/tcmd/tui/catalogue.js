@@ -23,7 +23,6 @@ import bookmarkListXml from "../components/BookmarkList.xml" with { type: "text"
 import bookmarkRowXml from "../components/BookmarkRow.xml" with { type: "text" }
 import commandBarXml from "../components/CommandBar.xml" with { type: "text" }
 import commandArgRowXml from "../components/CommandArgRow.xml" with { type: "text" }
-import commandFieldXml from "../components/CommandField.xml" with { type: "text" }
 import commandItemXml from "../components/CommandItem.xml" with { type: "text" }
 import commandPanelXml from "../components/CommandPanel.xml" with { type: "text" }
 import confirmXml from "../components/Confirm.xml" with { type: "text" }
@@ -45,7 +44,6 @@ import {
 	breadcrumbsBehaviors,
 	commandBarBehaviors,
 	commandArgRowBehaviors,
-	commandFieldBehaviors,
 	commandItemBehaviors,
 	commandItemRows,
 	commandBarMarksItem,
@@ -62,7 +60,6 @@ import {
 	filterBarBehaviors,
 	iconsEnabled,
 	panelArgRows,
-	panelFieldRows,
 	panelOpRows,
 	summaryBehaviors,
 } from "../components/index.js"
@@ -90,6 +87,7 @@ function tuiEnv() {
 		dirFg: tuiTheme.dirFg,
 		errorBg: tuiTheme.errorBg,
 		errorFg: tuiTheme.errorFg,
+		fieldBg: tuiTheme.fieldBg,
 		fileFg: tuiTheme.fileFg,
 		// Nerd Font icons in rows, on unless `TCMD_ICONS` opts out.
 		icons: iconsEnabled(process.env),
@@ -208,7 +206,6 @@ function createComponents() {
 	const env = tuiEnv()
 	const commandItem = bind(ui, "CommandItem", commandItemXml, commandItemBehaviors(env))
 	const commandArgRow = bind(ui, "CommandArgRow", commandArgRowXml, commandArgRowBehaviors(env))
-	const commandField = bind(ui, "CommandField", commandFieldXml, commandFieldBehaviors(env))
 	const crumb = bind(ui, "Crumb", crumbXml, crumbBehaviors(env))
 	const fileRow = bind(ui, "FileRow", fileRowXml, fileRowBehaviors(env))
 	const filterBar = bind(ui, "FilterBar", filterBarXml, filterBarBehaviors(env))
@@ -236,7 +233,6 @@ function createComponents() {
 			...env,
 			opRows: panelOpRows(commandArgRow),
 			argRows: panelArgRows(commandArgRow),
-			fieldRows: panelFieldRows(commandField),
 			argScrollTop: panelArgScrollTop,
 		})),
 		Confirm: bind(ui, "Confirm", confirmXml, confirmBehaviors(env)),

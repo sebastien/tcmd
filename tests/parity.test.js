@@ -82,6 +82,9 @@ describe("cross-engine parity", () => {
 			viewMode: "commander",
 		})
 		await load(session)
+		// Two marked paths so the FROM argument is a list with items.
+		session.panes.left.cursor.set(0)
+		session.panes.left.toggleMark()
 		session.panes.left.cursor.set(1)
 		session.panes.left.toggleMark()
 		const host = document.createElement("div")
@@ -93,12 +96,13 @@ describe("cross-engine parity", () => {
 			session.panelQuery.set("copy")
 			await new Promise((resolve) => setTimeout(resolve, 30))
 			await setup.renderOnce()
-			for (const text of ["Command · copy", "notes.txt", "copy /home/notes.txt /etc"]) {
+			for (const text of ["Command · copy", "notes.txt", "copy /home/tester /home/notes.txt /etc"]) {
 				expect(host.textContent).toContain(text)
 				expect(setup.captureCharFrame()).toContain(text)
 			}
+			// Toggling the FROM header clears the whole selection.
 			session.dispatch("panel.focusArg")
-			session.dispatch("panel.setRow", { index: 1 })
+			session.dispatch("panel.setRow", { index: 0 })
 			session.dispatch("panel.toggleItem")
 			await new Promise((resolve) => setTimeout(resolve, 30))
 			await setup.renderOnce()

@@ -52,21 +52,16 @@ async function makeSession() {
 }
 
 describe("panel", () => {
-	test("lists the CLI operations and the TinyCmd actions, tagged apart", () => {
-		const entries = panelEntries([
-			{ id: "file.open", title: "Open file", keys: "O" },
-			{ id: "nav.up", title: "Cursor up" },
-		])
-		const cli = entries.filter((entry) => entry.source === "cli").map((entry) => entry.name)
-		const app = entries.filter((entry) => entry.source === "app").map((entry) => entry.name)
-		expect(cli).toContain("copy")
-		expect(cli).toContain("sel")
-		expect(cli).toContain("run")
-		// Cursor movement is noise and stays out of the list.
-		expect(app).toEqual(["Open file"])
-		// Every CLI entry carries an operation and an args signature.
-		for (const entry of entries.filter((candidate) => candidate.source === "cli")) {
+	test("lists the CLI operations, each with its operation and args", () => {
+		const entries = panelEntries()
+		const names = entries.map((entry) => entry.name)
+		expect(names).toContain("copy")
+		expect(names).toContain("sel")
+		expect(names).toContain("run")
+		// Every entry carries an operation and an args signature.
+		for (const entry of entries) {
 			expect(entry.op.args.length).toBeGreaterThan(0)
+			expect(entry.id).toBe(`op:${entry.name}`)
 		}
 	})
 
@@ -182,13 +177,22 @@ describe("panel", () => {
 
 	test("panelRowList flattens arguments and their items", async () => {
 		const { session } = await makeSession()
+		// Two marked paths: the argument is a list, one header + one item each.
+		session.panes.left.marked.set(new Set(["/home/docs", "/home/notes.txt"]))
 		const rows = panelRowList(bindArgs(session, entryFor("delete")))
 		expect(rows[0].type).toBe("arg")
 		expect(rows[0].name).toBe("PATH")
+		expect(rows[0].summary).toBe("SRC · 2 selected")
 		expect(rows[1].type).toBe("item")
 		expect(rows[1].path).toBe("/home/docs")
 		expect(rows[1].parent).toBe("/home")
 		expect(rows[1].marker).toBe("[x]")
+		// A single path is not a list: the header shows the path, read-only.
+		session.panes.left.marked.set(new Set())
+		const single = panelRowList(bindArgs(session, entryFor("edit")))
+		expect(single).toHaveLength(1)
+		expect(single[0].readonly).toBe(true)
+		expect(single[0].summary).toBe("/home/docs")
 	})
 
 	test("panelSummary names the pane and the selected count", () => {
@@ -262,7 +266,7 @@ describe("panel", () => {
 		expect(session.panes.left.marked.value.size).toBe(0)
 	})
 
-	test("run on an incomplete command focuses the missing field", async () => {
+	test("run on an incomplete command focuses the missing argument", async () => {
 		const { session } = await makeSession()
 		session.dispatch("panel.open")
 		// `bookmark [NAME] [PATH]`: PATH binds the cursor entry, but the
@@ -270,14 +274,15 @@ describe("panel", () => {
 		// runnable until NAME is filled.
 		const index = session.panelFiltered.value.findIndex((op) => op.name === "bookmark")
 		session.dispatch("panel.setOp", { index })
-		session.dispatch("panel.focusName")
+		session.dispatch("panel.focusArg")
+		session.panelRowIndex.set(0)
 		await session.dispatch("panel.run")
-		// Enter does not fail: it moves the cursor onto the missing NAME field.
+		// Enter does not fail: it moves the cursor onto the missing NAME row.
 		expect(session.panelOpen.value).toBe(true)
 		expect(session.notice.value).toBe(null)
-		expect(session.panelFocus.value).toBe("field")
-		expect(session.panelFields.value[session.panelFieldIndex.value].name).toBe("NAME")
-		// Filling the field makes the draft runnable; running closes the panel.
+		expect(session.panelFocus.value).toBe("args")
+		expect(session.panelRows.value[session.panelRowIndex.value].name).toBe("NAME")
+		// Filling the argument makes the draft runnable; running closes the panel.
 		session.panelDraft.set(
 			session.panelDraft.value.map((binding) =>
 				binding.name === "NAME" ? { ...binding, value: "memo" } : binding,
@@ -297,21 +302,13 @@ describe("panel", () => {
 		expect(session.panelEntry.value.name).toBe("bookmark")
 	})
 
-	test("a TinyCmd action binds no arguments and dispatches on run", async () => {
+	test("a query that matches no operation leaves an empty list", async () => {
 		const { session } = await makeSession()
 		session.dispatch("panel.open")
 		session.dispatch("panel.setQuery", { query: "Preview" })
-		expect(session.panelEntry.value.name).toBe("Preview")
-		expect(session.panelEntry.value.source).toBe("app")
-		// Nothing to bind: an empty draft, an empty row list, a runnable entry
-		// whose "runs" line is the action's title.
-		expect(session.panelDraft.value).toEqual([])
-		expect(session.panelRows.value).toEqual([])
-		expect(session.panelRunnable.value).toBe(true)
-		expect(session.panelCommand.value).toBe("Preview")
-		await session.dispatch("panel.run")
-		expect(session.panelOpen.value).toBe(false)
-		expect(session.showPreview.value).toBe(false)
+		// The internal TinyCmd actions are not listed, so nothing matches.
+		expect(session.panelFiltered.value).toEqual([])
+		expect(session.panelEntry.value).toBe(null)
 	})
 
 	test("erase through the panel routes the confirm back to the draft", async () => {
@@ -339,58 +336,35 @@ describe("panel", () => {
 		const { session } = await makeSession()
 		session.dispatch("panel.open")
 		session.dispatch("panel.setQuery", { query: "edit" })
-		// Both namespaces match; the CLI operation leads its action.
-		expect(session.panelFiltered.value.map((entry) => entry.name)).toEqual(["edit", "Edit file"])
+		// Only the CLI operation matches (the internal actions are not listed).
+		expect(session.panelFiltered.value.map((entry) => entry.name)).toEqual(["edit"])
 		expect(session.panelOpIndex.value).toBe(0)
 		expect(session.panelEntry.value.name).toBe("edit")
 		// The draft re-binds to the new entry's arguments.
 		expect(session.panelDraft.value.map((b) => b.name)).toEqual(["PATH"])
 	})
 
-	test("panel.tab walks the name, inline fields and context rows", async () => {
+	test("panel.tab cycles the focus ring from the filter through the arguments", async () => {
 		const { session } = await makeSession()
 		session.dispatch("panel.open")
-		// Select `copy`: one textual field (TO, a destination) and one
-		// selection binding (FROM: its header row, then its item row).
+		// Select `copy`: two argument headers, FROM (row 0) then TO (row 1).
+		// A single source path is not a list, so FROM has no item rows.
 		expect(session.panelEntry.value.name).toBe("bookmark")
 		session.dispatch("panel.setOp", { index: session.panelFiltered.value.findIndex((op) => op.name === "copy") })
 		expect(session.panelEntry.value.name).toBe("copy")
 		expect(session.panelFocus.value).toBe("ops")
-		// Name → the TO inline field.
-		session.dispatch("panel.tab", { delta: 1 })
-		expect(session.panelFocus.value).toBe("field")
-		expect(session.panelFieldIndex.value).toBe(0)
-		// Field → the FROM context header, then its item row.
 		session.dispatch("panel.tab", { delta: 1 })
 		expect(session.panelFocus.value).toBe("args")
 		expect(session.panelRowIndex.value).toBe(0)
 		session.dispatch("panel.tab", { delta: 1 })
+		// The next header is TO (index 1).
 		expect(session.panelRowIndex.value).toBe(1)
-		// Past the last row: wrap back to the command name.
 		session.dispatch("panel.tab", { delta: 1 })
+		// Past the last header: wrap back to the filter.
 		expect(session.panelFocus.value).toBe("ops")
-		// Shift-Tab from the name wraps to the last context row.
+		// Shift-Tab from the filter wraps to the last argument header.
 		session.dispatch("panel.tab", { delta: -1 })
 		expect(session.panelFocus.value).toBe("args")
 		expect(session.panelRowIndex.value).toBe(1)
-	})
-
-	test("Tab first completes the command name from the typed prefix", async () => {
-		const { session } = await makeSession()
-		session.dispatch("panel.open")
-		session.dispatch("panel.setQuery", { query: "ren" })
-		expect(session.panelEntry.value.name).toBe("rename")
-		// The rest of the name is the ghost suffix.
-		expect(session.panelCompletion.value).toBe("ame")
-		session.dispatch("panel.tab", { delta: 1 })
-		// The first Tab completes and stays on the name field.
-		expect(session.panelQuery.value).toBe("rename")
-		expect(session.panelFocus.value).toBe("ops")
-		expect(session.panelCompletion.value).toBe("")
-		// A second Tab jumps to the first missing argument (REPLACE; FIND was
-		// prefilled with the basename).
-		session.dispatch("panel.tab", { delta: 1 })
-		expect(session.panelFocus.value).toBe("field")
-		expect(session.panelFields.value[session.panelFieldIndex.value].name).toBe("REPLACE")
 	})
 })

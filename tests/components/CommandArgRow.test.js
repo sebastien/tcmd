@@ -15,20 +15,41 @@ describe("CommandArgRow", () => {
 		expect(rowName({ type: "arg", name: "FROM" })).toBe("FROM")
 		expect(rowName({ type: "item", marker: "[x]", name: "notes.txt" })).toBe("[x] notes.txt")
 		expect(rowName({ type: "item", marker: "[ ]", name: "docs" })).toBe("[ ] docs")
+		// A group header carries its label; a picker entry a directory slash.
+		expect(rowName({ type: "group", name: "System" })).toBe("System")
+		expect(rowName({ type: "entry", name: "docs", isDir: true })).toBe("docs/")
 	})
 
-	test("marks an entry's namespace, by glyph or by text tag", () => {
-		expect(rowName({ type: "op", name: "copy", source: "cli" }, true)).toBe("\u{ebca} copy")
-		expect(rowName({ type: "op", name: "Open file", source: "app" }, true)).toBe("\u{f0e7} Open file")
-		expect(rowName({ type: "op", name: "copy", source: "cli" }, false)).toBe("cli copy")
-		expect(rowName({ type: "op", name: "Open file", source: "app" }, false)).toBe("app Open file")
-		// The behaviors take the choice from the renderer environment.
-		const tui = createBehaviors({ ...behaviorEnv, icons: true })
-		expect(tui.name(null, { row: { type: "op", name: "copy", source: "cli" } })).toBe("\u{ebca} copy")
-		const web = createBehaviors({ ...behaviorEnv, icons: false })
-		expect(web.name(null, { row: { type: "op", name: "copy", source: "cli" } })).toBe("cli copy")
-		// An argument or item row carries no namespace.
-		expect(tui.name(null, { row: { type: "arg", name: "FROM" } })).toBe("FROM")
+	test("group headers take no cursor and read as headings", () => {
+		expect(wantsFocus({ type: "group" })).toBe("none")
+		expect(isFocused({ type: "group" }, 0, 0, "ops")).toBe(false)
+		const behaviors = createBehaviors(behaviorEnv)
+		expect(behaviors.rowFg(null, { row: { type: "group", name: "System" }, index: 0 })).toBe("title")
+	})
+
+	test("pads an argument label and frames a selection's list", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		// The argument label is padded to the value column.
+		expect(behaviors.name(null, { row: { type: "arg", name: "FIND" }, labelWidth: 7 })).toBe("FIND   ")
+		// A frame row takes no cursor and draws the list's top/bottom.
+		expect(wantsFocus({ type: "frame" })).toBe("none")
+		expect(isFocused({ type: "frame" }, 0, 0, "args")).toBe(false)
+		expect(behaviors.listBorder(null, { row: { type: "frame", variant: "top" }, labelWidth: 7 })).toEqual([
+			"top",
+			"left",
+			"right",
+		])
+		expect(behaviors.listBorder(null, { row: { type: "frame", variant: "bottom" } })).toEqual([
+			"bottom",
+			"left",
+			"right",
+		])
+		// An item row draws the sides; the list indents under the value column
+		// (marker + gap + label + gap).
+		expect(behaviors.listBorder(null, { row: { type: "item" } })).toEqual(["left", "right"])
+		expect(behaviors.rowIndent(null, { row: { type: "item" }, labelWidth: 7 })).toBe(11)
+		expect(behaviors.listSpacer(null, { labelWidth: 7 })).toBe("\u00a0".repeat(11))
+		expect(behaviors.rowIndent(null, { row: { type: "arg" }, labelWidth: 7 })).toBe(0)
 	})
 
 	test("summarises headers and shows an item's parent", () => {

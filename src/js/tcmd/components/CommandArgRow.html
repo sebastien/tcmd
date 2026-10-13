@@ -1,5 +1,17 @@
 <li class="panel-row" out:class="rowClass" out:data-risk="row.risk" out:data-type="row.type" out:data-selected="rowSelected" on:click="row.key!panel:select">
-	<span class="panel-marker" out="marker"></span>
-	<span class="panel-name" out="name"></span>
-	<span class="panel-summary" out="summary"></span>
+	<span class="panel-list-indent" when="isList" out="listSpacer"></span>
+	<span class="panel-list-box" when="isList">
+		<span class="panel-marker" out="marker"></span>
+		<span class="panel-name" out="name"></span>
+		<span class="panel-summary" out="summary"></span>
+	</span>
+	<span class="panel-marker" when="!isList" out="marker"></span>
+	<span class="panel-name" when="!isList" out="name"></span>
+	<span class="panel-field" when="isArg">
+		<span class="panel-field-bracket" out="fieldOpen"></span>
+		<input class="panel-value" when="editing" type="text" inout="value" aria-label="Argument value" />
+		<span class="panel-field-value" when="!editing" out="summary"></span>
+		<span class="panel-field-bracket" out="fieldClose"></span>
+	</span>
+	<span class="panel-summary" when="isPlain" out="summary"></span>
 </li>

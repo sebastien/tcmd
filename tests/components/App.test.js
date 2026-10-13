@@ -291,25 +291,21 @@ describe("App", () => {
 		}
 	})
 
-	test("an inline field hands typing and editing to its input", () => {
+	test("a textual argument hands typing and editing to its value input", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
-		const { calls, data } = makeData({ panelFocus: "field", panelOpen: true })
-		// Letters, Backspace, caret movement are left to the input (Enter is
-		// routed to `panel.run` by the root, see the test above); the
-		// regression guard: Backspace used to bounce the cursor back to the
-		// command name mid-edit.
+		const { calls, data } = makeData({ panelFocus: "args", panelOpen: true, panelTextual: true })
+		// Letters, Backspace and caret movement are left to the input (Enter is
+		// routed to `panel.run` by the root); the regression guard: Backspace
+		// used to bounce the cursor back to the filter mid-edit.
 		behaviors.keys(null, data, { name: "x" })
 		behaviors.keys(null, data, { name: "backspace" })
 		behaviors.keys(null, data, { name: "left" })
 		behaviors.keys(null, data, { name: "right" })
 		behaviors.keys(null, data, { name: "home" })
 		behaviors.keys(null, data, { name: "end" })
-		// Arrow up/down are the field input's too.
-		behaviors.keys(null, data, { name: "up" })
-		behaviors.keys(null, data, { name: "down" })
 		expect(calls).toEqual([])
-		// From the context column, arrows move the rows.
-		const context = makeData({ panelFocus: "args", panelOpen: true })
+		// From a non-textual argument row, arrows move the pane cursor.
+		const context = makeData({ panelFocus: "args", panelOpen: true, panelTextual: false })
 		behaviors.keys(null, context.data, { name: "down" })
 		behaviors.keys(null, context.data, { name: "up" })
 		expect(context.calls).toEqual([
@@ -336,12 +332,17 @@ describe("App", () => {
 		const events = createEvents()
 		const { calls, data } = makeData({
 			panelOpen: true,
-			panelItems: [{ id: "op:copy", title: "copy" }],
+			panelItems: [
+				{ type: "group", id: "group:cli", name: "System" },
+				{ type: "op", id: "op:copy", entryIndex: 0, name: "copy" },
+			],
 			panelRows: [
 				{ key: "arg:0", type: "arg" },
 				{ key: "item:0:/a", type: "item" },
 			],
 		})
+		// A group header click is inert.
+		events["panel:select"](null, data, { data: "group:cli" })
 		events["panel:select"](null, data, { data: "op:copy" })
 		events["panel:select"](null, data, { data: "item:0:/a" })
 		events["panel:confirm"](null, data, {})

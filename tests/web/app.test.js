@@ -153,15 +153,17 @@ describe("web app", () => {
 		const { host, instance, session } = await mountApp()
 		try {
 			press(host, ":")
-			await settle()
+			// The panel mounts and focuses its filter a couple of frames in.
+			await new Promise((resolve) => setTimeout(resolve, 80))
 			expect(session.panelOpen.value).toBe(true)
 			expect(host.querySelector(".command-panel")).not.toBeNull()
 			expect(document.activeElement === host.querySelector(".panel-query")).toBe(true)
 			expect(host.querySelector(".panel-ops").textContent).toContain("copy")
-			// The browser has no Nerd Font, so entries carry the text tag.
+			// The list is the CLI operations only, with no namespace tag.
 			const names = [...host.querySelectorAll(".panel-ops .panel-name")].map((row) => row.textContent)
-			expect(names).toContain("cli bookmark")
-			expect(names).toContain("app Open file")
+			expect(names).toContain("bookmark")
+			expect(names).not.toContain("Open file")
+			expect(names.some((name) => name.includes("cli") || name.includes("app"))).toBe(false)
 			press(host, "Escape")
 			await settle()
 			expect(session.panelOpen.value).toBe(false)

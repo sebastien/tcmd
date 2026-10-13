@@ -131,26 +131,24 @@ function commandItemRows(CommandItem) {
 }
 
 // Function: panelOpRows
-// `{ item: entry, index, row, cursor, focus }` bags for the command panel's
-// entry column (`CommandArgRow`). `row` is the normalized row shape the
-// component reads — `name` is the entry name and `summary` its argument list
-// or key shortcut (both precomputed by `session.panelItems`); `risk` tints
-// destructive/caution operations and `source` marks the namespace (a CLI
-// operation or a TinyCmd action); `cursor` is the column's selected index.
+// `{ item, index, row, cursor, focus }` bags for the command panel's command
+// list (`CommandArgRow`). The list is the flat `core/panel.panelEntryRows`: one
+// operation per row. `row` is the normalized shape the component reads —
+// `name` is the operation name and `summary` its argument list; `risk` tints
+// destructive/caution operations.
 function panelOpRows(CommandArgRow) {
 	return (self, data) =>
 		CommandArgRow.map(
 			data.items ?? [],
 			(item, index) => ({
 				item,
-				index,
+				index: item.entryIndex ?? index,
 				row: {
 					type: "op",
 					key: item.id,
 					name: item.name,
 					summary: item.summary ?? "",
 					risk: item.risk ?? null,
-					source: item.source ?? null,
 				},
 				cursor: data.opCursor,
 				focus: data.focus,
@@ -160,43 +158,40 @@ function panelOpRows(CommandArgRow) {
 }
 
 // Function: panelArgRows
-// `{ item: row, index, row, cursor, focus }` bags for the command panel's
-// argument column (`CommandArgRow`). The rows are already flattened by
-// `core/panel.panelRowList`; `cursor` is the column's selected index.
+// `{ item, index, row, cursor, focus, value, labelWidth }` bags for the command
+// panel's argument pane (`CommandArgRow`). The rows are the flat
+// `core/panel.panelRowList`; this wraps each selection's item run in a top and
+// bottom `frame` row so the list reads as one bordered box. `index` is the
+// row's flat position (the frame rows take none), so the pane cursor still
+// addresses the same rows.
 function panelArgRows(CommandArgRow) {
-	return (self, data) =>
-		CommandArgRow.map(
-			data.rows ?? [],
+	return (self, data) => {
+		const rows = unwrap(data.rows) ?? []
+		const visual = []
+		for (let i = 0; i < rows.length; i++) {
+			const row = rows[i]
+			if (row.type !== "item") {
+				visual.push(row)
+				continue
+			}
+			const first = i === 0 || rows[i - 1].type !== "item"
+			const last = i === rows.length - 1 || rows[i + 1].type !== "item"
+			if (first) visual.push({ ...row, type: "frame", variant: "top", key: `frame:top:${row.argIndex}` })
+			visual.push(row)
+			if (last) visual.push({ ...row, type: "frame", variant: "bottom", key: `frame:bottom:${row.argIndex}` })
+		}
+		return CommandArgRow.map(
+			visual,
 			(item, index) => ({
 				item,
-				index,
+				index: item.type === "frame" ? -1 : item.rowIndex ?? index,
 				row: item,
 				cursor: data.argCursor,
 				focus: data.focus,
-			}),
-			(row) => row.key,
-		)
-}
-
-// Function: panelFieldRows
-// `{ item, index, focused, value }` bags for the command panel's inline
-// textual-argument fields (`CommandField`). `focused` is true only when the
-// panel focus is actually on that field (a plain per-row flag, so a focus move
-// rewrites just the two changed bags); `value` is the panel's shared edit cell,
-// written back by the focused field's input.
-function panelFieldRows(CommandField) {
-	return (self, data) => {
-		const focusing = unwrap(data.focus) === "field"
-		const cursor = unwrap(data.fieldIndex)
-		return CommandField.map(
-			data.fields ?? [],
-			(item, index) => ({
-				item,
-				index,
-				focused: focusing && index === cursor,
 				value: data.value,
+				labelWidth: unwrap(data.labelWidth) ?? 8,
 			}),
-			(item) => `field:${item.argIndex}`,
+			(item) => item.key,
 		)
 	}
 }
@@ -216,6 +211,6 @@ function bookmarkRows(BookmarkRow) {
 	}
 }
 
-export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, isSelected, panelArgRows, panelFieldRows, panelOpRows }
+export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, isSelected, panelArgRows, panelOpRows }
 
 // EOF

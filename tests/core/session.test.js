@@ -68,58 +68,44 @@ describe("session", () => {
 
 		session.panelOpen.set(true)
 		const hints = session.commandBarItems.value.map((item) => item.title)
-		expect(hints).toEqual(["Command", "Field", "Browse", "Toggle", "Run", "Close"])
+		expect(hints).toEqual(["Command", "Arg", "Browse", "Toggle", "Run", "Close"])
 		// The picker sub-mode swaps in its own hints.
 		session.panelPicking.set(true)
 		const picker = session.commandBarItems.value.map((item) => item.title)
 		expect(picker).toContain("Choose")
 	})
 
-	test("the panel lists the CLI operations first, then the TinyCmd actions", () => {
+	test("the panel lists only the CLI operations", () => {
 		const session = makeSession()
 		const items = session.panelItems.value
 		const ids = items.map((item) => item.id)
 		expect(ids).toContain("op:copy")
-		expect(ids).toContain("cmd:file.open")
-		// Hidden and internal commands stay out; so does raw cursor movement.
-		expect(ids).not.toContain("cmd:list.cursor")
-		expect(ids).not.toContain("cmd:pane.setPath")
-		expect(ids).not.toContain("cmd:nav.up")
-		expect(ids).not.toContain("cmd:panel.run")
-		// Every entry is tagged with its namespace.
-		for (const item of items) expect(item.source).toMatch(/^(cli|app)$/)
-		// CLI operations come first; each namespace is alphabetical by name.
-		const sources = items.map((item) => item.source)
-		const firstApp = sources.indexOf("app")
-		const lastCli = sources.lastIndexOf("cli")
-		expect(lastCli).toBeLessThan(firstApp)
-		const names = (from, to) => items.slice(from, to).map((item) => item.name)
-		expect(names(0, firstApp)).toEqual([...names(0, firstApp)].toSorted())
-		expect(names(firstApp)).toEqual([...names(firstApp)].toSorted())
+		// No group headers, no internal TinyCmd actions.
+		expect(ids.some((id) => `${id}`.startsWith("group:"))).toBe(false)
+		expect(ids.some((id) => `${id}`.startsWith("cmd:"))).toBe(false)
+		// Alphabetical by name.
+		const names = items.map((item) => item.name)
+		expect(names).toEqual([...names].toSorted())
 	})
 
-	test("the panel filters both namespaces by query and resets its cursor", () => {
+	test("the panel filters the operations by query and resets its cursor", () => {
 		const session = makeSession()
-		session.panelQuery.set("preview")
+		session.panelQuery.set("copy")
 		const ids = session.panelItems.value.map((item) => item.id)
-		expect(ids).toContain("cmd:view.togglePreview")
-		expect(ids).not.toContain("op:copy")
+		expect(ids).toEqual(["op:copy"])
 
 		session.panelOpIndex.set(3)
-		session.panelQuery.set("switch")
+		session.panelQuery.set("touch")
 		expect(session.panelOpIndex.value).toBe(0)
 	})
 
-	test("a query ranks by match, the CLI namespace winning ties", () => {
+	test("a query ranks the operations by match importance", () => {
 		const session = makeSession()
-		session.panelQuery.set("open")
-		const items = session.panelItems.value
-		const ids = items.map((item) => item.id)
-		expect(ids).toContain("cmd:file.open")
-		// `open` (the CLI operation) and `Open` (the pane action) score the
-		// same, so the CLI namespace wins the tie; the weaker app match follows.
+		session.panelQuery.set("op")
+		const ids = session.panelItems.value.map((item) => item.id)
+		// `open` (prefix) outranks `copy` (a subsequence match).
 		expect(ids[0]).toBe("op:open")
-		expect(ids[1]).toBe("cmd:pane.enter")
+		expect(ids).toContain("op:copy")
 	})
 
 	test("`!` lands on the shell operation with its CMD field focused", () => {
@@ -127,11 +113,10 @@ describe("session", () => {
 		session.dispatch("panel.shell")
 		expect(session.panelOpen.value).toBe(true)
 		expect(session.panelEntry.value.name).toBe("run")
-		// The CMD field is the operation's first inline field; it owns the
-		// keyboard so typing goes straight in.
-		expect(session.panelFocus.value).toBe("field")
+		// The argument pane takes the cursor, on the raw CMD field.
+		expect(session.panelFocus.value).toBe("args")
 		expect(session.panelTextual.value).toBe(true)
-		expect(session.panelFields.value.map((field) => field.name)).toEqual(["CMD"])
+		expect(session.panelRows.value[0].name).toBe("CMD")
 		// Selecting by index, not by query: the filter stays empty.
 		expect(session.panelQuery.value).toBe("")
 	})

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { cell } from "select/state/cells"
-import { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, panelOpRows } from "../../src/js/tcmd/components/rows.js"
+import { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, panelArgRows, panelOpRows } from "../../src/js/tcmd/components/rows.js"
 
 // Captures what each builder passes to `Component.map` and returns a sentinel.
 function fakeRow() {
@@ -114,18 +114,44 @@ describe("rows", () => {
 		expect(fileWindow(data, 0)).toEqual({ start: 0, len: 2, local: 1, total: 2 })
 	})
 
-	test("panelOpRows tags each entry with its namespace", () => {
+	test("panelOpRows tags each operation row with its index and risk", () => {
 		const Row = fakeRow()
 		const items = [
-			{ id: "op:copy", name: "copy", summary: "FROM TO", risk: null, source: "cli" },
-			{ id: "cmd:file.open", name: "Open file", summary: "[O]", risk: null, source: "app" },
+			{ type: "op", id: "op:copy", entryIndex: 0, name: "copy", summary: "FROM TO", risk: null },
+			{ type: "op", id: "op:erase", entryIndex: 1, name: "erase", summary: "PATH...", risk: "destructive" },
 		]
-		expect(panelOpRows(Row)(null, { items, opCursor: 0, focus: "ops" })).toBe("MAPPED")
+		expect(panelOpRows(Row)(null, { items, opCursor: 1, focus: "ops" })).toBe("MAPPED")
 		const [call] = Row.calls
 		expect(call.data).toEqual(items)
-		expect(call.processor(items[0], 0).row).toMatchObject({ type: "op", name: "copy", source: "cli" })
-		expect(call.processor(items[1], 1).row).toMatchObject({ type: "op", name: "Open file", source: "app" })
+		expect(call.processor(items[0], 0)).toMatchObject({
+			index: 0,
+			cursor: 1,
+			focus: "ops",
+			row: { type: "op", name: "copy", summary: "FROM TO", risk: null },
+		})
+		expect(call.processor(items[1], 1).row.risk).toBe("destructive")
 		expect(call.key(items[0])).toBe("op:copy")
+	})
+
+	test("panelArgRows frames a selection's item run and keeps the cursor index", () => {
+		const Row = fakeRow()
+		const rows = [
+			{ type: "arg", key: "arg:0", rowIndex: 0, argIndex: 0, name: "FROM" },
+			{ type: "item", key: "item:0:/a", rowIndex: 1, argIndex: 0, name: "a" },
+			{ type: "arg", key: "arg:1", rowIndex: 2, argIndex: 1, name: "TO" },
+		]
+		expect(panelArgRows(Row)(null, { rows, argCursor: 1, focus: "args", labelWidth: 7 })).toBe("MAPPED")
+		const [call] = Row.calls
+		// A top frame, the item, a bottom frame are injected around the run.
+		expect(call.data.map((row) => row.type)).toEqual(["arg", "frame", "item", "frame", "arg"])
+		expect(call.data[1].variant).toBe("top")
+		expect(call.data[3].variant).toBe("bottom")
+		// The item keeps its flat row index (the cursor still addresses it);
+		// the frame rows take none.
+		expect(call.processor(call.data[2], 2).index).toBe(1)
+		expect(call.processor(call.data[1], 1).index).toBe(-1)
+		expect(call.processor(call.data[0], 0).labelWidth).toBe(7)
+		expect(call.key(call.data[1])).toBe("frame:top:0")
 	})
 
 	test("bookmarkRows snapshots selection into a plain per-row flag", () => {

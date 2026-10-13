@@ -43,6 +43,8 @@ const DARK = {
 	cursorBg: "#274a9e",
 	cursorInactiveBg: "#1b2a51",
 	selectionBg: "#2b3f78",
+	// The value fields of the command panel's argument rows.
+	fieldBg: "#1b2a51",
 	// Text
 	textFg: "#e6ecff",
 	textSecondaryFg: "#8fa3d9",
@@ -88,6 +90,8 @@ const LIGHT = {
 	cursorBg: "#2f56b8",
 	cursorInactiveBg: "#c6d1ee",
 	selectionBg: "#c9d5f4",
+	// The value fields of the command panel's argument rows.
+	fieldBg: "#dbe4fb",
 	// Text
 	textFg: "#101a33",
 	textSecondaryFg: "#495785",
@@ -131,6 +135,7 @@ const MONO = {
 	cursorBg: undefined,
 	cursorInactiveBg: undefined,
 	selectionBg: undefined,
+	fieldBg: undefined,
 	textFg: undefined,
 	textSecondaryFg: undefined,
 	textHeadingFg: undefined,

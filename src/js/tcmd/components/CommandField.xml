@@ -1,5 +1,0 @@
-<box flexDirection="row" height="1" flexShrink="1" minWidth="0" columnGap="1" out:flexGrow="boxGrow" on:click="item.argIndex!panel:field">
-	<text out="name" out:fg="nameFg" wrapMode="none"></text>
-	<input when="editing" inout="value" flexGrow="1" minWidth="16" height="1" out:focused="focused"></input>
-	<text when="!editing" out="text" out:fg="textFg" wrapMode="none" truncate="true"></text>
-</box>
