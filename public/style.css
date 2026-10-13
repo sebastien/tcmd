@@ -418,6 +418,14 @@ body {
 	min-height: 0;
 }
 
+/* The maximized inspector (`⇧V`): the preview fills the whole pane row. */
+.preview-max {
+	display: flex;
+	flex: 1 1 0;
+	min-width: 0;
+	min-height: 0;
+}
+
 .preview {
 	display: flex;
 	flex: 1;
@@ -622,6 +630,82 @@ input:focus-visible {
 	padding: 0.3rem 0;
 }
 
+/* The command row: prompt, the command-name field (with a dim ghost
+   completion) and one inline field per textual argument. */
+.panel-command-line {
+	display: flex;
+	align-items: baseline;
+	gap: 0.35rem;
+	padding: 0.3rem 0;
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+.panel-query,
+.panel-value {
+	background: transparent;
+	border: none;
+	color: var(--text);
+	font: inherit;
+	min-width: 2ch;
+}
+
+.panel-name-text {
+	color: var(--text);
+}
+
+.panel-ghost {
+	color: var(--text-dim);
+}
+
+.panel-fields {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.6rem;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.panel-field {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.35rem;
+	cursor: pointer;
+}
+
+.panel-field-name {
+	color: var(--text-dim);
+}
+
+.panel-field-value {
+	color: var(--text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.panel-field-value:empty {
+	color: var(--text-dim);
+}
+
+.panel-field.is-focused .panel-field-name {
+	color: var(--accent);
+}
+
+/* The resolved command, dim, right under the command row. */
+.panel-runs {
+	padding: 0.15rem 0 0.35rem;
+	color: var(--text-dim);
+	overflow: auto;
+	max-height: 20vh;
+}
+
+.panel-runs pre {
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font: inherit;
+}
+
 .panel-query,
 .panel-value,
 .bookmark-query {
@@ -669,6 +753,39 @@ input:focus-visible {
 	font-style: italic;
 }
 
+/* File picker sub-mode: the browsed path, its filter, then the entry rows
+   (which reuse `.panel-row` through the shared arg-row map). */
+.panel-picker {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	padding: 0.3rem 0.6rem;
+	border-bottom: 1px solid var(--border);
+}
+
+.panel-picker-path {
+	margin: 0;
+	color: var(--text-dim);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.panel-picker-line {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.panel-picker-query {
+	flex: 1;
+	min-width: 0;
+	background: transparent;
+	border: none;
+	color: var(--text);
+	font: inherit;
+}
+
 .panel-row,
 .bookmark-row {
 	display: flex;
@@ -712,24 +829,6 @@ input:focus-visible {
 
 .panel-row[data-selected="true"]:not(.is-focused) .panel-name {
 	color: var(--mark);
-}
-
-.panel-runs {
-	padding: 0.4rem 0;
-	color: var(--accent);
-	max-height: 25vh;
-	overflow: auto;
-}
-
-.panel-runs[data-runnable="false"] {
-	color: var(--error);
-}
-
-.panel-runs pre {
-	margin: 0;
-	white-space: pre-wrap;
-	overflow-wrap: anywhere;
-	font: inherit;
 }
 
 .command-dialog > footer,

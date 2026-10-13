@@ -44,7 +44,7 @@ describe("cross-engine parity", () => {
 		const fs = createMockFs(TREE)
 		const left = createPane({ fs, path: "/home" })
 		const right = createPane({ fs, path: "/" })
-		const session = createSession({ fs, left, right })
+		const session = createSession({ fs, left, right, viewMode: "commander" })
 		await load(session)
 
 		const host = document.createElement("div")
@@ -75,7 +75,12 @@ describe("cross-engine parity", () => {
 
 	test("both renderers show the same resolved command and transient selection", async () => {
 		const fs = createMockFs(TREE)
-		const session = createSession({ fs, left: createPane({ fs, path: "/home" }), right: createPane({ fs, path: "/etc" }) })
+		const session = createSession({
+			fs,
+			left: createPane({ fs, path: "/home" }),
+			right: createPane({ fs, path: "/etc" }),
+			viewMode: "commander",
+		})
 		await load(session)
 		session.panes.left.cursor.set(1)
 		session.panes.left.toggleMark()
@@ -88,7 +93,7 @@ describe("cross-engine parity", () => {
 			session.panelQuery.set("copy")
 			await new Promise((resolve) => setTimeout(resolve, 30))
 			await setup.renderOnce()
-			for (const text of ["Command · copy", "notes.txt", "runs", "copy /home/notes.txt /etc"]) {
+			for (const text of ["Command · copy", "notes.txt", "copy /home/notes.txt /etc"]) {
 				expect(host.textContent).toContain(text)
 				expect(setup.captureCharFrame()).toContain(text)
 			}

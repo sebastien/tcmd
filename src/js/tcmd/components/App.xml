@@ -49,7 +49,7 @@
 		     slightly wider than its neighbours. The inspector completes the
 		     three columns in either mode. -->
 		<box when="!tooSmall" flexDirection="column" flexGrow="1" overflow="hidden">
-			<box flexDirection="row" flexGrow="1" overflow="hidden">
+			<box when="!showPreviewFull" flexDirection="row" flexGrow="1" overflow="hidden">
 				<box when="showParentPane" flexDirection="column" flexGrow="1" flexBasis="0" border borderStyle="single"
 				     out:border="leftBorder" out:borderColor="parentBorderFg"
 				     on:click="parentId!pane:activate">
@@ -105,6 +105,14 @@
 				             in:dirActive="previewActive" in:dirLoading="previewLoading"
 				             flexGrow="1" flexBasis="0"></filepreview>
 			</box>
+			<!-- Maximized inspector (`⇧V`): the preview takes the whole pane
+			     row, the identity and command bars staying in place. -->
+			<filepreview when="showPreviewFull" in:preview="preview" in:show="showPreviewFull"
+			             in:entry="appEntry" in:paneId="previewId"
+			             in:dirSegments="previewSegments" in:dirEntries="previewEntries"
+			             in:dirCursor="previewCursor" in:dirMarked="previewMarked"
+			             in:dirActive="previewActive" in:dirLoading="previewLoading"
+			             flexGrow="1"></filepreview>
 			<commandbar in:items="commandBarItems" in:notice="notice" in:leftError="leftError"
 			            in:rightError="rightError" in:active="active"
 			            in:leftMarked="leftMarked" in:rightMarked="rightMarked" out:height="barHeight"></commandbar>
@@ -125,8 +133,10 @@
 	<commandpanel when="panelOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="22"
 	              in:open="panelOpen" in:entry="panelEntry" in:items="panelItems"
 	              in:opCursor="panelOpIndex" in:rows="panelRows" in:argCursor="panelRowIndex"
+	              in:fields="panelFields" in:fieldIndex="panelFieldIndex" in:completion="panelCompletion"
 	              in:focus="panelFocus" in:textual="panelTextual" in:argRow="panelCursorRow"
 	              in:command="panelCommand" in:runnable="panelRunnable"
+	              in:picking="panelPicking" in:pickerQuery="pickerQuery" in:pickerPath="pickerPath"
 	              in:query="panelQuery" in:value="panelValue"></commandpanel>
 	<bookmarklist when="bookmarkOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="25"
 	              in:open="bookmarkOpen" in:mode="bookmarkMode" in:query="bookmarkQuery"

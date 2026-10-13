@@ -33,6 +33,7 @@
 			<div out="rightSummaryView|Summary"></div>
 		</section>
 		<div data-slot="inspector" when="showInspectorInline" out="previewView|FilePreview"></div>
+		<div class="preview-max" when="showPreviewFull" out="previewView|FilePreview"></div>
 	</main>
 	<div out="commandBarView|CommandBar"></div>
 	<div class="viewer" when="showViewer" role="dialog" aria-modal="true" aria-label="File inspector" tabindex="-1" out="previewView|FilePreview"></div>

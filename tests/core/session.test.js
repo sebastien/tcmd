@@ -16,10 +16,26 @@ function makeSession() {
 	const fs = createMockFs(TREE)
 	const left = createPane({ fs, path: "/home" })
 	const right = createPane({ fs, path: "/" })
-	return createSession({ fs, left, right, host: "box" })
+	// These tests exercise the commander workspace; the session opens in
+	// explorer now (see the default-mode test below).
+	return createSession({ fs, left, right, host: "box", viewMode: "commander" })
 }
 
 describe("session", () => {
+	test("opens in explorer mode by default", () => {
+		const fs = createMockFs(TREE)
+		const session = createSession({ fs, left: createPane({ fs, path: "/home" }), right: createPane({ fs, path: "/" }) })
+		expect(session.viewMode.value).toBe("explorer")
+		// A caller can still ask for the two-pane commander.
+		const commander = createSession({
+			fs,
+			left: createPane({ fs, path: "/home" }),
+			right: createPane({ fs, path: "/" }),
+			viewMode: "commander",
+		})
+		expect(commander.viewMode.value).toBe("commander")
+	})
+
 	test("tracks the host and the active pane's directory for the header", async () => {
 		const session = makeSession()
 		await load(session)
@@ -52,7 +68,11 @@ describe("session", () => {
 
 		session.panelOpen.set(true)
 		const hints = session.commandBarItems.value.map((item) => item.title)
-		expect(hints).toEqual(["Command", "Arg", "Toggle", "Run", "Close"])
+		expect(hints).toEqual(["Command", "Field", "Browse", "Toggle", "Run", "Close"])
+		// The picker sub-mode swaps in its own hints.
+		session.panelPicking.set(true)
+		const picker = session.commandBarItems.value.map((item) => item.title)
+		expect(picker).toContain("Choose")
 	})
 
 	test("the panel lists the CLI operations first, then the TinyCmd actions", () => {
@@ -107,8 +127,11 @@ describe("session", () => {
 		session.dispatch("panel.shell")
 		expect(session.panelOpen.value).toBe(true)
 		expect(session.panelEntry.value.name).toBe("run")
-		expect(session.panelFocus.value).toBe("args")
+		// The CMD field is the operation's first inline field; it owns the
+		// keyboard so typing goes straight in.
+		expect(session.panelFocus.value).toBe("field")
 		expect(session.panelTextual.value).toBe(true)
+		expect(session.panelFields.value.map((field) => field.name)).toEqual(["CMD"])
 		// Selecting by index, not by query: the filter stays empty.
 		expect(session.panelQuery.value).toBe("")
 	})

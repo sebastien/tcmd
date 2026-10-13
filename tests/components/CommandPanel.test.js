@@ -48,37 +48,37 @@ describe("CommandPanel", () => {
 		expect(behaviors.ruleFg()).toBe("border")
 	})
 
-	test("previews the assembled command and flags an unrunnable draft", () => {
+	test("previews the resolved command dimly and reports runnable state", () => {
 		const behaviors = createBehaviors(behaviorEnv)
-		expect(behaviors.previewLabel()).toBe("runs")
 		expect(behaviors.preview(null, { command: "/home/a /tmp" })).toBe("/home/a /tmp")
-		expect(behaviors.previewFg(null, { runnable: true })).toBe("accent")
-		// An unfilled required argument renders the preview as an error.
-		expect(behaviors.previewFg(null, { runnable: false })).toBe("error")
-		// The "runs" label wears the same colour as the command line.
-		expect(behaviors.previewLabelFg(null, { runnable: true })).toBe("accent")
-		expect(behaviors.previewLabelFg(null, { runnable: false })).toBe("error")
+		// The resolved line is dim; the focused missing field and the `«NAME»`
+		// placeholder carry the "not runnable" signal.
+		expect(behaviors.previewFg()).toBe("dim")
+		expect(behaviors.runnableState(null, { runnable: true })).toBe("true")
+		expect(behaviors.runnableState(null, { runnable: false })).toBe("false")
 	})
 
-	test("the text field appears only for a focused textual argument", () => {
+	test("the command row focuses its name field and suggests a completion", () => {
 		const behaviors = createBehaviors(behaviorEnv)
-		expect(behaviors.fieldVisible(null, { textual: true, focus: "args" })).toBe(true)
-		expect(behaviors.fieldVisible(null, { textual: true, focus: "ops" })).toBe(false)
-		expect(behaviors.fieldVisible(null, { textual: false, focus: "args" })).toBe(false)
-		expect(behaviors.fieldPrompt(null, { argRow: { type: "arg", name: "TO" } })).toBe("TO: ")
-		expect(behaviors.fieldPrompt(null, { argRow: { type: "item" } })).toBe("")
+		expect(behaviors.nameFocused(null, { open: true, focus: "ops" })).toBe(true)
+		expect(behaviors.nameFocused(null, { open: true, focus: "field" })).toBe(false)
+		// A closed panel never focuses its hidden field.
+		expect(behaviors.nameFocused(null, { open: false, focus: "ops" })).toBe(false)
+		// The picker hides the name field.
+		expect(behaviors.nameFocused(null, { open: true, focus: "ops", picking: true })).toBe(false)
+		expect(behaviors.nameText(null, { query: "ren" })).toBe("ren")
+		expect(behaviors.ghostVisible(null, { open: true, focus: "ops", completion: "ame" })).toBe(true)
+		expect(behaviors.ghostVisible(null, { open: true, focus: "ops", completion: "" })).toBe(false)
+		expect(behaviors.ghostVisible(null, { open: true, focus: "field", completion: "ame" })).toBe(false)
+		expect(behaviors.ghost(null, { completion: "ame" })).toBe("ame")
+		expect(behaviors.nameWidth(null, { query: "ren" })).toBe(5)
 	})
 
-	test("tracks the focused column and the filter focus", () => {
+	test("tracks the focused column", () => {
 		const behaviors = createBehaviors(behaviorEnv)
 		expect(behaviors.focusArgs(null, { focus: "args" })).toBe(true)
 		expect(behaviors.focusOps(null, { focus: "args" })).toBe(false)
 		expect(behaviors.focusOps(null, { focus: "ops" })).toBe(true)
-		// The filter input takes focus only while the panel is open and the
-		// command column owns the cursor.
-		expect(behaviors.queryFocused(null, { open: true, focus: "ops" })).toBe(true)
-		expect(behaviors.queryFocused(null, { open: true, focus: "args" })).toBe(false)
-		expect(behaviors.queryFocused(null, { open: false, focus: "ops" })).toBe(false)
 	})
 
 	test("rows are wired only when the renderer provides them", () => {

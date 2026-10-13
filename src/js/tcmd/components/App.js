@@ -66,11 +66,15 @@ function createInit(session) {
 		panelDraft: session.panelDraft,
 		panelCursorRow: session.panelCursorRow,
 		panelEntry: session.panelEntry,
+		panelFieldIndex: session.panelFieldIndex,
+		panelFields: session.panelFields,
+		panelCompletion: session.panelCompletion,
 		panelFiltered: session.panelFiltered,
 		panelFocus: session.panelFocus,
 		panelOpIndex: session.panelOpIndex,
 		panelItems: session.panelItems,
 		panelOpen: session.panelOpen,
+		panelPicking: session.panelPicking,
 		panelQuery: session.panelQuery,
 		panelRowIndex: session.panelRowIndex,
 		panelRows: session.panelRows,
@@ -91,6 +95,7 @@ function createInit(session) {
 		parentSegments: parent.segments,
 		parentSetFilter: (value) => parent.setFilter(value),
 		preview: session.preview,
+		previewFull: session.previewFull,
 		// The third column: the directory the inspector previews, so it reads
 		// as a pane. Over a file the inspector stays a card and these idle.
 		previewActive,
@@ -114,16 +119,22 @@ function createInit(session) {
 		rightSetFilter: (value) => right.setFilter(value),
 		showPreview: session.showPreview,
 		viewMode: session.viewMode,
+		// The panel's file picker: its filter input and the directory it
+		// currently browses, so the panel can render the picker view.
+		pickerPath: session.pickerPane?.path,
+		pickerQuery: session.pickerQuery,
 	})
 }
 
-// Function: inputOwnsEnter
-// True when one of the panel's inputs has the keyboard, and so its `on:enter`
-// publishes `panel:confirm`: the filter field while the entry column is
-// focused, the value field while a textual argument owns the cursor. A plain
-// argument row has no input pressed, so the key handler runs the command.
-function inputOwnsEnter(data, focus) {
-	return focus === PANEL_FOCUS.OPS || Boolean(unwrap(data.panelTextual))
+// Function: fieldOwnsKeys
+// True when one of the panel's inputs owns the keyboard: the command-name
+// field (`PANEL_FOCUS.OPS`) or an inline textual argument field
+// (`PANEL_FOCUS.FIELD`). While an input owns the keyboard the shared handler
+// leaves text editing to it — typing, Backspace, Delete, caret movement — and
+// its `on:enter` publishes `panel:confirm`. The context column (selection rows)
+// has no input pressed, so the handler handles those keys itself.
+function fieldOwnsKeys(data, focus) {
+	return focus === PANEL_FOCUS.OPS || focus === PANEL_FOCUS.FIELD
 }
 
 // Function: createBehaviors
@@ -142,7 +153,45 @@ function createBehaviors(env) {
 				return
 			}
 			if (unwrap(data.panelOpen)) {
+				// The picker is a sub-mode of the panel: it owns navigation and
+				// choice, while typing filters through its own input.
+				if (unwrap(data.panelPicking)) {
+					if (key?.name === "escape") {
+						data.dispatch("panel.pick.cancel")
+						return
+					}
+					if (key?.name === "tab") {
+						data.dispatch("panel.pick.cancel")
+						return
+					}
+					if (key?.name === "up") {
+						data.dispatch("panel.pick.up")
+						return
+					}
+					if (key?.name === "down") {
+						data.dispatch("panel.pick.down")
+						return
+					}
+					if (key?.name === "right") {
+						data.dispatch("panel.pick.descend")
+						return
+					}
+					if (key?.name === "backspace") {
+						// An empty filter steps up; otherwise the filter input
+						// owns Backspace and edits itself.
+						if (`${unwrap(data.pickerQuery) ?? ""}` === "") data.dispatch("panel.pick.parent")
+						return
+					}
+					if (key?.name === "return" || key?.name === "enter") {
+						data.dispatch(key.ctrl ? "panel.pick.chooseDir" : "panel.pick.enter")
+						return
+					}
+					// Everything else (typing, caret movement) is the filter
+					// input's to handle.
+					return
+				}
 				const focus = unwrap(data.panelFocus)
+				const fieldOwns = fieldOwnsKeys(data, focus)
 				// Escape closes; Tab cycles the focus ring (command ⇄ args);
 				// arrows move within the focused column; Enter runs the command.
 				if (key?.name === "escape") {
@@ -154,38 +203,44 @@ function createBehaviors(env) {
 					return
 				}
 				if (key?.name === "up") {
-					data.dispatch(focus === PANEL_FOCUS.ARGS ? "panel.prevArg" : "panel.up")
+					if (focus === PANEL_FOCUS.ARGS) data.dispatch("panel.prevArg")
+					else if (focus !== PANEL_FOCUS.FIELD) data.dispatch("panel.up")
 					return
 				}
 				if (key?.name === "down") {
-					data.dispatch(focus === PANEL_FOCUS.ARGS ? "panel.nextArg" : "panel.down")
+					if (focus === PANEL_FOCUS.ARGS) data.dispatch("panel.nextArg")
+					else if (focus !== PANEL_FOCUS.FIELD) data.dispatch("panel.down")
+					return
+				}
+				if (key?.name === "o" && key.ctrl) {
+					// Browse a path/destination argument in the file picker.
+					data.dispatch("panel.browse")
 					return
 				}
 				if (key?.name === "return" || key?.name === "enter") {
-					// The focused input owns Enter (its `on:enter` publishes
-					// `panel:confirm`): the query field while the entry column
-					// is focused, the value field while a textual argument owns
-					// the cursor. Only a plain argument row has no input to
-					// press, so only then does the key run the command.
-					if (env.inputOwnsEnter !== false && inputOwnsEnter(data, focus)) return
+					// Enter runs a complete command, or walks to the next
+					// missing field (see `panel.run`); the root routes it for
+					// every renderer, so no per-input `on:enter` is needed.
 					data.dispatch("panel.run")
 					return
 				}
-				// Space toggles a selection item in the argument column.
-				if (key?.name === "space" && focus === PANEL_FOCUS.ARGS && !unwrap(data.panelTextual)) {
+				// While an input owns the keyboard (the command filter, or a
+				// textual argument's value field) it also owns text editing:
+				// typing, Backspace, Delete and caret movement pass through to
+				// it. Intercepting Backspace here used to bounce the cursor
+				// back to the command filter mid-edit.
+				if (fieldOwns) return
+				// A focused non-textual argument row: Space toggles its
+				// selection, any other printable key jumps back to the command
+				// filter and appends the character; Backspace edits the filter.
+				if (key?.name === "space") {
 					data.dispatch("panel.toggleItem")
 					return
 				}
-				if (key?.name === "backspace" && focus === PANEL_FOCUS.ARGS) {
-					// Editing the command filter from the argument column.
+				if (key?.name === "backspace") {
 					data.dispatch("panel.type", { backspace: true })
 					return
 				}
-				// While the command column is focused, or a textual argument
-				// owns the cursor, the focused input handles typing.
-				if (focus !== PANEL_FOCUS.ARGS || unwrap(data.panelTextual)) return
-				// Typing on a non-textual argument jumps back to the command
-				// filter and appends the character.
 				if (key?.name && key.name.length === 1 && !key.ctrl && !key.meta) {
 					data.dispatch("panel.type", { char: key.name })
 					return
@@ -293,7 +348,8 @@ function createEvents(env = {}) {
 		},
 		"panel:select": (_self, data, event) => {
 			// Clicking an operation row moves the cursor to it; clicking an
-			// argument/item row focuses the argument column (toggling an item).
+			// argument/item row focuses the argument column (toggling an item);
+			// clicking a picker row chooses it (descending into a directory).
 			const items = unwrap(data.panelItems) ?? []
 			const index = items.findIndex((row) => row.id === event.data)
 			if (index >= 0) {
@@ -303,15 +359,33 @@ function createEvents(env = {}) {
 			const rows = unwrap(data.panelRows) ?? []
 			const rowIndex = rows.findIndex((row) => row.key === event.data)
 			if (rowIndex < 0) return
+			const row = rows[rowIndex]
+			if (row?.type === "entry") {
+				data.dispatch("panel.focusArg")
+				data.dispatch("panel.pick.setCursor", { index: rowIndex })
+				data.dispatch("panel.pick.enter")
+				return
+			}
 			data.dispatch("panel.focusArg")
 			data.dispatch("panel.setRow", { index: rowIndex })
-			const row = rows[rowIndex]
 			if (row?.type === "item") data.dispatch("panel.toggleItem")
+		},
+		"panel:field": (_self, data, event) => {
+			// Clicking an inline field focuses it.
+			data.dispatch("panel.focusField", { argIndex: event.data })
+		},
+		"panel:name": (_self, data) => {
+			// Clicking the command name focuses its field.
+			data.dispatch("panel.focusName")
 		},
 		"panel:confirm": (_self, data) => {
 			// Published by a focused panel input's `on:enter`; the key handler
-			// leaves Enter to it (see `inputOwnsEnter`).
+			// leaves Enter to it (see `fieldOwnsKeys`).
 			if (!unwrap(data.panelOpen)) return
+			if (unwrap(data.panelPicking)) {
+				data.dispatch("panel.pick.enter")
+				return
+			}
 			data.dispatch("panel.run")
 		},
 		"crumbs:go": (_self, data, event) => {

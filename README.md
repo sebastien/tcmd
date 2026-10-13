@@ -10,11 +10,11 @@
 
 TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
 
-- Browse files in two panes (the left is the source, the right the
-  destination), or in the three-column explorer — the parent directory, the
-  current directory (slightly wider) and the preview — with `t` toggling
-  between the two views. Clicking any column, preview included, gives it the
-  focus.
+- Browse files in the three-column explorer (the opening view) — the parent
+  directory, the current directory (slightly wider) and the preview — or in
+  the two-pane commander (the left is the source, the right the destination),
+  with `t` toggling between the two views. Clicking any column, preview
+  included, gives it the focus.
 - Named bookmarks: `b` records the cursor entry (or the pane directory) under
   a name defaulting to its basename, remembering whether it is a file or a
   directory; `g` opens a fzf-style picker over bookmark names and paths. A
@@ -22,11 +22,19 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   and previewed in its directory.
 - Operations over the current panes: copy, move, delete/erase, stat, touch,
   selection buffers, edit/view/open and shell commands
-- Command panel (`:`), the one entry point: the CLI operations and the TinyCmd
-  actions (Open, Bookmark, Preview, …) in one filtered list, each row marked
-  with its namespace by a Nerd Font glyph (a `cli`/`app` tag without one), with
-  editable arguments and a resolved-command preview. `!` lands straight on the
-  shell command.
+- Command panel (`:`), the one entry point, laid out like a command line: a `>`
+  prompt with the command name (typing filters and ghost-completes the entry),
+  one inline field per textual argument, and — dim, right under it — the
+  resolved command the draft expands to. Below sit the entry list and the
+  context (selection bindings, `[x]`/`[ ]` items). `Tab` completes the name then
+  walks name → fields → context rows; `Enter` runs a complete command or jumps
+  to the next missing field. Each row marks its namespace by a Nerd Font glyph
+  (a `cli`/`app` tag without one). `!` lands straight on the shell command. A
+  destination/path argument browses the filesystem in an inline file picker
+  (`⌃O`): explorer mode has no destination pane, so a move or copy there asks
+  where to. A `rename` operation replaces a literal `FIND` with `REPLACE` across
+  the selection — one file replaces its whole name — previewing each
+  `old → new` before it runs.
 - Keyboard and mouse navigation, inline file previews — a previewed directory
   renders as a pane (its breadcrumbs over its own listing), in both views
 - Symlinks are shown *and* followed: a link row prints `name -> target`
@@ -65,21 +73,22 @@ lands on the directory you left), `Esc`/`⇧Esc` history back/forward, `Tab`/`�
 bookmark the cursor entry (or the pane
 directory) under a basename-defaulted name, `g` jump to a bookmark, `:` open the
 command panel (the one entry point: CLI operations and TinyCmd actions, their
-arguments, and the live resolved command), `v` preview (fullscreen viewer when
-the terminal is narrow), `O`/`E` open/edit the previewed file, `/` fuzzy-filter
+arguments, the live resolved command, and the inline file picker on `⌃O`), `v` preview (fullscreen viewer when
+the terminal is narrow), `⇧V` maximize the preview over the columns and back
+again, `O`/`E` open/edit the previewed file, `/` fuzzy-filter
 the active pane (`Enter` keeps it, `Esc` clears), `!` open the panel on the
 shell command, `^R` reload, `?` key reference, `q` quit.
 
-The workspace opens with a slim identity bar (`TinyCmd - HOST`) — the view
-mode and version trailing at its right, the mode word drawn letter by letter
-along the logo's own gradients (`explorer` in the Tiny blues, `commander` in
-the Cmd oranges) and the version dim after it — over an
-unframed tiling of pane boxes (the two middle edges sit side by
-side) labelled **SRC** (left, source) / **DST** (right, destination), with a
+The workspace opens in explorer mode with a slim identity bar (`TinyCmd -
+HOST`) — the view mode and version trailing at its right, the mode word drawn
+letter by letter along the logo's own gradients (`explorer` in the Tiny blues,
+`commander` in the Cmd oranges) and the version dim after it — over an
+unframed tiling of pane boxes (the two middle edges sit side by side) labelled
+**SRC** (left, source) / **DST** (right, destination) in commander, with a
 header row (label + clickable breadcrumbs — collapsed to first letters like
 `/h/s/W/Perso/tcmd` when the width demands — + the inline filter) separated by a
 rule from the listing, an entry-detail line for the selected entry, and one
-summary row, so the two panes stay aligned. The detail line shows
+summary row, so the columns stay aligned. The detail line shows
 `date · type · size · rights` with the rights right-aligned, the date and size
 bright, and the size/rights dropping out when the pane is too narrow; the
 summary row is indented to match. The active pane's border and header
@@ -92,7 +101,9 @@ command panel marks its entries the same way — a glyph in the TUI, a `cli`/`ap
 tag on the web. A
 context-aware inspector sits
 on the right when the terminal is at least 100 columns wide, and becomes a
-fullscreen viewer below that. The status bar lists every binding as a bracket
+fullscreen viewer below that; `⇧V` expands it over the whole pane row —
+parent and current included — and brings the previous layout back on the next
+press. The status bar lists every binding as a bracket
 shorthand (`[Open ⏎]`) wrapping over as many rows as the width demands — the
 marked count trails the list, and a notice or error swaps the keys for a
 one-line status. Below 64×16
@@ -102,10 +113,10 @@ the app shows a resize hint instead of the workspace.
 
 `t` flips the workspace between two modes:
 
-- **commander** (the default) tiles source and destination;
-- **explorer** drops the destination for the parent of the current directory,
+- **explorer** (the default) leads with the parent of the current directory,
   so the three columns read parent · current · preview — a Miller chain with
-  the current column slightly wider than its neighbours.
+  the current column slightly wider than its neighbours;
+- **commander** tiles source and destination.
 
 The parent and preview columns are mirrors: they own their cursor, filter and
 marks, but opening an entry, stepping up, following one of their breadcrumbs or
@@ -137,7 +148,8 @@ It uses the same command panel (`:`), selection/filter and history keys as the
 TUI, plus `?` for the key reference. Pane focus, marks,
 entry details and command risk colours follow the terminal presentation. The
 inspector sits beside the panes when wide and opens with `v` as a fullscreen
-viewer when narrow (`Esc` closes it). Bookmarks persist in browser storage,
+viewer when narrow (`Esc` closes it); `⇧V` maximizes it over the pane row and
+restores the layout. Bookmarks persist in browser storage,
 separately for each filesystem backend and HTTP root; they are not shared with
 the TUI's bookmark file. Storage denial leaves bookmarks usable for the session.
 

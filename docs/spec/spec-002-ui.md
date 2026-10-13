@@ -24,14 +24,13 @@ after it. Inside:
 each one shows are the only ones that exist, so focus can never park on an
 invisible column.
 
-- **commander** (default): source and destination, tiled evenly, plus the
-  inspector.
-- **explorer**: the destination is replaced by the *parent* of the current
-  directory, so the columns read parent · current · preview — a Miller chain
-  laid out left to right. The current column is the middle one and carries
-  slightly more width (`flexGrow` 1.35 against 1 for its neighbours); the
-  columns share `flexBasis: 0` so the whole row is distributed by those
+- **explorer** (default): the destination is replaced by the *parent* of the
+  current directory, so the columns read parent · current · preview — a Miller
+  chain laid out left to right. The current column is the middle one and
+  carries slightly more width (`flexGrow` 1.35 against 1 for its neighbours);
+  the columns share `flexBasis: 0` so the whole row is distributed by those
   growers rather than by the content each column would claim.
+- **commander**: source and destination, tiled evenly, plus the inspector.
 
 The parent and preview columns are *mirrors*: the parent tracks the parent of
 the current directory, the preview tracks the directory being previewed. Each
@@ -81,7 +80,9 @@ The inspector is context-aware: text files show their leading content, other
 kinds show a metadata card, and a directory shows *its own listing* — the same
 column shape as a pane (breadcrumbs over a cursorable, clickable listing), in
 both view modes, so a previewed directory is never a dead card. It sits beside
-the panes at ≥100 columns and becomes a fullscreen viewer (`v`) below that.
+the panes at ≥100 columns and becomes a fullscreen viewer (`v`) below that;
+`⇧V` maximizes it over the whole pane row in either mode, and the next `⇧V`
+restores the previous layout (focus and pane widths included).
 
 ```text
   TinyCmd - devbox
@@ -111,6 +112,8 @@ events, with the renderer dimensions as a fallback):
 
 - `< 64×16`: minimum-size hint replaces the workspace.
 - `< 100 cols`: the inline inspector collapses; `v` opens the fullscreen viewer.
+- `⇧V` maximizes the inspector over the pane row at any width, hiding the
+  columns until the next press brings the previous layout back.
 - The status bar wraps its shorthands onto as many rows as the width demands
   (up to three at the minimum width); nothing is trimmed — the palette and the
   `?` reference carry the same bindings.

@@ -16,7 +16,7 @@
 // - `hidden`: true for internal commands that never show in the panel.
 
 import { basename, parent as parentOf } from "./path.js"
-import { PANEL_FOCUS, argvFor, bindingAt, missingArg, rowAt, withToggledItem } from "./panel.js"
+import { PANEL_FOCUS, argvFor, bindingAt, fieldIndexOf, missingBinding, rowAt, withArgValue, withToggledItem } from "./panel.js"
 import { clampCursor, moveCursor } from "./selection.js"
 import { currentPane } from "./pane.js"
 import { runLine } from "./script.js"
@@ -55,10 +55,23 @@ const BOOKMARK_LIST_KEYS = [
 // Command-bar hints while the command panel is open.
 const PANEL_HINT_KEYS = [
 	{ id: null, title: "Command", keys: "↑/↓" },
-	{ id: null, title: "Arg", keys: "⇥" },
+	{ id: null, title: "Field", keys: "⇥" },
+	{ id: null, title: "Browse", keys: "^O" },
 	{ id: null, title: "Toggle", keys: "Spc" },
 	{ id: null, title: "Run", keys: "↵", primary: true },
 	{ id: null, title: "Close", keys: "Esc" },
+]
+
+// Constant: PANEL_PICK_KEYS
+// Command-bar hints while the panel's file picker owns the keyboard.
+const PANEL_PICK_KEYS = [
+	{ id: null, title: "Filter", keys: "type" },
+	{ id: null, title: "Row", keys: "↑/↓" },
+	{ id: null, title: "Open", keys: "→" },
+	{ id: null, title: "Choose", keys: "↵", primary: true },
+	{ id: null, title: "Here", keys: "^↵" },
+	{ id: null, title: "Up", keys: "⌫" },
+	{ id: null, title: "Back", keys: "Esc" },
 ]
 
 const commands = [
@@ -422,6 +435,19 @@ const commands = [
 		},
 	},
 	{
+		id: "view.maximize",
+		title: "Maximize preview",
+		keys: "⇧V",
+		kind: "ui",
+		run(session) {
+			// The inspector takes the whole pane row, or gives it back. The
+			// preference cells are untouched, so the previous layout — pane
+			// widths, focus and whether the preview was even shown — returns
+			// untouched on the next press.
+			session.previewFull.set(!session.previewFull.value)
+		},
+	},
+	{
 		id: "view.toggleMode",
 		title: "Explorer view",
 		keys: "t",
@@ -528,31 +554,57 @@ const commands = [
 	},
 	{
 		id: "panel.tab",
-		title: "Next argument or command",
+		title: "Next field or command",
 		kind: "ui",
 		hidden: true,
 		run(session, payload) {
-			// Tab cycles the focus ring: the command (query) then each argument
-			// header, wrapping at both ends. Shift-Tab walks it backwards.
+			// Forward Tab first completes the command name when the typed query
+			// is a prefix of the selected entry (the ghost suffix); a second
+			// Tab jumps to the next missing argument, and once nothing is
+			// missing it walks the focus ring — the command name, each inline
+			// textual field, then each context row — wrapping at both ends.
+			// Shift-Tab walks it backwards.
 			const delta = payload?.delta === -1 ? -1 : 1
-			const rows = session.panelRows.value
-			const headers = []
-			for (let i = 0; i < rows.length; i++) if (rows[i].type === "arg") headers.push(i)
-			if (!headers.length) return
-			if (session.panelFocus.value === PANEL_FOCUS.OPS) {
-				session.panelRowIndex.set(delta > 0 ? headers[0] : headers[headers.length - 1])
-				session.panelFocus.set(PANEL_FOCUS.ARGS)
-				return
+			if (delta > 0 && session.panelFocus.value === PANEL_FOCUS.OPS) {
+				const draft = session.panelDraft.value
+				if (session.panelCompletion.value) {
+					session.panelQuery.set(`${session.panelEntry.value?.name ?? ""}`)
+					return
+				}
+				const missing = missingBinding(draft)
+				if (missing) {
+					focusBinding(session, draft, missing)
+					return
+				}
 			}
-			const at = headers.indexOf(session.panelRowIndex.value)
-			if (delta > 0) {
-				if (at === -1 || at >= headers.length - 1) session.panelFocus.set(PANEL_FOCUS.OPS)
-				else session.panelRowIndex.set(headers[at + 1])
-			} else if (at <= 0) {
-				session.panelFocus.set(PANEL_FOCUS.OPS)
-			} else {
-				session.panelRowIndex.set(headers[at - 1])
-			}
+			const stops = panelStops(session)
+			if (!stops.length) return
+			const at = currentStop(session, stops)
+			const next = at < 0 ? 0 : (at + delta + stops.length) % stops.length
+			focusStop(session, stops[next])
+		},
+	},
+	{
+		id: "panel.focusField",
+		title: "Focus a command field",
+		kind: "ui",
+		hidden: true,
+		run(session, payload) {
+			const argIndex = payload?.argIndex
+			if (argIndex === undefined) return
+			const fieldIndex = fieldIndexOf(session.panelDraft.value, argIndex)
+			if (fieldIndex < 0) return
+			session.panelFocus.set(PANEL_FOCUS.FIELD)
+			session.panelFieldIndex.set(fieldIndex)
+		},
+	},
+	{
+		id: "panel.focusName",
+		title: "Focus the command name",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			session.panelFocus.set(PANEL_FOCUS.OPS)
 		},
 	},
 	{
@@ -629,6 +681,111 @@ const commands = [
 			session.panelDraft.set(draft.map((b) => (b.index === row.argIndex ? { ...b, items } : b)))
 		},
 	},
+	// File picker: a sub-mode of the panel that browses the filesystem for a
+	// path/destination argument. Lifecycle then navigation then choose.
+	{
+		id: "panel.browse",
+		title: "Browse for a path",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			// Browse the focused argument when it is pickable, else the first
+			// pickable argument of the operation; a no-op when there is none.
+			const focused = focusedBinding(session)
+			const binding = focused?.picker === true ? focused : firstPickableBinding(session)
+			if (!binding) return undefined
+			return openPicker(session, binding.index, binding)
+		},
+	},
+	{
+		id: "panel.pick.up",
+		title: "Previous picker row",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			const length = session.pickerRows.value.length
+			session.panelRowIndex.set(moveCursor(session.panelRowIndex.value, -1, length))
+		},
+	},
+	{
+		id: "panel.pick.down",
+		title: "Next picker row",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			const length = session.pickerRows.value.length
+			session.panelRowIndex.set(moveCursor(session.panelRowIndex.value, 1, length))
+		},
+	},
+	{
+		id: "panel.pick.setCursor",
+		title: "Highlight picker row",
+		kind: "ui",
+		hidden: true,
+		run(session, payload) {
+			if (payload?.index !== undefined) session.panelRowIndex.set(Math.max(0, payload.index))
+		},
+	},
+	{
+		id: "panel.pick.enter",
+		title: "Choose picker row",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			const entry = pickerEntry(session)
+			if (!entry) return undefined
+			// A directory descends unless this is a destination picker, where
+			// every row is already a valid choice.
+			if (entry.isDir && session.panelPickerMode.value !== "dir") {
+				return descendPicker(session, entry.path)
+			}
+			return choosePicker(session, entry.path)
+		},
+	},
+	{
+		id: "panel.pick.descend",
+		title: "Open the picker's directory",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			const entry = pickerEntry(session)
+			if (entry?.isDir) return descendPicker(session, entry.path)
+			return undefined
+		},
+	},
+	{
+		id: "panel.pick.parent",
+		title: "Picker parent directory",
+		kind: "ui",
+		hidden: true,
+		async run(session) {
+			session.pickerQuery.set("")
+			await session.pickerPane.up()
+			session.panelRowIndex.set(0)
+		},
+	},
+	{
+		id: "panel.pick.chooseDir",
+		title: "Choose the picker's directory",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			return choosePicker(session, session.pickerPane.path.value)
+		},
+	},
+	{
+		id: "panel.pick.cancel",
+		title: "Leave the picker",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			// Back to the argument column, panel still open.
+			session.panelPicking.set(false)
+			session.panelPickerArg.set(-1)
+			session.panelFocus.set(PANEL_FOCUS.ARGS)
+			session.panelRowIndex.set(0)
+		},
+	},
 	{
 		id: "panel.run",
 		title: "Run command",
@@ -644,15 +801,22 @@ const commands = [
 				return "ran"
 			}
 			const op = entry.op
-			// An unrunnable draft is refused with the missing argument's name —
-			// the `«NAME»` the preview already flags — instead of the generic
-			// usage error `runOperation` would produce.
-			const missing = missingArg(session.panelDraft.value)
+			const draft = session.panelDraft.value
+			// An incomplete command does not fail: a blank destination/path
+			// asks where to (the picker opens and the run resumes on a choice —
+			// explorer mode has no DST pane to default from), and any other
+			// missing argument just takes the cursor, so Enter walks the
+			// command field by field.
+			const missing = missingBinding(draft)
 			if (missing) {
-				session.notice.set({ kind: "error", text: `${op.name}: fill in «${missing}»` })
+				if (missing.kind === "dest" || missing.kind === "path") {
+					session.panelPendingRun.set(true)
+					return openPicker(session, missing.index, missing)
+				}
+				focusBinding(session, draft, missing)
 				return
 			}
-			const status = await runOperation(session, op, argvFor(session.panelDraft.value))
+			const status = await runOperation(session, op, argvFor(draft))
 			// A confirm keeps the panel open until the user answers; a run
 			// closes it. Errors stay open so the draft can be fixed.
 			if (status === "ran") closePanel(session)
@@ -774,8 +938,8 @@ function getAppCommands() {
 // hints while the picker owns the keyboard, the `bar`-flagged UI commands
 // otherwise (keymap order). Takes the context as named fields — four adjacent
 // flags are too easy to transpose.
-function getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen }) {
-	if (panelOpen) return PANEL_HINT_KEYS
+function getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking }) {
+	if (panelOpen) return panelPicking ? PANEL_PICK_KEYS : PANEL_HINT_KEYS
 	if (bookmarkOpen) return bookmarkMode === "name" ? BOOKMARK_NAME_KEYS : BOOKMARK_LIST_KEYS
 	if (filtering) return FILTER_KEYS
 	return commands.filter((command) => command.bar).map(barRow)
@@ -906,6 +1070,83 @@ function closeBookmark(session) {
 	session.bookmarkOpen.set(false)
 }
 
+// Function: panelStops
+// The panel's focus ring as a flat, ordered list: the command-name field, then
+// each inline textual field, then each context row (a selection header or
+// item). Tab and Shift-Tab walk it; Enter jumps to the first missing stop.
+function panelStops(session) {
+	const stops = [{ focus: PANEL_FOCUS.OPS }]
+	const fields = session.panelFields.value ?? []
+	for (let i = 0; i < fields.length; i++) stops.push({ focus: PANEL_FOCUS.FIELD, fieldIndex: i })
+	const rows = session.panelRows.value ?? []
+	for (let i = 0; i < rows.length; i++) stops.push({ focus: PANEL_FOCUS.ARGS, rowIndex: i })
+	return stops
+}
+
+// Function: currentStop
+// The index of the stop the focus ring currently rests on, or -1.
+function currentStop(session, stops) {
+	const focus = session.panelFocus.value
+	const fieldIndex = session.panelFieldIndex.value
+	const rowIndex = session.panelRowIndex.value
+	return stops.findIndex(
+		(stop) =>
+			stop.focus === focus &&
+			(stop.focus !== PANEL_FOCUS.FIELD || stop.fieldIndex === fieldIndex) &&
+			(stop.focus !== PANEL_FOCUS.ARGS || stop.rowIndex === rowIndex),
+	)
+}
+
+// Function: focusStop
+// Moves the focus ring onto a stop.
+function focusStop(session, stop) {
+	session.panelFocus.set(stop.focus)
+	if (stop.focus === PANEL_FOCUS.FIELD) session.panelFieldIndex.set(stop.fieldIndex ?? 0)
+	if (stop.focus === PANEL_FOCUS.ARGS) session.panelRowIndex.set(stop.rowIndex ?? 0)
+}
+
+// Function: focusedBinding
+// The draft binding the cursor is on: the inline field at `panelFieldIndex`, or
+// the context row at `panelRowIndex`. Null on the command name.
+function focusedBinding(session) {
+	const draft = session.panelDraft.value
+	if (session.panelFocus.value === PANEL_FOCUS.FIELD) {
+		const field = session.panelFields.value[session.panelFieldIndex.value]
+		return field ? bindingAt(draft, field.argIndex) : null
+	}
+	if (session.panelFocus.value === PANEL_FOCUS.ARGS) {
+		const row = rowAt(session.panelRows.value, session.panelRowIndex.value)
+		return row ? bindingAt(draft, row.argIndex) : null
+	}
+	return null
+}
+
+// Function: firstPickableBinding
+// The first browsable (`picker`) binding of the draft, so `^O` works from the
+// command-name field too.
+function firstPickableBinding(session) {
+	return (session.panelDraft.value ?? []).find((binding) => binding.picker === true) ?? null
+}
+
+// Function: focusBinding
+// Moves the focus ring onto the binding Enter found missing: its inline field
+// when it is textual, else its context header row.
+function focusBinding(session, draft, binding) {
+	if (binding.textual) {
+		const fieldIndex = fieldIndexOf(draft, binding.index)
+		if (fieldIndex >= 0) {
+			session.panelFocus.set(PANEL_FOCUS.FIELD)
+			session.panelFieldIndex.set(fieldIndex)
+			return
+		}
+	}
+	const rowIndex = (session.panelRows.value ?? []).findIndex(
+		(row) => row.type === "arg" && row.argIndex === binding.index,
+	)
+	session.panelFocus.set(PANEL_FOCUS.ARGS)
+	session.panelRowIndex.set(rowIndex >= 0 ? rowIndex : 0)
+}
+
 // Function: openPanel
 // Opens the command panel fresh: empty query, first entry selected, the entry
 // column focused. `options.name` selects a CLI operation by name — `!` lands on
@@ -915,7 +1156,11 @@ function openPanel(session, options = {}) {
 	session.panelQuery.set("")
 	session.panelOpIndex.set(0)
 	session.panelRowIndex.set(0)
+	session.panelFieldIndex.set(0)
 	session.panelFocus.set(PANEL_FOCUS.OPS)
+	session.panelPicking.set(false)
+	session.panelPickerArg.set(-1)
+	session.panelPendingRun.set(false)
 	session.panelOpen.set(true)
 	if (!options.name) return
 	// Select the operation by index rather than by query, so the filter stays
@@ -926,9 +1171,86 @@ function openPanel(session, options = {}) {
 	if (index < 0) throw new Error(`command panel has no entry named "${options.name}"`)
 	session.panelOpIndex.set(index)
 	if (options.focus === PANEL_FOCUS.ARGS) {
-		session.panelFocus.set(PANEL_FOCUS.ARGS)
-		session.panelRowIndex.set(0)
+		// `!` wants the operation's first inline field (its CMD) to own the
+		// keyboard; fall back to the context column when it has none.
+		const fields = session.panelFields.value
+		if (fields.length) {
+			session.panelFocus.set(PANEL_FOCUS.FIELD)
+			session.panelFieldIndex.set(0)
+		} else {
+			session.panelFocus.set(PANEL_FOCUS.ARGS)
+			session.panelRowIndex.set(0)
+		}
 	}
+}
+
+// Function: pickerEntry
+// The entry under the picker cursor, or null (empty listing / stale cursor).
+function pickerEntry(session) {
+	const rows = session.pickerRows.value
+	return rows[clampCursor(session.panelRowIndex.value, rows.length)] ?? null
+}
+
+// Function: openPicker
+// Opens the panel's file picker on a path argument: the argument column
+// switches to a browsable listing seated on the argument's current value (a
+// directory opens there, a file opens in its parent with the file under the
+// cursor), else on the current pane's directory. Focus moves to the argument
+// column so the picker's own input owns the keyboard.
+async function openPicker(session, argIndex, binding) {
+	const mode = binding?.mode ?? "dir"
+	session.panelPickerMode.set(mode)
+	session.panelPickerArg.set(argIndex)
+	session.pickerQuery.set("")
+	session.panelPicking.set(true)
+	session.panelFocus.set(PANEL_FOCUS.ARGS)
+	let startPath = currentPane(session)?.path?.value ?? session.fs.cwd?.() ?? "/"
+	let cursorPath = null
+	const value = `${binding?.value ?? ""}`.trim()
+	if (value) {
+		const stats = await session.fs.stat(value)
+		if (stats?.isDir) startPath = value
+		else {
+			startPath = parentOf(value) ?? "/"
+			cursorPath = value
+		}
+	}
+	await session.pickerPane.navigate(startPath, { record: false, cursorPath })
+	const rows = session.pickerRows.value
+	const index = cursorPath ? rows.findIndex((row) => row.path === cursorPath) : -1
+	session.panelRowIndex.set(index >= 0 ? index : 0)
+}
+
+// Function: descendPicker
+// Moves the picker into `path`, clearing its filter and re-anchoring the
+// cursor at the top of the fresh listing.
+async function descendPicker(session, path) {
+	if (!path) return undefined
+	session.pickerQuery.set("")
+	await session.pickerPane.navigate(path, { record: false })
+	session.panelRowIndex.set(0)
+	return undefined
+}
+
+// Function: choosePicker
+// Accepts `path` as the picked value: writes it into the argument, leaves the
+// picker (the panel stays open on the argument column) and, when the picker was
+// opened to satisfy a pending run, runs the operation now.
+function choosePicker(session, path) {
+	if (path == null) return undefined
+	const argIndex = session.panelPickerArg.value
+	session.panelDraft.set(withArgValue(session.panelDraft.value, argIndex, path))
+	session.panelPicking.set(false)
+	session.panelPickerArg.set(-1)
+	session.panelFocus.set(PANEL_FOCUS.ARGS)
+	const rows = session.panelRows.value
+	const index = rows.findIndex((row) => row.type === "arg" && row.argIndex === argIndex)
+	session.panelRowIndex.set(index >= 0 ? index : 0)
+	if (session.panelPendingRun.value) {
+		session.panelPendingRun.set(false)
+		return session.dispatch("panel.run")
+	}
+	return undefined
 }
 
 function closePanel(session) {

@@ -16,7 +16,7 @@ const TREE = {
 	"/etc": [{ name: "hosts", text: "127.0.0.1 localhost\n", size: 19 }],
 }
 
-const makeSetup = (width, height) => makeSetupTui(TREE, width, height)
+const makeSetup = (width, height, options) => makeSetupTui(TREE, width, height, options)
 
 describe("tui app", () => {
 	test("renders the header, both panes and the command bar", async () => {
@@ -109,7 +109,7 @@ describe("tui app", () => {
 	})
 
 	test("tab switches the active pane", async () => {
-		const { setup, session } = await makeSetup()
+		const { setup, session } = await makeSetup(100, 20, { viewMode: "commander" })
 		try {
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
@@ -177,7 +177,7 @@ describe("tui app", () => {
 	})
 
 	test("the panel opens, filters and runs a TinyCmd action", async () => {
-		const { setup, session } = await makeSetup()
+		const { setup, session } = await makeSetup(100, 20, { viewMode: "commander" })
 		try {
 			setup.mockInput.pressKey(":")
 			await settle(setup)
@@ -211,15 +211,17 @@ describe("tui app", () => {
 			await settle(setup)
 			expect(session.panelOpIndex.value).toBe(0)
 
-			// Tab walks the focus ring: the first argument header, then the
-			// second, then back to the command column.
+			// Tab walks the focus ring: the NAME field, then the context rows
+			// (the PATH header and its item), then back to the command name.
+			setup.mockInput.pressKey("\t")
+			await settle(setup)
+			expect(session.panelFocus.value).toBe("field")
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			expect(session.panelFocus.value).toBe("args")
 			expect(session.panelRowIndex.value).toBe(0)
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
-			expect(session.panelFocus.value).toBe("args")
 			expect(session.panelRowIndex.value).toBe(1)
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
@@ -278,7 +280,7 @@ describe("tui app", () => {
 			await settle(setup)
 			expect(session.panelOpen.value).toBe(true)
 			expect(session.panelEntry.value.name).toBe("run")
-			expect(session.panelFocus.value).toBe("args")
+			expect(session.panelFocus.value).toBe("field")
 			expect(session.panelTextual.value).toBe(true)
 			expect(setup.captureCharFrame()).toContain("Command · run")
 
@@ -326,7 +328,7 @@ describe("tui app", () => {
 	})
 
 	test("shift-tab switches back to the previous pane", async () => {
-		const { setup, session } = await makeSetup()
+		const { setup, session } = await makeSetup(100, 20, { viewMode: "commander" })
 		try {
 			expect(session.active.value).toBe("left")
 			// Shift-Tab arrives as CSI Z on the wire.
@@ -342,7 +344,7 @@ describe("tui app", () => {
 	})
 
 	test("clicking a pane row activates that pane", async () => {
-		const { setup, session } = await makeSetup(90, 18)
+		const { setup, session } = await makeSetup(90, 18, { viewMode: "commander" })
 		try {
 			expect(session.active.value).toBe("left")
 			// First entry row of the right pane (frame border, merged header).
@@ -356,7 +358,7 @@ describe("tui app", () => {
 	})
 
 	test("clicking the body of a pane activates it", async () => {
-		const { setup, session } = await makeSetup(90, 18)
+		const { setup, session } = await makeSetup(90, 18, { viewMode: "commander" })
 		try {
 			expect(session.active.value).toBe("left")
 			// Blank area inside the right pane (past its last entry).
@@ -374,6 +376,31 @@ describe("tui app", () => {
 			setup.mockInput.pressKey("v")
 			await settle(setup)
 			expect(session.showPreview.value).toBe(false)
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("shift-v maximizes the inspector over the pane row", async () => {
+		const { setup, session } = await makeSetup()
+		try {
+			// Both panes are on screen first (`etc` is the destination's).
+			expect(setup.captureCharFrame()).toContain("etc")
+			setup.mockInput.pressKey("V")
+			await settle(setup)
+			expect(session.previewFull.value).toBe(true)
+			const frame = setup.captureCharFrame()
+			// The identity and command bars stay; the pane row is the preview.
+			expect(frame.split("\n")[0]).toContain("TinyCmd")
+			expect(frame).toContain("[Open ⏎]")
+			expect(frame).toContain("notes.txt")
+			// The destination pane's listing is covered by the preview.
+			expect(frame).not.toContain("etc")
+			// Shift-V again restores the panes untouched.
+			setup.mockInput.pressKey("V")
+			await settle(setup)
+			expect(session.previewFull.value).toBe(false)
+			expect(setup.captureCharFrame()).toContain("etc")
 		} finally {
 			setup.renderer.destroy()
 		}

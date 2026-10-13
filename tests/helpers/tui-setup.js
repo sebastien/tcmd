@@ -16,12 +16,13 @@ async function settle(setup) {
 }
 
 // Mount the app over `tree`, feeding the presentation the real viewport as the
-// TUI entry point does.
-async function makeSetup(tree, width = 100, height = 20) {
+// TUI entry point does. The session opens in explorer (the product default);
+// pass `{ viewMode: "commander" }` for the two-pane layout.
+async function makeSetup(tree, width = 100, height = 20, options = {}) {
 	const fs = createMockFs(tree)
 	const left = createPane({ fs, path: "/home" })
 	const right = createPane({ fs, path: "/" })
-	const session = createSession({ fs, left, right })
+	const session = createSession({ fs, left, right, viewMode: options.viewMode })
 	await load(session)
 	const size = cell({ width, height })
 	const App = createAppComponent(session, { size })

@@ -2,34 +2,42 @@
 	<box width="80%" height="72%" border borderStyle="rounded"
 	     out:title="title" out:titleColor="titleColor" out:borderColor="borderFg"
 	     out:backgroundColor="bg" flexDirection="column">
-		<box flexDirection="row" height="1" paddingLeft="1" overflow="hidden">
+		<!-- Command row: prompt, the command-name field (with its dim ghost
+		     completion), then one inline field per textual argument. -->
+		<box flexDirection="row" height="1" paddingLeft="1" overflow="hidden" columnGap="1">
 			<text out="sign" out:fg="signFg" wrapMode="none"></text>
-			<input ref="query" inout="query" flexGrow="1" height="1" out:focused="queryFocused" on:enter="confirm"></input>
+			<input when="nameFocused" ref="query" inout="query" out:width="nameWidth" height="1" out:focused="nameFocused"></input>
+			<text when="!nameFocused" out="nameText" out:fg="nameFg" wrapMode="none"></text>
+			<text when="ghostVisible" out="ghost" out:fg="ghostFg" wrapMode="none"></text>
+			<box out="fieldRows" flexDirection="row" flexShrink="1" minWidth="0" overflow="hidden" columnGap="1"></box>
 		</box>
-		<!-- Horizontal rule under the filter input. -->
+		<!-- The resolved command the draft expands to, dim, right under the
+		     command row (a `rename` previews its `old → new` mapping). -->
+		<box flexDirection="column" flexShrink="0" paddingLeft="1" paddingRight="1" overflow="hidden">
+			<text out="preview" out:fg="previewFg" wrapMode="word"></text>
+		</box>
+		<!-- Horizontal rule above the two columns. -->
 		<box height="1" out:border="headRule" out:borderColor="ruleFg"></box>
 		<box flexDirection="row" flexGrow="1" overflow="hidden" columnGap="1">
 			<scrollbox flexGrow="2">
 				<box out="opRows" flexDirection="column"></box>
 			</scrollbox>
-			<!-- Vertical rule between the entry list and the argument sidebar. -->
+			<!-- Vertical rule between the entry list and the context column. -->
 			<box width="1" out:border="sideRule" out:borderColor="ruleFg"></box>
 			<scrollbox ref="args" flexGrow="3" out:scrollTop="argScrollTop">
 				<box flexDirection="column">
+					<!-- File picker sub-mode: the directory's path, its own filter,
+					     then the entry rows (which arrive through `argRows`). -->
+					<text when="picking" out="pickerPath" out:fg="labelFg" paddingLeft="1" wrapMode="none" truncate="true"></text>
+					<box when="picking" flexDirection="row" height="1" paddingLeft="1" overflow="hidden">
+						<text out="pickerSign" out:fg="signFg" wrapMode="none"></text>
+						<input ref="pickQuery" inout="pickerQuery" flexGrow="1" height="1" out:focused="pickerFocused"></input>
+					</box>
 					<text when="argsEmpty" out="argsEmptyText" out:fg="labelFg" paddingLeft="1" wrapMode="none"></text>
 					<box out="argRows" flexDirection="column"></box>
+					<text when="pickerEmpty" out="pickerEmptyText" out:fg="labelFg" paddingLeft="1" wrapMode="none"></text>
 				</box>
 			</scrollbox>
-		</box>
-		<!-- Horizontal rule above the assembled command preview. -->
-		<box height="1" out:border="headRule" out:borderColor="ruleFg"></box>
-		<box flexDirection="column" paddingLeft="1" paddingRight="1" flexShrink="0" overflow="hidden">
-			<text out="previewLabel" out:fg="previewLabelFg" wrapMode="none"></text>
-			<text out="preview" out:fg="previewFg" wrapMode="word"></text>
-		</box>
-		<box when="fieldVisible" flexDirection="row" height="1" paddingLeft="1" overflow="hidden">
-			<text out="fieldPrompt" out:fg="labelFg" wrapMode="none"></text>
-			<input inout="value" flexGrow="1" height="1" out:focused="fieldFocused" on:enter="confirm"></input>
 		</box>
 		<box flexDirection="row" height="1" paddingLeft="1">
 			<text out="footer" out:fg="footerFg"></text>

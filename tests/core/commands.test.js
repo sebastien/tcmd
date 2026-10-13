@@ -17,7 +17,8 @@ function makeSession() {
 	const fs = createMockFs(TREE)
 	const left = createPane({ fs, path: "/home" })
 	const right = createPane({ fs, path: "/" })
-	return createSession({ fs, left, right })
+	// The commander-specific tests opt in; the session now opens in explorer.
+	return createSession({ fs, left, right, viewMode: "commander" })
 }
 
 describe("commands", () => {
@@ -140,6 +141,17 @@ describe("commands", () => {
 		expect(session.showPreview.value).toBe(false)
 	})
 
+	test("view.maximize toggles the maximized inspector", () => {
+		const session = makeSession()
+		expect(session.previewFull.value).toBe(false)
+		session.dispatch("view.maximize")
+		expect(session.previewFull.value).toBe(true)
+		// Toggling back leaves the rest of the view state untouched.
+		expect(session.showPreview.value).toBe(true)
+		session.dispatch("view.maximize")
+		expect(session.previewFull.value).toBe(false)
+	})
+
 	test("view.toggleMode flips between the commander and the explorer", async () => {
 		const session = makeSession()
 		await load(session)
@@ -173,7 +185,6 @@ describe("commands", () => {
 	test("the explorer's parent column mirrors the current directory", async () => {
 		const session = makeExplorerSession()
 		await load(session)
-		session.dispatch("view.toggleMode")
 		expect(session.panes.parent.path.value).toBe("/work")
 		// Descending keeps the mirror on the new parent.
 		await session.panes.left.navigate("/work/src")
@@ -190,7 +201,6 @@ describe("commands", () => {
 	test("opening from the parent column descends the pane it follows", async () => {
 		const session = makeExplorerSession()
 		await load(session)
-		session.dispatch("view.toggleMode")
 		session.dispatch("pane.activate", { paneId: "parent" })
 		const index = session.panes.parent.entries.value.findIndex((entry) => entry.name === "src")
 		expect(index).toBeGreaterThan(0)
@@ -229,7 +239,6 @@ describe("commands", () => {
 	test("the explorer's parent column keeps its cursor on the current directory", async () => {
 		const session = makeExplorerSession()
 		await load(session)
-		session.dispatch("view.toggleMode")
 		const parentCursorName = () => session.panes.parent.currentEntry()?.name
 		expect(session.panes.parent.path.value).toBe("/work")
 		// The mirror opens with its cursor on the directory the pane shows.
@@ -247,7 +256,6 @@ describe("commands", () => {
 	test("mirroring the parent column never records its history", async () => {
 		const session = makeExplorerSession()
 		await load(session)
-		session.dispatch("view.toggleMode")
 		const depth = session.panes.parent.history.stack.length
 		await session.panes.left.navigate("/work/src")
 		expect(session.panes.parent.path.value).toBe("/work")
@@ -257,7 +265,6 @@ describe("commands", () => {
 	test("clicking a parent directory makes it the current directory", async () => {
 		const session = makeExplorerSession()
 		await load(session)
-		session.dispatch("view.toggleMode")
 		const index = session.panes.parent.entries.value.findIndex((entry) => entry.name === "src")
 		await session.dispatch("list.cursor", { paneId: "parent", index })
 		await new Promise((resolve) => setTimeout(resolve, 0))
@@ -272,7 +279,6 @@ describe("commands", () => {
 	test("clicking a parent file opens its directory and selects the file", async () => {
 		const session = makeExplorerSession()
 		await load(session)
-		session.dispatch("view.toggleMode")
 		const index = session.panes.parent.entries.value.findIndex((entry) => entry.name === "readme.md")
 		await session.dispatch("list.cursor", { paneId: "parent", index })
 		await new Promise((resolve) => setTimeout(resolve, 0))
@@ -287,7 +293,6 @@ describe("commands", () => {
 	test("clicking an item in the preview promotes the previewed directory", async () => {
 		const session = makeExplorerSession()
 		await load(session)
-		session.dispatch("view.toggleMode")
 		// Put the current pane at /work with `docs` under the cursor, so the
 		// inspector previews `/work/docs` as a directory pane.
 		await session.panes.left.navigate("/work")
@@ -307,7 +312,6 @@ describe("commands", () => {
 	test("back restores the focused column that initiated the move", async () => {
 		const session = makeExplorerSession()
 		await load(session)
-		session.dispatch("view.toggleMode")
 		session.dispatch("pane.activate", { paneId: "parent" })
 		const index = session.panes.parent.entries.value.findIndex((entry) => entry.name === "src")
 		session.panes.parent.cursor.set(index)
@@ -324,7 +328,6 @@ describe("commands", () => {
 	test("filter.start stays on a column with a filter field and falls back otherwise", async () => {
 		const session = makeExplorerSession()
 		await load(session)
-		session.dispatch("view.toggleMode")
 		// The parent column is a full pane: it keeps focus and its own filter.
 		session.dispatch("pane.activate", { paneId: "parent" })
 		session.dispatch("filter.start")
@@ -341,19 +344,19 @@ describe("commands", () => {
 	test("pane.toggle cycles the columns the current view mode shows", async () => {
 		const session = makeExplorerSession()
 		await load(session)
-		// Commander: source ⇄ destination.
-		session.dispatch("pane.toggle")
-		expect(session.active.value).toBe("right")
-		session.dispatch("pane.toggle")
-		expect(session.active.value).toBe("left")
-
-		session.dispatch("view.toggleMode")
-		// Explorer, rightward with a wrap: current → preview → parent →
-		// current.
+		// Explorer (the opening mode), rightward with a wrap: current →
+		// preview → parent → current.
 		session.dispatch("pane.toggle")
 		expect(session.active.value).toBe("preview")
 		session.dispatch("pane.toggle")
 		expect(session.active.value).toBe("parent")
+		session.dispatch("pane.toggle")
+		expect(session.active.value).toBe("left")
+
+		session.dispatch("view.toggleMode")
+		// Commander: source ⇄ destination.
+		session.dispatch("pane.toggle")
+		expect(session.active.value).toBe("right")
 		session.dispatch("pane.toggle")
 		expect(session.active.value).toBe("left")
 	})

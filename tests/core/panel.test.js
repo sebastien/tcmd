@@ -45,7 +45,8 @@ async function makeSession() {
 	const fs = createMockFs(TREE)
 	const left = createPane({ fs, path: "/home" })
 	const right = createPane({ fs, path: "/tmp" })
-	const session = createSession({ fs, left, right })
+	// The panel's `dest` argument binds the DST pane, a commander concept.
+	const session = createSession({ fs, left, right, viewMode: "commander" })
 	await Promise.all([left.refresh(), right.refresh()])
 	return { fs, session }
 }
@@ -261,20 +262,29 @@ describe("panel", () => {
 		expect(session.panes.left.marked.value.size).toBe(0)
 	})
 
-	test("run refuses an unrunnable draft, naming the missing argument", async () => {
+	test("run on an incomplete command focuses the missing field", async () => {
 		const { session } = await makeSession()
 		session.dispatch("panel.open")
-		// A `run` (raw CMD) draft with no command typed is not runnable.
-		const runIndex = session.panelFiltered.value.findIndex((op) => op.name === "run")
-		session.dispatch("panel.setOp", { index: runIndex })
+		// `bookmark [NAME] [PATH]`: PATH binds the cursor entry, but the
+		// optional NAME before it leaves a positional gap, so the draft is not
+		// runnable until NAME is filled.
+		const index = session.panelFiltered.value.findIndex((op) => op.name === "bookmark")
+		session.dispatch("panel.setOp", { index })
+		session.dispatch("panel.focusName")
 		await session.dispatch("panel.run")
+		// Enter does not fail: it moves the cursor onto the missing NAME field.
 		expect(session.panelOpen.value).toBe(true)
-		expect(session.notice.value?.kind).toBe("error")
-		expect(session.notice.value?.text).toContain("«CMD»")
-		// Nothing ran; fixing the draft and running again closes the panel.
-		session.dispatch("panel.focusArg")
+		expect(session.notice.value).toBe(null)
+		expect(session.panelFocus.value).toBe("field")
+		expect(session.panelFields.value[session.panelFieldIndex.value].name).toBe("NAME")
+		// Filling the field makes the draft runnable; running closes the panel.
+		session.panelDraft.set(
+			session.panelDraft.value.map((binding) =>
+				binding.name === "NAME" ? { ...binding, value: "memo" } : binding,
+			),
+		)
 		await session.dispatch("panel.run")
-		expect(session.panelOpen.value).toBe(true)
+		expect(session.panelOpen.value).toBe(false)
 	})
 
 	test("`:` opens the panel on the first entry, the entry column focused", async () => {
@@ -337,28 +347,50 @@ describe("panel", () => {
 		expect(session.panelDraft.value.map((b) => b.name)).toEqual(["PATH"])
 	})
 
-	test("panel.tab cycles the focus ring from the command through the arguments", async () => {
+	test("panel.tab walks the name, inline fields and context rows", async () => {
 		const { session } = await makeSession()
 		session.dispatch("panel.open")
-		// The list opens alphabetically; select `copy` explicitly to keep the
-		// ring walk independent of the ordering: two argument headers, FROM
-		// (row 0, then its item at row 1), then TO (row 2).
+		// Select `copy`: one textual field (TO, a destination) and one
+		// selection binding (FROM: its header row, then its item row).
 		expect(session.panelEntry.value.name).toBe("bookmark")
 		session.dispatch("panel.setOp", { index: session.panelFiltered.value.findIndex((op) => op.name === "copy") })
 		expect(session.panelEntry.value.name).toBe("copy")
 		expect(session.panelFocus.value).toBe("ops")
+		// Name → the TO inline field.
+		session.dispatch("panel.tab", { delta: 1 })
+		expect(session.panelFocus.value).toBe("field")
+		expect(session.panelFieldIndex.value).toBe(0)
+		// Field → the FROM context header, then its item row.
 		session.dispatch("panel.tab", { delta: 1 })
 		expect(session.panelFocus.value).toBe("args")
 		expect(session.panelRowIndex.value).toBe(0)
 		session.dispatch("panel.tab", { delta: 1 })
-		// The next header is TO (index 2), skipping the FROM item row.
-		expect(session.panelRowIndex.value).toBe(2)
+		expect(session.panelRowIndex.value).toBe(1)
+		// Past the last row: wrap back to the command name.
 		session.dispatch("panel.tab", { delta: 1 })
-		// Past the last header: wrap back to the command column.
 		expect(session.panelFocus.value).toBe("ops")
-		// Shift-Tab from the command wraps to the last argument header.
+		// Shift-Tab from the name wraps to the last context row.
 		session.dispatch("panel.tab", { delta: -1 })
 		expect(session.panelFocus.value).toBe("args")
-		expect(session.panelRowIndex.value).toBe(2)
+		expect(session.panelRowIndex.value).toBe(1)
+	})
+
+	test("Tab first completes the command name from the typed prefix", async () => {
+		const { session } = await makeSession()
+		session.dispatch("panel.open")
+		session.dispatch("panel.setQuery", { query: "ren" })
+		expect(session.panelEntry.value.name).toBe("rename")
+		// The rest of the name is the ghost suffix.
+		expect(session.panelCompletion.value).toBe("ame")
+		session.dispatch("panel.tab", { delta: 1 })
+		// The first Tab completes and stays on the name field.
+		expect(session.panelQuery.value).toBe("rename")
+		expect(session.panelFocus.value).toBe("ops")
+		expect(session.panelCompletion.value).toBe("")
+		// A second Tab jumps to the first missing argument (REPLACE; FIND was
+		// prefilled with the basename).
+		session.dispatch("panel.tab", { delta: 1 })
+		expect(session.panelFocus.value).toBe("field")
+		expect(session.panelFields.value[session.panelFieldIndex.value].name).toBe("REPLACE")
 	})
 })

@@ -178,6 +178,29 @@ function panelArgRows(CommandArgRow) {
 		)
 }
 
+// Function: panelFieldRows
+// `{ item, index, focused, value }` bags for the command panel's inline
+// textual-argument fields (`CommandField`). `focused` is true only when the
+// panel focus is actually on that field (a plain per-row flag, so a focus move
+// rewrites just the two changed bags); `value` is the panel's shared edit cell,
+// written back by the focused field's input.
+function panelFieldRows(CommandField) {
+	return (self, data) => {
+		const focusing = unwrap(data.focus) === "field"
+		const cursor = unwrap(data.fieldIndex)
+		return CommandField.map(
+			data.fields ?? [],
+			(item, index) => ({
+				item,
+				index,
+				focused: focusing && index === cursor,
+				value: data.value,
+			}),
+			(item) => `field:${item.argIndex}`,
+		)
+	}
+}
+
 // Function: bookmarkRows
 // `{ item: { name, path }, index, selectedRow }` bags for `BookmarkRow` rows.
 // `selectedRow` is the plain per-row selection flag so a picker move rewrites
@@ -193,6 +216,6 @@ function bookmarkRows(BookmarkRow) {
 	}
 }
 
-export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, isSelected, panelArgRows, panelOpRows }
+export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, isSelected, panelArgRows, panelFieldRows, panelOpRows }
 
 // EOF

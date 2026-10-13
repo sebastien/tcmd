@@ -48,7 +48,8 @@ async function mountApp(options = {}) {
 	const fs = options.fs ?? createMockFs(TREE)
 	const left = createPane({ fs, path: "/home" })
 	const right = createPane({ fs, path: "/" })
-	const session = createSession({ fs, left, right })
+	// The session opens in explorer; commander-specific tests pass the mode.
+	const session = createSession({ fs, left, right, viewMode: options.viewMode })
 	await load(session)
 	const host = document.createElement("div")
 	document.body.appendChild(host)
@@ -71,8 +72,21 @@ function type(input, value) {
 }
 
 describe("web app", () => {
+	test("opens in explorer mode by default", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			expect(session.viewMode.value).toBe("explorer")
+			expect(host.querySelector(".app-header-status").textContent).toBe(`explorer · ${VERSION}`)
+			// The parent and current columns show; the destination does not.
+			expect(host.querySelector(".pane-parent")).not.toBeNull()
+			expect(host.querySelector(".pane-right")).toBeNull()
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
 	test("mounts the shared App over a reactive session", async () => {
-		const { host, instance } = await mountApp()
+		const { host, instance } = await mountApp({ viewMode: "commander" })
 		try {
 			// CommandBar/FileList/Breadcrumbs all come from reactive session cells.
 			expect(host.textContent).toContain("[Switch ⇥]")
@@ -158,7 +172,7 @@ describe("web app", () => {
 	})
 
 	test("panel input, clicks and keyboard edit the draft, not the real marks, and Enter runs once", async () => {
-		const { host, instance, session } = await mountApp()
+		const { host, instance, session } = await mountApp({ viewMode: "commander" })
 		try {
 			session.panes.left.toggleMark()
 			session.panes.left.cursor.set(1)
@@ -196,7 +210,7 @@ describe("web app", () => {
 		}
 	})
 
-	test("the panel exposes risk colours and refuses missing required arguments", async () => {
+	test("the panel exposes risk colours and focuses the next missing argument", async () => {
 		const { host, instance, session } = await mountApp()
 		try {
 			press(host, ":")
@@ -211,8 +225,11 @@ describe("web app", () => {
 			expect(host.querySelector(".panel-runs").getAttribute("data-runnable")).toBe("false")
 			press(host, "Enter")
 			await settle()
+			// Enter does not fail: it focuses the missing PATH argument.
 			expect(session.panelOpen.value).toBe(true)
-			expect(session.notice.value.kind).toBe("error")
+			expect(session.notice.value).toBeNull()
+			expect(session.panelFocus.value).toBe("args")
+			expect(session.panelRowIndex.value).toBe(0)
 		} finally {
 			instance.unmount()
 		}
@@ -302,7 +319,7 @@ describe("web app", () => {
 	})
 
 	test("t switches to the explorer: a parent column, a wider current, a directory preview", async () => {
-		const { host, instance, session } = await mountApp()
+		const { host, instance, session } = await mountApp({ viewMode: "commander" })
 		try {
 			expect(host.querySelector(".pane-parent")).toBeNull()
 			press(host, "t")
@@ -335,8 +352,32 @@ describe("web app", () => {
 		}
 	})
 
-	test("pane focus, loading, empty state and marked count reach the web components", async () => {
+	test("shift-v maximizes the inspector over the pane row and restores it", async () => {
 		const { host, instance, session } = await mountApp()
+		try {
+			// Wide viewport: the inline inspector sits beside the panes.
+			expect(host.querySelector('[data-slot="inspector"] .preview')).not.toBeNull()
+			press(host, "V", { shiftKey: true })
+			await settle()
+			expect(session.previewFull.value).toBe(true)
+			// The columns are gone and the preview fills the row.
+			expect(host.querySelector(".pane-left")).toBeNull()
+			expect(host.querySelector(".pane-right")).toBeNull()
+			expect(host.querySelector(".preview-max .preview")).not.toBeNull()
+			// Shift-V again restores the previous layout untouched.
+			press(host, "V", { shiftKey: true })
+			await settle()
+			expect(session.previewFull.value).toBe(false)
+			expect(host.querySelector(".preview-max")).toBeNull()
+			expect(host.querySelector(".pane-left")).not.toBeNull()
+			expect(host.querySelector('[data-slot="inspector"] .preview')).not.toBeNull()
+		} finally {
+			instance.unmount()
+		}
+	})
+
+	test("pane focus, loading, empty state and marked count reach the web components", async () => {
+		const { host, instance, session } = await mountApp({ viewMode: "commander" })
 		try {
 			expect(host.querySelector(".pane-left .is-current").dataset.active).toBe("true")
 			expect(host.querySelector(".pane-right .is-current").dataset.active).toBe("false")
@@ -376,7 +417,7 @@ describe("web app", () => {
 				return new Response(JSON.stringify(payload ?? { ok: true }), { headers: { "content-type": "application/json" } })
 			},
 		})
-		const { host, instance, session } = await mountApp({ fs })
+		const { host, instance, session } = await mountApp({ fs, viewMode: "commander" })
 		try {
 			session.panes.left.cursor.set(1)
 			press(host, ":")
@@ -395,7 +436,7 @@ describe("web app", () => {
 	})
 
 	test("clicking a row in the other pane activates that pane", async () => {
-		const { host, instance, session } = await mountApp()
+		const { host, instance, session } = await mountApp({ viewMode: "commander" })
 		try {
 			expect(session.active.value).toBe("left")
 			const rows = host.querySelectorAll(".pane-right .file-row")

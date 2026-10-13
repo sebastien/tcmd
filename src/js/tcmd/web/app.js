@@ -145,11 +145,17 @@ function webViewBehaviors() {
 			opCursor: data.panelOpIndex,
 			rows: data.panelRows,
 			argCursor: data.panelRowIndex,
+			fields: data.panelFields,
+			fieldIndex: data.panelFieldIndex,
+			completion: data.panelCompletion,
 			focus: data.panelFocus,
 			textual: data.panelTextual,
 			argRow: data.panelCursorRow,
 			command: data.panelCommand,
 			runnable: data.panelRunnable,
+			picking: data.panelPicking,
+			pickerQuery: data.pickerQuery,
+			pickerPath: data.pickerPath,
 			query: data.panelQuery,
 			value: data.panelValue,
 		}),
@@ -212,7 +218,7 @@ function createWebApp(session, options = {}) {
 	const crumbs = (pane) => derived([pane.segments, paneWidth], ([segments, width]) => elideCrumbs(segments, width))
 	const quit = (self) => self.unmount?.()
 	// DOM inputs have no native `enter` event; the root routes Enter for them.
-	const baseKeys = appBehaviors({ normalizeKey, inputOwnsEnter: false, quit }).keys
+	const baseKeys = appBehaviors({ normalizeKey, quit }).keys
 	const events = appEvents({ quit })
 	return ui(appHtml)
 		.init(() => ({
@@ -257,7 +263,7 @@ function createWebApp(session, options = {}) {
 					else if (key.shift && key.name === "e") session.dispatch("file.edit")
 					return
 				}
-				if (!busy && key.name === "v" && isNarrow(data, self)) {
+				if (!busy && key.name === "v" && !key.shift && isNarrow(data, self)) {
 					viewer.set(!viewer.value)
 					return
 				}

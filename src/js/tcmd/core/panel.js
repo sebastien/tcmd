@@ -34,10 +34,11 @@ import { basename, parent } from "./path.js"
 import { getOperations, pathToken } from "./operations.js"
 
 // Constant: PANEL_FOCUS
-// The two columns the panel's focus ring moves through: "ops" (the entry list,
-// where typing filters) and "args" (an argument row, where Space toggles and a
-// textual argument owns the keyboard).
-const PANEL_FOCUS = { OPS: "ops", ARGS: "args" }
+// The focus ring of the panel: "ops" is the command-name field (typing filters
+// and completes the entry), "field" is one of the inline textual-argument
+// fields on the command row (`panelFieldIndex` picks which), and "args" is the
+// context column (selection bindings, where Space toggles an item).
+const PANEL_FOCUS = { OPS: "ops", FIELD: "field", ARGS: "args" }
 
 // Constant: PANEL_SOURCES
 // The two namespaces the panel lists, in display order: the CLI operations,
@@ -136,12 +137,16 @@ function filterPanelEntries(entries, query) {
 }
 
 // Function: resolvePaneId
-// Maps an argument role to a pane id: "source" -> SRC (left), "dest" -> DST
-// (right), anything else -> the pane holding the current directory (never an
-// auxiliary column: operations run against the directory being browsed).
+// Maps an argument role to a pane id: "source" -> the working pane (SRC in
+// commander; the pane the explorer is actually browsing, which may be either
+// side), "dest" -> DST (right), anything else -> the pane holding the current
+// directory (never an auxiliary column: operations run against the directory
+// being browsed).
 function resolvePaneId(session, role) {
-	if (role === "source") return "left"
 	if (role === "dest") return "right"
+	if (role === "source") {
+		return session.viewMode?.value === "explorer" ? currentPaneId(session) : "left"
+	}
 	return currentPaneId(session)
 }
 
@@ -191,7 +196,8 @@ function bindArg(session, arg, index) {
 		role,
 		optional: arg.optional === true,
 		variadic: arg.variadic === true,
-		textual: arg.kind === "literal" || arg.kind === "raw" || arg.kind === "buffer",
+		textual:
+			arg.kind === "literal" || arg.kind === "raw" || arg.kind === "buffer" || arg.kind === "path",
 	}
 	if (arg.kind === "selection") {
 		const paneId = resolvePaneId(session, role)
@@ -204,11 +210,17 @@ function bindArg(session, arg, index) {
 			value: "",
 		}
 	}
-	if (arg.kind === "dest") {
-		const pane = session.panes.right
-		const path = pane?.path?.value ?? ""
-		// The destination is editable in place, like a literal (no toggles).
-		return { ...common, paneId: "right", textual: true, items: [], value: path }
+	if (arg.kind === "dest" || arg.kind === "path") {
+		// A destination or a path argument is typeable in place, like a
+		// literal, and additionally browsable through the panel's file picker
+		// (`picker: true`, opened with `panel.browse`). In commander mode the
+		// DST pane is the natural destination, so a directory argument
+		// pre-fills from it; explorer mode has no destination pane, so it opens
+		// empty for the picker (or the user) to fill.
+		const mode = arg.kind === "dest" ? "dir" : arg.mode ?? "any"
+		const commander = (session.viewMode?.value ?? "commander") !== "explorer"
+		const value = mode === "dir" && commander ? session.panes?.right?.path?.value ?? "" : ""
+		return { ...common, textual: true, picker: true, mode, items: [], value }
 	}
 	if (arg.kind === "buffer") {
 		const label = PANE_BUFFERS[session.currentId?.value ?? session.active.value] ?? "A"
@@ -258,21 +270,29 @@ function argvFor(bindings) {
 	return args
 }
 
-// Function: missingArg
-// The name of the first argument that is not runnable: a required argument left
-// blank, an optional one before a filled one (a positional gap would shift the
-// following tokens), or a selection with nothing selected. Returns null when the
-// argv is runnable.
-function missingArg(bindings) {
+// Function: missingBinding
+// The first binding that is not runnable: a required argument left blank, an
+// optional one before a filled one (a positional gap would shift the following
+// tokens), or a selection with nothing selected. Returns null when the argv is
+// runnable. The panel uses it both to flag an unrunnable draft and to focus the
+// next thing to fill when Enter lands on an incomplete command.
+function missingBinding(bindings) {
 	const list = bindings ?? []
 	const args = argTokens(list)
 	for (let i = 0; i < args.length - 1; i++) {
-		if (args[i] === "") return list[i].name
+		if (args[i] === "") return list[i]
 	}
 	// A trailing required argument must still be filled.
 	const trailing = list[list.length - 1]
-	if (trailing && args[args.length - 1] === "" && trailing.optional !== true) return trailing.name
+	if (trailing && args[args.length - 1] === "" && trailing.optional !== true) return trailing
 	return null
+}
+
+// Function: missingArg
+// The name of the first argument that is not runnable (see `missingBinding`),
+// or null when the argv is runnable.
+function missingArg(bindings) {
+	return missingBinding(bindings)?.name ?? null
 }
 
 // Function: shellQuote
@@ -327,20 +347,23 @@ function panelSummary(binding) {
 		const count = selectedPaths(binding).length
 		return `${pane} · ${count} selected`
 	}
-	if (binding.kind === "dest") return binding.value || "(none)"
+	if (binding.kind === "dest" || binding.kind === "path") return binding.value || "(none)"
 	if (binding.kind === "buffer") return binding.value || "(active)"
 	return binding.value ? binding.value : "(empty)"
 }
 
 // Function: panelRowList
-// Flattens the draft into the rows the panel's argument column renders: one
-// header row per argument, followed by one item row per item of a
-// selection/destination argument (so individual paths can be toggled). Row
-// focus is assigned by the view (comparing the row index to the cursor), the
-// same way list rows are; this stays pure and index-stable.
+// Flattens the draft into the rows the panel's *context* column renders: one
+// header row per selection argument, followed by one item row per marked path
+// (so individual paths can be toggled). Textual arguments (literal/raw/path/
+// dest/buffer) are edited inline on the command row instead, so they
+// contribute no context rows. Row focus is assigned by the view (comparing the
+// row index to the cursor), the same way list rows are; this stays pure and
+// index-stable.
 function panelRowList(bindings) {
 	const rows = []
 	for (const binding of bindings ?? []) {
+		if (binding.textual) continue
 		rows.push({
 			type: "arg",
 			key: `arg:${binding.index}`,
@@ -353,6 +376,8 @@ function panelRowList(bindings) {
 			optional: binding.optional,
 			variadic: binding.variadic,
 			textual: binding.textual,
+			picker: binding.picker === true,
+			mode: binding.mode ?? null,
 			value: binding.value,
 			count: (binding.items ?? []).length,
 		})
@@ -376,10 +401,69 @@ function panelRowList(bindings) {
 	return rows
 }
 
+// Function: panelFieldList
+// The inline textual-argument fields on the command row, in signature order:
+// one per textual binding (literal/raw/path/dest/buffer). `fieldIndex` is the
+// field's position in the row (what the focus ring moves through); `argIndex`
+// is the binding it edits. Selection bindings are not fields — they live in
+// the context column.
+function panelFieldList(bindings) {
+	const fields = []
+	for (const binding of bindings ?? []) {
+		if (!binding.textual) continue
+		fields.push({
+			fieldIndex: fields.length,
+			argIndex: binding.index,
+			name: binding.name,
+			kind: binding.kind,
+			mode: binding.mode ?? null,
+			picker: binding.picker === true,
+			value: `${binding.value ?? ""}`,
+		})
+	}
+	return fields
+}
+
+// Function: fieldIndexOf
+// The field position (see `panelFieldList`) of the binding at `argIndex`, or
+// -1 when that binding is not a textual field.
+function fieldIndexOf(bindings, argIndex) {
+	const field = panelFieldList(bindings).find((candidate) => candidate.argIndex === argIndex)
+	return field ? field.fieldIndex : -1
+}
+
+// Function: panelCompletion
+// The ghost completion of the selected entry's name after the typed query: the
+// remaining characters when the query is a case-insensitive prefix of the
+// name, else "" (nothing to suggest).
+function panelCompletion(query, entry) {
+	const q = `${query ?? ""}`.trim().toLowerCase()
+	const name = `${entry?.name ?? ""}`
+	if (!q || !name || !name.toLowerCase().startsWith(q)) return ""
+	return name.slice(q.length)
+}
+
 // Function: rowAt
 // The argument row at the cursor `index`, or null.
 function rowAt(rows, index) {
 	return (rows ?? [])[index] ?? null
+}
+
+// Function: pickerRowList
+// Flattens the picker's visible listing into the rows the panel's argument
+// column renders while a path is being picked. The shape mirrors a
+// file-listing row (`name`, `path`, `isDir`) so the shared row component can
+// render both; a symlink carries its raw target for the summary.
+function pickerRowList(entries) {
+	return (entries ?? []).map((entry) => ({
+		type: "entry",
+		key: entry.path,
+		name: entry.name,
+		path: entry.path,
+		isDir: entry.isDir === true,
+		isSymlink: entry.isSymlink === true,
+		target: entry.target ?? null,
+	}))
 }
 
 // Function: isTextualRow
@@ -424,17 +508,23 @@ export {
 	PANEL_FOCUS,
 	PANEL_SOURCES,
 	argvFor,
+	bindArg,
 	bindArgs,
 	bindingAt,
+	fieldIndexOf,
 	filterPanelEntries,
 	isTextualRow,
 	missingArg,
+	missingBinding,
 	panelCommand,
+	panelCompletion,
 	panelEntries,
+	panelFieldList,
 	panelRowList,
 	panelRunnable,
 	panelSummary,
 	paneSelectionPaths,
+	pickerRowList,
 	rowAt,
 	selectedPaths,
 	withArgValue,

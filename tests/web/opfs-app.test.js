@@ -26,13 +26,14 @@ beforeAll(async () => {
 	;({ createWebApp } = await import("../../src/js/tcmd/web/app.js"))
 })
 
-async function boot() {
+async function boot(options = {}) {
 	const { root } = createMockOpfs()
 	const fs = createOpfsFs({ root })
 	const seeded = await seedOpfs(fs)
 	const left = createPane({ fs, path: fs.home() })
 	const right = createPane({ fs, path: "/" })
-	const session = createSession({ fs, os: createNullOs(), left, right })
+	// The session opens in explorer; commander-specific tests pass the mode.
+	const session = createSession({ fs, os: createNullOs(), left, right, viewMode: options.viewMode })
 	await load(session)
 	const host = document.createElement("div")
 	document.body.appendChild(host)
@@ -54,7 +55,7 @@ describe("opfs web bootstrap", () => {
 	})
 
 	test("mounts the shared app over seeded OPFS storage", async () => {
-		const { host, instance } = await boot()
+		const { host, instance } = await boot({ viewMode: "commander" })
 		try {
 			expect(host.textContent).toContain("notes.txt")
 			expect(host.textContent).toContain("README.md")
@@ -78,7 +79,7 @@ describe("opfs web bootstrap", () => {
 	})
 
 	test("the web command panel copies through the OPFS backend", async () => {
-		const { fs, host, instance, session } = await boot()
+		const { fs, host, instance, session } = await boot({ viewMode: "commander" })
 		try {
 			const notes = session.panes.left.entries.value.findIndex((entry) => entry.name === "notes.txt")
 			session.panes.left.cursor.set(notes)

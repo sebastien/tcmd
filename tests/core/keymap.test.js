@@ -43,6 +43,11 @@ describe("keymap", () => {
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "t", shift: true })).toBeNull()
 	})
 
+	test("v previews and shift-v maximizes the inspector", () => {
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "v" })).toBe("view.togglePreview")
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "v", shift: true })).toBe("view.maximize")
+	})
+
 	test("binds every entry to a command id", () => {
 		for (const binding of DEFAULT_KEYMAP) {
 			expect(binding.key.length).toBeGreaterThan(0)

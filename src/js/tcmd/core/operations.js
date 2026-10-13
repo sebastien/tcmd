@@ -26,7 +26,7 @@
 // - "literal": free text (a name), edited in the panel's text field.
 // - "raw": the rest of the line, unparsed (a shell command).
 
-import { basename, extname, join, normalize } from "./path.js"
+import { basename, extname, join, normalize, parent as parentOf } from "./path.js"
 import { currentPane, currentPaneId, PANE_BUFFERS } from "./pane.js"
 
 // Constant: PATHS_PREFIX
@@ -107,6 +107,67 @@ const operations = [
 			}
 			await refreshPanes(session)
 			return `moved ${sources.length} path${sources.length === 1 ? "" : "s"} to ${target}`
+		},
+	},
+	{
+		name: "rename",
+		signature: "rename FIND REPLACE PATH...",
+		description: "Rename paths with a literal find-and-replace",
+		risk: "caution",
+		arity: { min: 3 },
+		args: [
+			{ name: "FIND", kind: "literal" },
+			{ name: "REPLACE", kind: "literal" },
+			{ name: "PATH", kind: "selection", role: "active", variadic: true },
+		],
+		// The live mapping the panel previews instead of the command line: one
+		// `old → new` line per path, an unchanged path marked as such, and an
+		// invalid name or a duplicate target flagged before anything runs.
+		preview(session, argv) {
+			const [find, replace] = argv
+			if (!find || !replace) return null
+			let paths
+			try {
+				paths = expandAll(session, argv.slice(2))
+			} catch (error) {
+				return null
+			}
+			if (!paths.length) return null
+			const plan = renamePlan(find, replace, paths)
+			const lines = plan.map((row) => {
+				if (row.error) return `${row.name} → ⚠ ${row.error}`
+				if (!row.changed) return `${row.name}  (unchanged)`
+				return `${row.name} → ${row.newName}`
+			})
+			for (const name of duplicateTargets(plan)) lines.push(`⚠ duplicate target: ${name}`)
+			return lines.join("\n")
+		},
+		async run(session, args) {
+			const find = `${args[0] ?? ""}`
+			const replace = `${args[1] ?? ""}`
+			if (!find) throw new Error("rename needs FIND")
+			if (!replace) throw new Error("rename needs REPLACE")
+			const paths = expandAll(session, args.slice(2))
+			if (!paths.length) throw new Error("rename needs at least one path")
+			const plan = renamePlan(find, replace, paths)
+			const bad = plan.find((row) => row.error)
+			if (bad) throw new Error(`rename ${basename(bad.path)}: ${bad.error}`)
+			const duplicates = duplicateTargets(plan)
+			if (duplicates.length) throw new Error(`rename: duplicate target ${duplicates[0]}`)
+			for (const row of plan) {
+				if (!row.changed) continue
+				const target = join(parentOf(row.path), row.newName)
+				if (await session.fs.stat(target)) throw new Error(`rename: ${row.newName} already exists`)
+			}
+			let count = 0
+			for (const row of plan) {
+				if (!row.changed) continue
+				await session.fs.move(row.path, join(parentOf(row.path), row.newName))
+				count += 1
+			}
+			await refreshPanes(session)
+			if (!count) return "rename: nothing changed"
+			return `renamed ${count} path${count === 1 ? "" : "s"}`
 		},
 	},
 	{
@@ -425,6 +486,35 @@ function findBuffer(session, name) {
 	throw new Error(`unknown selection buffer: ${name}`)
 }
 
+// Function: renamePlan
+// The literal find-and-replace mapping a `rename` runs: one row per path with
+// its source basename, its new basename (every occurrence of FIND replaced by
+// REPLACE), whether it changed, and an error when the result is empty or
+// contains a path separator. Pure, so the panel preview and the run agree.
+function renamePlan(find, replace, paths) {
+	return (paths ?? []).map((path) => {
+		const name = basename(path)
+		const newName = name.split(find).join(replace)
+		let error = null
+		if (!newName) error = "empty name"
+		else if (newName.includes("/")) error = "name has a slash"
+		return { path, name, newName, changed: error === null && newName !== name, error }
+	})
+}
+
+// Function: duplicateTargets
+// The new names two or more different paths would collide on.
+function duplicateTargets(plan) {
+	const seen = new Set()
+	const duplicates = new Set()
+	for (const row of plan ?? []) {
+		if (!row.changed) continue
+		if (seen.has(row.newName)) duplicates.add(row.newName)
+		seen.add(row.newName)
+	}
+	return [...duplicates]
+}
+
 // Function: humanSize
 // Compact byte size for stat output (core-local: components own presentation
 // formatting).
@@ -449,6 +539,7 @@ export {
 	getOperations,
 	humanSize,
 	pathToken,
+	renamePlan,
 	runOperation,
 }
 

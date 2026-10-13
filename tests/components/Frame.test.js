@@ -99,6 +99,22 @@ describe("components Frame", () => {
 		expect(behaviors.showViewer(narrow, { showPreview: false, viewerOpen: true })).toBe(true)
 	})
 
+	test("maximizing the inspector takes the whole pane row", () => {
+		const behaviors = createFrameBehaviors({ theme })
+		const wide = selfAt(INSPECTOR_INLINE_WIDTH, 30)
+		const full = { showPreview: true, viewerOpen: false, previewFull: true }
+		expect(behaviors.showPreviewFull(wide, full)).toBe(true)
+		// Every column yields to the maximized preview, inline inspector too.
+		expect(behaviors.showLeftPane(wide, full)).toBe(false)
+		expect(behaviors.showRightPane(wide, full)).toBe(false)
+		expect(behaviors.showParentPane(wide, { ...full, viewMode: "explorer" })).toBe(false)
+		expect(behaviors.showInspectorInline(wide, full)).toBe(false)
+		// Clearing the flag brings the layout straight back.
+		expect(behaviors.showPreviewFull(wide, {})).toBe(false)
+		expect(behaviors.showLeftPane(wide, {})).toBe(true)
+		expect(behaviors.showInspectorInline(wide, { showPreview: true })).toBe(true)
+	})
+
 	test("the command bar wraps and the listing windows around it", () => {
 		const behaviors = createFrameBehaviors({ theme })
 		const items = [

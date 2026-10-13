@@ -26,7 +26,7 @@ const TREE = {
 	"/etc": [{ name: "hosts", text: "127.0.0.1 localhost\n", size: 19 }],
 }
 
-const makeSetup = (width, height) => makeSetupTui(TREE, width, height)
+const makeSetup = (width, height, options) => makeSetupTui(TREE, width, height, options)
 
 // A frame is aligned when every rendered line has the same display width.
 function widths(frame) {
@@ -35,7 +35,7 @@ function widths(frame) {
 
 describe("golden frames", () => {
 	test("120x30: two panes, inline inspector, wrapped status bar", async () => {
-		const { setup } = await makeSetup(120, 30)
+		const { setup } = await makeSetup(120, 30, { viewMode: "commander" })
 		try {
 			const frame = setup.captureCharFrame()
 			// The identity bar names the app; the pane boxes tile below it.
@@ -120,8 +120,21 @@ describe("golden frames", () => {
 		return [...border.matchAll(/[┌╭]([^┌╭╮┐╯╰]*)[┐╮]/g)].map((match) => match[1].length)
 	}
 
-	test("`t` toggles the three-column explorer: parent, wider current, preview", async () => {
+	test("opens in the three-column explorer by default", async () => {
 		const { setup, session } = await makeSetup(120, 30)
+		try {
+			expect(session.viewMode.value).toBe("explorer")
+			const frame = setup.captureCharFrame()
+			expect(frame.split("\n")[0].trimEnd()).toEndWith(`explorer · ${VERSION}`)
+			// Parent mirror, current directory, directory preview.
+			expect(columnWidths(frame).length).toBe(3)
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("`t` toggles the three-column explorer: parent, wider current, preview", async () => {
+		const { setup, session } = await makeSetup(120, 30, { viewMode: "commander" })
 		try {
 			// Commander: source and destination share the row evenly (the
 			// layout rounds to the nearest column, so "evenly" is ±1).
@@ -205,21 +218,20 @@ describe("golden frames", () => {
 			// namespace glyph (a terminal prompt, a bolt).
 			expect(frame).toContain("\u{ebca} bookmark")
 			expect(frame).toContain("\u{f0e7} Back")
-			// A vertical rule divides the entry list from the argument
-			// sidebar: the rows carry a "│" between the two columns.
+			// A vertical rule divides the entry list from the context column:
+			// the rows carry a "│" between the two columns.
 			expect(frame).toMatch(/bookmark[^\n]*│/)
-			// A horizontal rule separates the columns from the preview, whose
-			// line sits right below it.
+			// The resolved command sits dim, right under the command row.
 			const lines = frame.split("\n")
-			const runs = lines.findIndex((line) => line.includes("runs"))
-			expect(runs).toBeGreaterThan(0)
-			expect(lines[runs - 1]).toContain("─")
-			// The preview maps the draft to a full assembled command line.
-			expect(frame).toContain("bookmark /home/documents")
+			const cmd = lines.findIndex((line) => line.includes("›"))
+			expect(cmd).toBeGreaterThan(0)
+			expect(lines[cmd + 1]).toContain("bookmark /home/documents")
+			// The inline NAME field is on the command row itself.
+			expect(lines[cmd]).toContain("NAME")
 			// The filter prompt is the header row.
 			expect(frame).toContain("›")
 			// The panel keys are advertised in its own footer.
-			expect(frame).toContain("filter")
+			expect(frame).toContain("type to command")
 			// The command bar underneath switches to the panel hints.
 			expect(frame).toContain("Toggle")
 		} finally {
@@ -270,12 +282,18 @@ describe("golden frames", () => {
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain(" Command · edit ")
 			expect(frame).not.toContain("bookmark [NAME]")
-			expect(frame).toContain("runs")
+			// The resolved line sits right under the command row.
 			expect(frame).toContain("edit /home/documents")
-			// Tab walks to the first argument and wraps back to the command.
+			// Tab walks the ring: the context header, then its item, then wraps
+			// back to the command name (edit has a selection and no textual
+			// field).
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			expect(session.panelFocus.value).toBe("args")
+			expect(session.panelRowIndex.value).toBe(0)
+			setup.mockInput.pressKey("\t")
+			await settle(setup)
+			expect(session.panelRowIndex.value).toBe(1)
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			expect(session.panelFocus.value).toBe("ops")
@@ -289,8 +307,11 @@ describe("golden frames", () => {
 		try {
 			setup.mockInput.pressKey(":")
 			await settle(setup)
-			// Filter to `copy` so its FROM selection owns the argument rows.
+			// Filter to `copy` so its FROM selection owns the context rows.
 			await setup.mockInput.typeText("copy")
+			await settle(setup)
+			// Tab to the TO field, then to the FROM header, then toggle it off.
+			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
@@ -307,7 +328,7 @@ describe("golden frames", () => {
 	})
 
 	test("running the default copy from the panel closes it and reports", async () => {
-		const { setup, session } = await makeSetup(120, 30)
+		const { setup, session } = await makeSetup(120, 30, { viewMode: "commander" })
 		try {
 			setup.mockInput.pressKey(":")
 			await settle(setup)
@@ -337,7 +358,7 @@ describe("golden frames", () => {
 			// The raw CMD field owns the keyboard, so typing goes straight in;
 			// the filter stays empty so the full list keeps its ordering.
 			expect(session.panelQuery.value).toBe("")
-			expect(session.panelFocus.value).toBe("args")
+			expect(session.panelFocus.value).toBe("field")
 			expect(session.panelTextual.value).toBe(true)
 			await setup.mockInput.typeText("echo hi")
 			await settle(setup)

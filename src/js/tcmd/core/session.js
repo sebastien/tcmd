@@ -20,7 +20,7 @@ import { cell, derived, effect } from "select/state/cells"
 import { createBookmarks } from "./bookmarks.js"
 import { createDispatch, getAppCommands, getCommandBarItems } from "./commands.js"
 import { createNullOs } from "./os.js"
-import { PANEL_FOCUS, bindArgs, filterPanelEntries, isTextualRow, panelCommand, panelEntries, panelRowList, panelRunnable, rowAt, withArgValue } from "./panel.js"
+import { PANEL_FOCUS, argvFor, bindArgs, filterPanelEntries, panelCommand, panelCompletion, panelEntries, panelFieldList, panelRowList, panelRunnable, pickerRowList, rowAt, withArgValue } from "./panel.js"
 import { basename, extname, join, parent as parentPath } from "./path.js"
 import { indexOfPath } from "./selection.js"
 import { createPane, PANE_BUFFERS } from "./pane.js"
@@ -37,7 +37,7 @@ const PREVIEW_BYTES = 65536
 // await session.load()
 // session.dispatch("pane.toggle")
 // ```
-function createSession({ fs, os, left, right, host, bookmarks } = {}) {
+function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explorer" } = {}) {
 	const session = {}
 	session.fs = fs
 	session.os = os ?? createNullOs()
@@ -47,15 +47,21 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	// first sync can never read a blank one.
 	session.panes.parent = createPane({ fs, path: parentPath(left.path.value) ?? left.path.value })
 	session.panes.preview = createPane({ fs, path: left.path.value })
+	// File picker: a private pane the command panel browses while a path
+	// argument is being picked. Kept out of `session.panes` so `load`, the
+	// pane refresh loop and pane navigation leave it alone; it is (re)read
+	// when the picker opens (see `core/commands#openPicker`).
+	session.pickerPane = createPane({ fs, path: left.path.value })
 	// Shown in the header title; empty when the environment has no hostname.
 	session.host = host ?? ""
 	// Bookmark model (named paths). The store defaults to in-memory.
 	session.bookmarks = bookmarks ?? createBookmarks()
-	// View mode: the two-pane "commander" workspace, or the three-column
-	// "explorer" (parent · current · preview). `view.toggleMode` (`t`) flips
-	// it; the workspace chrome in `components/Frame` reads it to decide which
-	// columns exist.
-	session.viewMode = cell("commander")
+	// View mode: the three-column "explorer" (parent · current · preview) the
+	// workspace opens in, or the two-pane "commander". `view.toggleMode` (`t`)
+	// flips it; the workspace chrome in `components/Frame` reads it to decide
+	// which columns exist. Callers that need the two-pane workspace (tests, a
+	// host that prefers it) pass `viewMode: "commander"`.
+	session.viewMode = cell(viewMode)
 	session.active = cell("left")
 	// The source/destination pane focus last was on. The auxiliary columns
 	// are attached to it, so `currentId` survives focus moving into them.
@@ -74,6 +80,11 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 		current === "left" ? l : r,
 	)
 	session.showPreview = cell(true)
+	// The inspector maximized over the workspace columns (`⇧V`): the preview
+	// takes the whole pane row until toggled back, leaving the identity and
+	// command bars in place. Independent of `showPreview`, so restoring the
+	// layout returns the inline inspector to exactly what it was.
+	session.previewFull = cell(false)
 	session.notice = cell(null)
 	session.confirm = cell(null)
 	// The pane whose filter input currently owns the keyboard, or null.
@@ -109,7 +120,12 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	// follows the current directory, so the mirror always highlights the
 	// entry the current pane is showing. Mirroring never records history: the
 	// column's own back/forward stays on the paths the user navigated.
-	effect([session.activePath, session.viewMode], ([path, mode]) => {
+	//
+	// `parent.entries` is a dependency so the cursor also lands when the
+	// mirror's listing arrives *after* the effect first runs — the explorer is
+	// the opening mode, so its parent column is populated by the initial
+	// `load` rather than by a later navigation.
+	effect([session.activePath, session.viewMode, session.panes.parent.entries], ([path, mode]) => {
 		if (mode !== "explorer" || !path) return
 		// The filesystem root has no parent; mirror itself rather than read a
 		// blank path.
@@ -149,9 +165,26 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	session.panelQuery = cell("")
 	session.panelOpIndex = cell(0)
 	session.panelRowIndex = cell(0)
+	// The inline textual-argument field the focus ring is on (an index into
+	// `panelFields`), when `panelFocus` is "field".
+	session.panelFieldIndex = cell(0)
 	session.panelFocus = cell(PANEL_FOCUS.OPS)
 	session.panelDraft = cell([])
 	session.panelEntries = cell(panelEntries(getAppCommands()))
+
+	// Picker sub-mode: while a `dest`/`path` argument is being browsed the
+	// panel's argument column shows the picker's listing instead of the
+	// argument rows. `panelPickerMode` ("dir"/"file"/"any") decides what the
+	// list offers and what Enter accepts; `panelPickerArg` is the argument the
+	// chosen path is written back to; `panelPendingRun` reruns the operation
+	// once a pick that was holding up a run completes.
+	session.panelPicking = cell(false)
+	session.panelPickerMode = cell("dir")
+	session.panelPickerArg = cell(-1)
+	session.panelPendingRun = cell(false)
+	// The picker's fuzzy filter, written by the picker input and routed to the
+	// picker pane's own filter (see the effect below).
+	session.pickerQuery = cell("")
 
 	// The bookmark picker keeps its cursor on the first match whenever the
 	// query changes.
@@ -293,9 +326,9 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	// Command bar rows: context-dependent key hints (see core/commands). The
 	// panel button is dropped when a host disables the panel.
 	session.commandBarItems = derived(
-		[session.filtering, session.bookmarkOpen, session.bookmarkMode, session.panelOpen],
-		([filtering, bookmarkOpen, bookmarkMode, panelOpen]) =>
-			getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen }),
+		[session.filtering, session.bookmarkOpen, session.bookmarkMode, session.panelOpen, session.panelPicking],
+		([filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking]) =>
+			getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking }),
 	)
 
 	// The entry list filtered by the typed query; `panelOpIndex` indexes into
@@ -309,7 +342,32 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 		[session.panelFiltered, session.panelOpIndex],
 		([entries, index]) => entries[Math.max(0, Math.min(index, entries.length - 1))] ?? null,
 	)
-	session.panelRows = derived([session.panelDraft], ([draft]) => panelRowList(draft))
+	// The picker's visible listing for the current mode: a destination picker
+	// lists directories only, so every row is a valid choice; a file/any
+	// picker keeps the listing intact, where a directory row descends.
+	session.pickerVisible = derived(
+		[session.pickerPane.entries, session.panelPickerMode],
+		([entries, mode]) => (mode === "dir" ? (entries ?? []).filter((entry) => entry.isDir) : entries ?? []),
+	)
+	session.pickerRows = derived([session.pickerVisible], ([entries]) => pickerRowList(entries))
+	// The argument column: the picker's entry rows while picking, the draft's
+	// argument rows otherwise. Focus is read from `panelRowIndex` by the row
+	// builder, so it works for both row shapes.
+	session.panelRows = derived(
+		[session.panelDraft, session.panelPicking, session.pickerRows],
+		([draft, picking, picker]) => (picking ? picker : panelRowList(draft)),
+	)
+	// The inline textual-argument fields on the command row, and the ghost
+	// completion of the command name after the typed query. Empty while the
+	// panel is closed, so a hidden field can never own the keyboard.
+	session.panelFields = derived(
+		[session.panelDraft, session.panelOpen],
+		([draft, open]) => (open ? panelFieldList(draft) : []),
+	)
+	session.panelCompletion = derived(
+		[session.panelQuery, session.panelEntry],
+		([query, entry]) => panelCompletion(query, entry),
+	)
 	// The assembled command line the draft maps to, and whether it is runnable.
 	// The preview answers "what will this run" as the shell would see it,
 	// prefixed with the entry name; a `«NAME»` marks a required argument still
@@ -317,32 +375,40 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	session.panelCommand = derived(
 		[session.panelDraft, session.panelEntry],
 		([draft, entry]) => {
+			// An operation may preview its own mapping instead of the command
+			// line (`rename` shows `old → new` per path). Anything else falls
+			// back to the assembled command line.
+			const custom = entry?.op?.preview?.(session, argvFor(draft), draft)
+			if (typeof custom === "string") return custom
 			const args = panelCommand(draft)
 			const name = entry?.name ?? ""
 			return args ? `${name} ${args}` : name
 		},
 	)
 	session.panelRunnable = derived([session.panelDraft], ([draft]) => panelRunnable(draft))
-	// The cursor row and whether it is a textual argument (so the panel focuses
-	// its text field).
+	// The context cursor row (selection bindings only).
 	session.panelCursorRow = derived(
 		[session.panelRows, session.panelRowIndex],
 		([rows, row]) => rowAt(rows, row),
 	)
-	session.panelTextual = derived([session.panelCursorRow], ([row]) => isTextualRow(row))
-	// The text the input edits. A plain cell (the input writes through it); an
-	// effect copies the focused binding's value in whenever the cursor lands on
-	// a textual argument, and another folds typing back into the transient
-	// draft so a value survives moving to another argument.
+	// True while an inline textual field owns the keyboard (the command name
+	// field is `PANEL_FOCUS.OPS`, a field is `PANEL_FOCUS.FIELD`).
+	session.panelTextual = derived([session.panelFocus], ([focus]) => focus === PANEL_FOCUS.FIELD)
+	// The text the focused inline field edits. An effect copies the focused
+	// field's value in whenever the focus lands on it, and another folds typing
+	// back into the transient draft so a value survives moving to another
+	// field.
 	session.panelValue = cell("")
-	effect([session.panelCursorRow], ([row]) => {
-		if (isTextualRow(row)) session.panelValue.set(`${row.value ?? ""}`)
+	effect([session.panelFocus, session.panelFieldIndex, session.panelFields], () => {
+		if (session.panelFocus.value !== PANEL_FOCUS.FIELD) return
+		const field = session.panelFields.value[session.panelFieldIndex.value]
+		if (field) session.panelValue.set(field.value)
 	})
 	effect([session.panelValue], ([value]) => {
-		const row = session.panelCursorRow.value
-		if (isTextualRow(row)) {
-			session.panelDraft.set(withArgValue(session.panelDraft.value, row.argIndex, value))
-		}
+		if (session.panelFocus.value !== PANEL_FOCUS.FIELD) return
+		const field = session.panelFields.value[session.panelFieldIndex.value]
+		if (!field) return
+		session.panelDraft.set(withArgValue(session.panelDraft.value, field.argIndex, value))
 	})
 
 	// A picker-row projection for the entry list (left column), over the
@@ -365,15 +431,33 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	// underneath it; opening the panel owns the draft while it is open.
 	effect([session.panelOpen, session.panelEntry], ([open, entry]) => {
 		if (!open) return
-		session.panelDraft.set(bindArgs(session, entry))
+		const draft = bindArgs(session, entry)
+		prefillPanelDraft(entry, draft)
+		session.panelDraft.set(draft)
 	})
 	// Selecting another entry resets the argument cursor.
 	effect([session.panelEntry], () => {
 		session.panelRowIndex.set(0)
+		session.panelFieldIndex.set(0)
 	})
 	// Typing a query re-anchors the entry cursor on the first match.
 	effect([session.panelQuery], () => {
 		session.panelOpIndex.set(0)
+	})
+
+	// The picker's query drives the picker pane's fuzzy filter and re-anchors
+	// the picker cursor on the first match. Only while picking, so the effect
+	// can never reset the argument cursor outside the picker.
+	effect([session.pickerQuery], ([query]) => {
+		session.pickerPane.setFilter(`${query ?? ""}`)
+		if (session.panelPicking.value) session.panelRowIndex.set(0)
+	})
+	// Closing the panel leaves the picker (it lives inside the panel).
+	effect([session.panelOpen], ([open]) => {
+		if (open) return
+		session.panelPicking.set(false)
+		session.panelPickerArg.set(-1)
+		session.panelPendingRun.set(false)
 	})
 
 	session.dispatch = createDispatch(session)
@@ -405,6 +489,18 @@ async function load(session) {
 		...Object.values(session.panes).map((pane) => pane.refresh()),
 		session.bookmarks.load?.(),
 	])
+}
+
+// Function: prefillPanelDraft
+// Seeds a freshly bound draft: a single-path `rename` prefills FIND with the
+// whole name, so typing REPLACE renames it in one step; a multi-path rename
+// keeps FIND empty for a shared substring.
+function prefillPanelDraft(entry, draft) {
+	if (entry?.op?.name !== "rename") return
+	const find = (draft ?? []).find((binding) => binding.name === "FIND")
+	const selection = (draft ?? []).find((binding) => binding.kind === "selection")
+	const selected = (selection?.items ?? []).filter((item) => item.selected)
+	if (find && selected.length === 1) find.value = basename(selected[0].path)
 }
 
 function entrySummary(entry) {

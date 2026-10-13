@@ -280,41 +280,42 @@ describe("App", () => {
 		])
 	})
 
-	test("panel Enter runs the command only when no input owns the keyboard", () => {
+	test("panel Enter asks to run, from any focus", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
-		// The entry column: the filter input owns Enter, so the key does
-		// nothing here — its `on:enter` publishes `panel:confirm`.
-		const ops = makeData({ panelFocus: "ops", panelOpIndex: 2, panelOpen: true })
-		behaviors.keys(null, ops.data, { name: "return" })
-		expect(ops.calls).toEqual([])
-
-		// A textual argument: the value field owns Enter instead.
-		const textual = makeData({ panelFocus: "args", panelOpen: true, panelTextual: true })
-		behaviors.keys(null, textual.data, { name: "return" })
-		expect(textual.calls).toEqual([])
-
-		// A plain argument row has no input pressed: the key runs the command.
-		const args = makeData({ panelFocus: "args", panelOpen: true })
-		behaviors.keys(null, args.data, { name: "return" })
-		expect(args.calls).toEqual([{ id: "panel.run", payload: undefined }])
-
-		// A host whose inputs have no `enter` event routes Enter itself.
-		const web = createBehaviors({ inputOwnsEnter: false, quit: () => {} })
-		const webOps = makeData({ panelFocus: "ops", panelOpen: true })
-		web.keys(null, webOps.data, { name: "return" })
-		expect(webOps.calls).toEqual([{ id: "panel.run", payload: undefined }])
+		// Enter always asks the panel to run; `panel.run` then runs a complete
+		// command or walks to the missing field. No input owns Enter itself.
+		for (const focus of ["ops", "field", "args"]) {
+			const { calls, data } = makeData({ panelFocus: focus, panelOpen: true })
+			behaviors.keys(null, data, { name: "return" })
+			expect(calls).toEqual([{ id: "panel.run", payload: undefined }])
+		}
 	})
 
-	test("a textual argument hands typing and Enter to the field", () => {
+	test("an inline field hands typing and editing to its input", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
-		const { calls, data } = makeData({ panelFocus: "args", panelOpen: true, panelTextual: true })
-		// Letters and Enter are left to the input (its `on:enter` runs the
-		// command); navigation still works.
+		const { calls, data } = makeData({ panelFocus: "field", panelOpen: true })
+		// Letters, Backspace, caret movement are left to the input (Enter is
+		// routed to `panel.run` by the root, see the test above); the
+		// regression guard: Backspace used to bounce the cursor back to the
+		// command name mid-edit.
 		behaviors.keys(null, data, { name: "x" })
-		behaviors.keys(null, data, { name: "return" })
-		expect(calls).toEqual([])
+		behaviors.keys(null, data, { name: "backspace" })
+		behaviors.keys(null, data, { name: "left" })
+		behaviors.keys(null, data, { name: "right" })
+		behaviors.keys(null, data, { name: "home" })
+		behaviors.keys(null, data, { name: "end" })
+		// Arrow up/down are the field input's too.
+		behaviors.keys(null, data, { name: "up" })
 		behaviors.keys(null, data, { name: "down" })
-		expect(calls).toEqual([{ id: "panel.nextArg", payload: undefined }])
+		expect(calls).toEqual([])
+		// From the context column, arrows move the rows.
+		const context = makeData({ panelFocus: "args", panelOpen: true })
+		behaviors.keys(null, context.data, { name: "down" })
+		behaviors.keys(null, context.data, { name: "up" })
+		expect(context.calls).toEqual([
+			{ id: "panel.nextArg", payload: undefined },
+			{ id: "panel.prevArg", payload: undefined },
+		])
 	})
 
 	test("typing on a non-textual argument returns to the command filter", () => {

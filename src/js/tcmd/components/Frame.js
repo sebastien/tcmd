@@ -247,16 +247,24 @@ function createFrameBehaviors(env) {
 		// destination; explorer drops destination for the parent of the
 		// current directory, which leads the row so the current pane stays in
 		// the middle. The inspector column follows `showInspectorInline` and
-		// completes the three columns in either mode.
-		showParentPane: (_self, data) => isExplorer(data),
-		showLeftPane: (_self, data) => !isExplorer(data) || currentColumnId(data) === "left",
-		showRightPane: (_self, data) => !isExplorer(data) || currentColumnId(data) === "right",
+		// completes the three columns in either mode. Maximizing the inspector
+		// (`⇧V`) hides every column so the preview can take the row.
+		showParentPane: (_self, data) => isExplorer(data) && !unwrap(data?.previewFull),
+		showLeftPane: (_self, data) =>
+			(!isExplorer(data) || currentColumnId(data) === "left") && !unwrap(data?.previewFull),
+		showRightPane: (_self, data) =>
+			(!isExplorer(data) || currentColumnId(data) === "right") && !unwrap(data?.previewFull),
 
 		// The inline inspector shows when the preview is on and the viewport is
-		// wide enough; otherwise `v` opens the fullscreen viewer.
+		// wide enough; otherwise `v` opens the fullscreen viewer. Maximizing
+		// (`⇧V`) replaces the column with `showPreviewFull` below.
 		inspectorNarrow: (self, data) => isNarrow(data, self),
-		showInspectorInline: (self, data) => Boolean(unwrap(data.showPreview)) && !isNarrow(data, self),
+		showInspectorInline: (self, data) =>
+			Boolean(unwrap(data.showPreview)) && !isNarrow(data, self) && !unwrap(data?.previewFull),
 		showViewer: (self, data) => Boolean(unwrap(data.viewerOpen)) && isNarrow(data, self),
+		// The maximized inspector: the preview fills the pane row in either
+		// view mode, pushed by `view.maximize` (`⇧V`).
+		showPreviewFull: (_self, data) => Boolean(unwrap(data?.previewFull)),
 
 		// Help overlay visibility; the content lives in `Help.js` so the
 		// overlay has a single source of truth.

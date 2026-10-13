@@ -33,20 +33,27 @@ function riskFg(row, env) {
 
 // Function: rowName
 // The row's left cell: an entry prefixed with its namespace marker, an
-// argument's name, or an item's `[x] basename`.
+// argument's name, an item's `[x] basename`, or a picker entry (directories
+// carry a trailing slash so they read apart from files).
 function rowName(row, icons) {
 	if (!row) return ""
 	if (row.type === "item") return `${row.marker ?? "[ ]"} ${row.name ?? ""}`
+	if (row.type === "entry") return `${row.name ?? ""}${row.isDir ? "/" : ""}`
 	if (row.type === "op" && row.source) return `${sourceMarker(row.source, icons)} ${row.name ?? ""}`
 	return row.name ?? ""
 }
 
 // Function: rowSummary
 // The row's right cell: an entry's argument list or key shortcut, an
-// argument's binding summary, or an item's parent directory.
+// argument's binding summary, an item's parent directory, or a picker entry's
+// kind (a symlink names where it points).
 function rowSummary(row) {
 	if (!row) return ""
 	if (row.type === "item") return row.parent ?? ""
+	if (row.type === "entry") {
+		if (row.isSymlink && row.target) return `${row.target}`
+		return row.isDir ? "dir" : ""
+	}
 	return row.summary ?? ""
 }
 

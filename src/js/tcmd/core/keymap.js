@@ -33,6 +33,7 @@ const DEFAULT_KEYMAP = [
 	{ key: "/", command: "filter.start" },
 	{ key: "r", ctrl: true, command: "pane.reload" },
 	{ key: "v", command: "view.togglePreview" },
+	{ key: "v", shift: true, command: "view.maximize" },
 	{ key: "t", command: "view.toggleMode" },
 	{ key: "o", shift: true, command: "file.open" },
 	{ key: "e", shift: true, command: "file.edit" },

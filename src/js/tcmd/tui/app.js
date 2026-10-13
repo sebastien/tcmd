@@ -122,8 +122,8 @@ function createAppComponent(session, options = {}) {
 					return
 				}
 				// Below the inline breakpoint `v` toggles the viewer overlay
-				// instead of the side panel.
-				if (!busy && name === "v" && isNarrow(data, self)) {
+				// instead of the side panel (`⇧V` still maximizes).
+				if (!busy && name === "v" && !key.shift && isNarrow(data, self)) {
 					viewer.set(!viewer.value)
 					return
 				}
