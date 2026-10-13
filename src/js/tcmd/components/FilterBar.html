@@ -1,6 +1,6 @@
 <div class="filter-bar" when="visible">
 	<span class="filter-prompt" out="prompt"></span>
-	<input when="editing" ref="query" inout="query" class="filter-input" />
+	<input when="editing" ref="query" inout="query" on:input="onFilter" class="filter-input" />
 	<span when="applied" class="filter-label" out="label"></span>
 	<span class="filter-alert" out="alert"></span>
 </div>

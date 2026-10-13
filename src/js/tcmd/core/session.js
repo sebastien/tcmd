@@ -79,6 +79,19 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	// The pane whose filter input currently owns the keyboard, or null.
 	session.filtering = cell(null)
 
+	// Back/forward restore the focused column alongside the listing: each
+	// source/destination pane captures `active` into its history entries and
+	// restores it on Esc/⇧Esc. A column the current mode does not show falls
+	// back to the pane owning the current directory.
+	const focusContext = {
+		get: () => session.active.value,
+		set: (value) => {
+			if (value) session.active.set(visibleColumn(session, value))
+		},
+	}
+	left.setContext(focusContext)
+	right.setContext(focusContext)
+
 	// Focus remembers which source/destination pane it came from.
 	effect([session.active], ([active]) => {
 		if (active === "left" || active === "right") session.anchor.set(active)
@@ -94,7 +107,8 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	// moves on its own: opening, stepping up or following a breadcrumb in it
 	// retargets the current pane instead (see `core/commands`). Its cursor
 	// follows the current directory, so the mirror always highlights the
-	// entry the current pane is showing.
+	// entry the current pane is showing. Mirroring never records history: the
+	// column's own back/forward stays on the paths the user navigated.
 	effect([session.activePath, session.viewMode], ([path, mode]) => {
 		if (mode !== "explorer" || !path) return
 		// The filesystem root has no parent; mirror itself rather than read a
@@ -109,7 +123,7 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 			const index = indexOfPath(parent.entries.value, path)
 			if (index >= 0) parent.cursor.set(index)
 		}
-		if (parent.path.value !== target) void parent.navigate(target).then(sync)
+		if (parent.path.value !== target) void parent.navigate(target, { record: false }).then(sync)
 		else sync()
 	})
 
@@ -148,18 +162,18 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	effect([session.active], () => session.filtering.set(null))
 
 	// The entry under the cursor of each pane, as a small plain object. The
-	// stat details (ctime, mode, uid, gid) come from the directory's lazy
-	// `cursorStat`, so the pane detail line updates as the cursor moves.
-	session.leftCursorEntry = derived([left.entries, left.cursor, left.cursorStat], ([entries, cursor, stat]) =>
-		entrySummary(stat ?? entries[cursor]),
+	// listing carries the stat details (ctime, mode, uid, gid), so the detail
+	// line updates as the cursor moves without a separate stat pass.
+	session.leftCursorEntry = derived([left.entries, left.cursor], ([entries, cursor]) =>
+		entrySummary(entries[cursor]),
 	)
-	session.rightCursorEntry = derived([right.entries, right.cursor, right.cursorStat], ([entries, cursor, stat]) =>
-		entrySummary(stat ?? entries[cursor]),
+	session.rightCursorEntry = derived([right.entries, right.cursor], ([entries, cursor]) =>
+		entrySummary(entries[cursor]),
 	)
 	// The same detail line for the explorer's parent column.
 	const parent = session.panes.parent
-	session.parentCursorEntry = derived([parent.entries, parent.cursor, parent.cursorStat], ([entries, cursor, stat]) =>
-		entrySummary(stat ?? entries[cursor]),
+	session.parentCursorEntry = derived([parent.entries, parent.cursor], ([entries, cursor]) =>
+		entrySummary(entries[cursor]),
 	)
 
 	// Preview target: a `view`/`stat` pin, or the current pane's cursor entry.
@@ -179,7 +193,9 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	// own for the same reason as the parent column.
 	effect([session.previewEntry], ([entry]) => {
 		if (!entry?.isDir) return
-		if (session.panes.preview.path.value !== entry.path) void session.panes.preview.navigate(entry.path)
+		if (session.panes.preview.path.value !== entry.path) {
+			void session.panes.preview.navigate(entry.path, { record: false })
+		}
 	})
 
 	session._previewToken = 0
@@ -363,6 +379,21 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	session.dispatch = createDispatch(session)
 	session.load = () => load(session)
 	return session
+}
+
+// Function: visibleColumn
+// `id` when the current view mode shows that column, else the pane that owns
+// the current directory. Used to keep a restored focus on a column that
+// exists.
+function visibleColumn(session, id) {
+	const current = session.currentId.value
+	const columns =
+		session.viewMode.value === "explorer"
+			? session.showPreview.value
+				? ["parent", current, "preview"]
+				: ["parent", current]
+			: ["left", "right"]
+	return columns.includes(id) ? id : current
 }
 
 // Function: load

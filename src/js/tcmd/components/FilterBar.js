@@ -7,10 +7,12 @@
 // FilterBar: the fuzzy filter indicator, folded into the pane header so it
 // never shifts the listing. While the pane owns the filter input
 // (`filtering === paneId`) it shows a compact focused input bound to the pane's
-// `query`; once accepted it degrades to the same `/ query` indication, so the
-// pane is navigable again and the filter can still be cleared with Esc. When
-// the query matches no entry it shows a `no match` alert. The key hints live in
-// the command bar, not here.
+// `query`; each change also routes through the pane's `setFilter` (passed as
+// `setFilter`), so the cursor re-anchors with no directory watcher. Once
+// accepted it degrades to the same `/ query` indication, so the pane is
+// navigable again and the filter can still be cleared with Esc. When the query
+// matches no entry it shows a `no match` alert. The key hints live in the
+// command bar, not here.
 //
 // Environment: `accentFg` (the applied label), `textSecondaryFg` (the `/`
 // prompt), `warningFg` (the no-match alert).
@@ -33,6 +35,14 @@ function createBehaviors(env) {
 		applied: (self, data) => !editing(self, data) && activeQuery(self, data).length > 0,
 		editing,
 		focused: editing,
+		// The input both displays and captures through `inout`; `on:input`
+		// additionally routes the change through the pane's `setFilter` so the
+		// cursor re-anchors on the first match. The TUI delivers the input
+		// value directly, the DOM an event carrying it.
+		onFilter: (_self, data, event) => {
+			const value = typeof event === "string" ? event : `${event?.target?.value ?? ""}`
+			data.setFilter?.(value)
+		},
 		// The bare query (shared with the web presentation).
 		label: (self, data) => queryText(self, data),
 		labelFg: () => env.accentFg,

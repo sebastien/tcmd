@@ -25,7 +25,8 @@ function createBehaviors(env) {
 		loadingFg: () => env?.textSecondaryFg,
 		showEmpty: (_self, data) =>
 			!unwrap(data.loading) && (unwrap(data.entries)?.length ?? 0) === 0,
-		showLoading: (_self, data) => Boolean(unwrap(data.loading)),
+		showLoading: (_self, data) =>
+			Boolean(unwrap(data.loading)) && (unwrap(data.entries)?.length ?? 0) === 0,
 	}
 	if (env?.rows) {
 		behaviors.rows = (self, data) => env.rows(self, data)

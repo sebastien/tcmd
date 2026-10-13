@@ -342,9 +342,12 @@ describe("web app", () => {
 			expect(host.querySelector(".command-bar").textContent).toContain("1 marked")
 			session.panes.left.loading.set(true)
 			await settle()
+			expect(host.querySelector(".pane-left .file-list").textContent).not.toContain("loading")
+			expect(host.querySelector(".pane-left .is-current").dataset.marked).toBe("true")
+			session.panes.left.filter.set("no-match")
+			await settle()
 			expect(host.querySelector(".pane-left .file-list").textContent).toContain("loading")
 			session.panes.left.loading.set(false)
-			session.panes.left.filter.set("no-match")
 			await settle()
 			expect(host.querySelector(".pane-left .file-list").textContent).toContain("(empty)")
 		} finally {
@@ -476,6 +479,23 @@ describe("web app", () => {
 			session.filtering.set("left")
 			await new Promise((resolve) => setTimeout(resolve, 0))
 			expect(host.querySelector(".pane-left .filter-input")).not.toBeNull()
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("typing in the filter re-anchors the cursor through setFilter", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			// Park the cursor off the first entry, then filter to a listing
+			// whose only match is the first one.
+			session.panes.left.cursor.set(1)
+			session.filtering.set("left")
+			await settle()
+			type(host.querySelector(".pane-left .filter-input"), "tester")
+			await settle()
+			expect(session.panes.left.filter.value).toBe("tester")
+			expect(session.panes.left.cursor.value).toBe(0)
 		} finally {
 			instance?.unmount?.()
 		}

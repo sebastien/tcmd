@@ -50,4 +50,17 @@ describe("FilterBar", () => {
 		expect(behaviors.label(null, data)).toBe("foo")
 		expect(behaviors.alert(null, data)).toBe("no match")
 	})
+
+	test("onFilter routes the input value through setFilter in both renderers", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		const seen = []
+		const data = { setFilter: (value) => seen.push(value) }
+		// TUI: the input event carries the value directly.
+		behaviors.onFilter(null, data, "tiny")
+		// DOM: the input event carries it on the target.
+		behaviors.onFilter(null, data, { target: { value: "notes" } })
+		expect(seen).toEqual(["tiny", "notes"])
+		// A pane without a setter must not throw.
+		expect(() => behaviors.onFilter(null, {}, "x")).not.toThrow()
+	})
 })

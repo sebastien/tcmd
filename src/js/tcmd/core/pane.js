@@ -6,8 +6,11 @@
 // Module: tcmd/core/pane
 // A Pane is one column with a single directory: it owns that directory and
 // proxies its cells (path, entries, cursor, marks, disk, …) as pane-level
-// cells, so views and commands address the pane directly. Navigation is async
-// and updates the directory's `rawEntries` in place.
+// cells, so views and commands address the pane directly. Navigation reads the
+// target first and commits atomically (see `core/directory#read`), so the pane
+// keeps showing its current listing until the replacement is ready. The pane
+// also owns its navigation history (back/forward snapshots of the view), which
+// the session drives to restore position, selection and focus.
 
 import { cell } from "select/state/cells"
 import { createDirectory } from "./directory.js"
@@ -48,10 +51,10 @@ function currentPane(session) {
 // await pane.refresh()
 // pane.entries.value // sorted, filtered FileEntry[]
 // ```
-function createPane({ fs, path: initialPath } = {}) {
+function createPane({ fs, path: initialPath, context } = {}) {
 	const pane = {}
 	pane.fs = fs
-	pane.directory = createDirectory({ fs, path: initialPath })
+	pane.directory = createDirectory({ fs, path: initialPath, context })
 
 	// Proxy cells mirror the directory, so views address the pane uniformly.
 	const dir = pane.directory
@@ -63,26 +66,29 @@ function createPane({ fs, path: initialPath } = {}) {
 	pane.sort = dir.sort
 	pane.entries = dir.entries
 	pane.cursor = dir.cursor
-	pane.cursorStat = dir.cursorStat
 	pane.marked = dir.marked
 	pane.disk = dir.disk
 	pane.segments = dir.segments
+	pane.history = dir.history
 
 	// Function: current
 	// The pane's directory.
 	pane.current = () => pane.directory
 
 	// Function: refresh / navigate / up / open / back / forward /
-	// currentEntry / toggleMark / clearFilter — delegate to the directory.
+	// currentEntry / toggleMark / setFilter / clearFilter — delegate to the
+	// directory.
 	pane.refresh = () => pane.directory.refresh()
-	pane.navigate = (path) => pane.directory.navigate(path)
+	pane.navigate = (path, options) => pane.directory.navigate(path, options)
 	pane.up = () => pane.directory.up()
 	pane.open = () => pane.directory.open()
 	pane.back = () => pane.directory.back()
 	pane.forward = () => pane.directory.forward()
 	pane.currentEntry = () => pane.directory.currentEntry()
 	pane.toggleMark = () => pane.directory.toggleMark()
+	pane.setFilter = (query) => pane.directory.setFilter(query)
 	pane.clearFilter = () => pane.directory.clearFilter()
+	pane.setContext = (context) => pane.directory.setContext(context)
 	pane.dispose = () => pane.directory.dispose()
 
 	return pane

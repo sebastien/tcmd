@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { effect } from "select/state/cells"
 import { createDirectory } from "../../src/js/tcmd/core/directory.js"
 import { createMockFs } from "../helpers/mock-fs.js"
 
@@ -15,20 +16,165 @@ function tick() {
 	return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
+function deferred() {
+	let resolve, reject
+	const promise = new Promise((yes, no) => {
+		resolve = yes
+		reject = no
+	})
+	return { promise, resolve, reject }
+}
+
 describe("directory", () => {
-	test("cursorStat enriches the selected entry with stat-only fields", async () => {
+	test("navigation keeps the old snapshot until one coherent commit", async () => {
+		const fs = createMockFs(TREE)
+		const dir = createDirectory({ fs, path: "/home" })
+		await dir.refresh()
+		dir.setFilter("notes")
+		dir.toggleMark()
+		const oldEntries = dir.entries.value
+		const oldMarks = dir.marked.value
+		const pending = deferred()
+		const disk = deferred()
+		fs.readDir = () => pending.promise
+		fs.disk = () => disk.promise
+		const snapshots = []
+		const stop = effect([dir.path, dir.entries, dir.cursor, dir.marked], () => {
+			snapshots.push({
+				path: dir.path.value,
+				entries: dir.entries.value.map((entry) => entry.path),
+				cursor: dir.cursor.value,
+				filter: dir.filter.value,
+				marks: [...dir.marked.value],
+				entry: dir.currentEntry()?.path,
+			})
+		})
+		try {
+			const navigation = dir.navigate("/home/tester")
+			await tick()
+			expect(dir.path.value).toBe("/home")
+			expect(dir.entries.value).toBe(oldEntries)
+			expect(dir.filter.value).toBe("notes")
+			expect(dir.marked.value).toBe(oldMarks)
+			expect(dir.loading.value).toBe(true)
+			pending.resolve([{ name: "new.txt", path: "/home/tester/new.txt", isDir: false }])
+			await tick()
+			// The listing commits without waiting for capacity information.
+			expect(dir.path.value).toBe("/home/tester")
+			expect(dir.loading.value).toBe(false)
+			expect(dir.disk.value).toBeNull()
+			for (const snapshot of snapshots) {
+				if (snapshot.path === "/home") {
+					expect(snapshot.entries).toEqual(["/home/notes.txt"])
+					expect(snapshot.filter).toBe("notes")
+					expect(snapshot.marks).toEqual(["/home/notes.txt"])
+					expect(snapshot.entry).toBe("/home/notes.txt")
+				} else {
+					expect(snapshot.path).toBe("/home/tester")
+					expect(snapshot.entries).toEqual(["/home/tester/new.txt"])
+					expect(snapshot.filter).toBe("")
+					expect(snapshot.marks).toEqual([])
+					expect(snapshot.cursor).toBe(0)
+					expect(snapshot.entry).toBe("/home/tester/new.txt")
+				}
+			}
+			disk.resolve({ free: 10, total: 20 })
+			await navigation
+			expect(dir.disk.value).toEqual({ free: 10, total: 20 })
+		} finally {
+			stop()
+			dir.dispose()
+		}
+	})
+
+	test.each(["older", "newer"])("overlapping navigation with %s finishing first ignores stale reads", async (firstToFinish) => {
+		const fs = createMockFs(TREE)
+		const dir = createDirectory({ fs, path: "/home" })
+		await dir.refresh()
+		const older = deferred()
+		const newer = deferred()
+		fs.readDir = (path) => path === "/home/tester" ? older.promise : newer.promise
+		const first = dir.navigate("/home/tester")
+		const second = dir.navigate("/")
+		if (firstToFinish === "older") {
+			older.resolve([{ name: "stale", path: "/home/tester/stale" }])
+			await first
+			expect(dir.path.value).toBe("/home")
+			expect(dir.loading.value).toBe(true)
+		}
+		newer.resolve([{ name: "home", path: "/home", isDir: true }])
+		await second
+		if (firstToFinish === "newer") {
+			older.resolve([{ name: "stale", path: "/home/tester/stale" }])
+			await first
+		}
+		expect(dir.path.value).toBe("/")
+		expect(dir.entries.value.map((entry) => entry.path)).toEqual(["/home"])
+		expect(dir.history.stack.map((entry) => entry.path)).toEqual(["/home", "/"])
+		dir.dispose()
+	})
+
+	test("stale read failures cannot replace the current error or loading state", async () => {
+		const fs = createMockFs(TREE)
+		const dir = createDirectory({ fs, path: "/home" })
+		await dir.refresh()
+		const pending = deferred()
+		const readDir = fs.readDir
+		fs.readDir = (path) => path === "/home/tester" ? pending.promise : readDir(path)
+		const stale = dir.navigate("/home/tester")
+		await dir.navigate("/")
+		pending.reject(new Error("stale error"))
+		await stale
+		expect(dir.path.value).toBe("/")
+		expect(dir.error.value).toBeNull()
+		expect(dir.loading.value).toBe(false)
+		dir.dispose()
+	})
+
+	test("a late refresh cannot overwrite navigation or its disk figures", async () => {
+		const fs = createMockFs(TREE)
+		const dir = createDirectory({ fs, path: "/home" })
+		await dir.refresh()
+		const pending = deferred()
+		fs.disk = (path) => path === "/home" ? pending.promise : Promise.resolve({ free: 1, total: 2 })
+		const refresh = dir.refresh()
+		await tick()
+		await dir.navigate("/home/tester")
+		pending.resolve({ free: 100, total: 200 })
+		await refresh
+		expect(dir.path.value).toBe("/home/tester")
+		expect(dir.disk.value).toEqual({ free: 1, total: 2 })
+		dir.dispose()
+	})
+
+	test("failed navigation preserves the displayed directory and history", async () => {
 		const dir = createDirectory({ fs: createMockFs(TREE), path: "/home" })
 		await dir.refresh()
-		await tick()
-		expect(dir.cursorStat.value.name).toBe("tester")
-		expect(dir.cursorStat.value.isDir).toBe(true)
-		expect(dir.cursorStat.value.mode).toBe(0o040755)
+		dir.cursor.set(1)
+		dir.toggleMark()
+		const entries = dir.entries.value
+		await dir.navigate("/missing")
+		expect(dir.path.value).toBe("/home")
+		expect(dir.entries.value).toBe(entries)
+		expect(dir.cursor.value).toBe(1)
+		expect([...dir.marked.value]).toEqual(["/home/notes.txt"])
+		expect(dir.history.stack.map((entry) => entry.path)).toEqual(["/home"])
+		expect(dir.error.value).toContain("ENOENT")
+		expect(dir.loading.value).toBe(false)
+		dir.dispose()
+	})
+
+	test("currentEntry reports the selected entry and its stat fields", async () => {
+		const dir = createDirectory({ fs: createMockFs(TREE), path: "/home" })
+		await dir.refresh()
+		expect(dir.currentEntry().name).toBe("tester")
+		expect(dir.currentEntry().isDir).toBe(true)
+		expect(dir.currentEntry().mode).toBe(0o040755)
 
 		dir.cursor.set(1) // notes.txt
-		await tick()
-		expect(dir.cursorStat.value.name).toBe("notes.txt")
-		expect(dir.cursorStat.value.mode).toBe(0o100644)
-		expect(dir.cursorStat.value.owner).toBe("")
+		expect(dir.currentEntry().name).toBe("notes.txt")
+		expect(dir.currentEntry().mode).toBe(0o100644)
+		expect(dir.currentEntry().owner).toBe("")
 		dir.dispose()
 	})
 
@@ -36,13 +182,14 @@ describe("directory", () => {
 		const dir = createDirectory({ fs: createMockFs(TREE), path: "/home" })
 		await dir.refresh()
 		await dir.navigate("/home/tester")
-		dir.filter.set("notes")
+		dir.setFilter("notes")
 		await dir.navigate("/")
 		expect(dir.path.value).toBe("/")
 
 		await dir.back()
 		expect(dir.path.value).toBe("/home/tester")
-		expect(dir.filter.value).toBe("") // back re-applies like a navigation
+		// Back restores the view as it was left, filter included.
+		expect(dir.filter.value).toBe("notes")
 		await dir.back()
 		expect(dir.path.value).toBe("/home")
 		await dir.back() // no-op at the start of the history
@@ -114,17 +261,88 @@ describe("directory", () => {
 		dir.dispose()
 	})
 
-	test("dispose releases the reactive watchers", async () => {
-		const dir = createDirectory({ fs: createMockFs(TREE), path: "/home" })
+	test("clearing a navigation filter does not reset the remembered cursor", async () => {
+		const dir = createDirectory({ fs: createWideFs(), path: "/work/mid" })
 		await dir.refresh()
+		dir.cursor.set(2)
+		await dir.up()
+		dir.setFilter("mid")
+		await dir.open()
+		expect(dir.filter.value).toBe("")
+		expect(dir.cursor.value).toBe(2)
+		expect(dir.currentEntry().path).toBe("/work/mid/c.txt")
+		dir.dispose()
+	})
+
+	test("an empty replacement clears the old cursor entry", async () => {
+		const dir = createDirectory({ fs: createMockFs({ ...TREE, "/empty": [] }), path: "/home" })
+		await dir.refresh()
+		await dir.navigate("/empty")
+		expect(dir.entries.value).toEqual([])
+		expect(dir.currentEntry()).toBeUndefined()
+		dir.dispose()
+	})
+
+	test("dispose cancels an in-flight read", async () => {
+		const fs = createMockFs(TREE)
+		const dir = createDirectory({ fs, path: "/home" })
+		await dir.refresh()
+		const entries = dir.entries.value
+		const pending = deferred()
+		fs.readDir = () => pending.promise
+		const navigation = dir.navigate("/home/tester")
 		await tick()
 		dir.dispose()
-		// A filter change no longer snaps the cursor to the top match…
-		dir.cursor.set(1)
-		dir.filter.set("notes")
+		pending.resolve([{ name: "late.txt", path: "/home/tester/late.txt", isDir: false }])
+		await navigation
+		// The disposed directory never publishes the late listing.
+		expect(dir.path.value).toBe("/home")
+		expect(dir.entries.value).toBe(entries)
+	})
+
+	test("back restores the cursor and marks the entry had", async () => {
+		const dir = createDirectory({ fs: createMockFs(TREE), path: "/home" })
+		await dir.refresh()
+		dir.cursor.set(1) // notes.txt
+		dir.toggleMark()
+		await dir.navigate("/home/tester")
+		expect([...dir.marked.value]).toEqual([])
+
+		await dir.back()
+		expect(dir.path.value).toBe("/home")
 		expect(dir.cursor.value).toBe(1)
-		// …and moving the cursor no longer re-stats the entry.
-		await tick()
-		expect(dir.cursorStat.value.name).toBe("tester")
+		expect([...dir.marked.value]).toEqual(["/home/notes.txt"])
+		dir.dispose()
+	})
+
+	test("a non-recording move changes the listing without touching the history", async () => {
+		const dir = createDirectory({ fs: createMockFs(TREE), path: "/home" })
+		await dir.refresh()
+		const depth = dir.history.stack.length
+		await dir.navigate("/home/tester", { record: false })
+		expect(dir.path.value).toBe("/home/tester")
+		expect(dir.history.stack.length).toBe(depth)
+		// The cursor is no longer restored by a stale memory entry either.
+		await dir.back()
+		expect(dir.path.value).toBe("/home/tester")
+		dir.dispose()
+	})
+
+	test("history entries carry the owner context and restore it", async () => {
+		let active = "left"
+		const dir = createDirectory({
+			fs: createMockFs(TREE),
+			path: "/home",
+			context: { get: () => active, set: (value) => { active = value } },
+		})
+		await dir.refresh()
+		await dir.navigate("/home/tester")
+		expect(dir.history.current().context).toBe("left")
+
+		// The owner moved focus elsewhere; back restores the captured one.
+		active = "parent"
+		await dir.back()
+		expect(active).toBe("left")
+		dir.dispose()
 	})
 })

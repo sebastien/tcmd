@@ -57,7 +57,7 @@
 						<box when="!parentFilterOn" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
 							<breadcrumbs in:segments="parentSegments" in:paneId="parentId" height="1"></breadcrumbs>
 						</box>
-						<filterbar in:query="parentFilter" in:paneId="parentId" in:filtering="filtering" in:entries="parentEntries"></filterbar>
+						<filterbar in:query="parentFilter" in:paneId="parentId" in:filtering="filtering" in:entries="parentEntries" in:setFilter="parentSetFilter"></filterbar>
 					</box>
 					<box height="1" out:border="headRule" out:borderColor="parentHeadRuleFg"></box>
 					<filelist in:entries="parentEntries" in:cursor="parentCursor" in:marked="parentMarked"
@@ -73,7 +73,7 @@
 						<box when="!leftFilterOn" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
 							<breadcrumbs in:segments="leftSegments" in:paneId="leftId" height="1"></breadcrumbs>
 						</box>
-						<filterbar in:query="leftFilter" in:paneId="leftId" in:filtering="filtering" in:entries="leftEntries"></filterbar>
+						<filterbar in:query="leftFilter" in:paneId="leftId" in:filtering="filtering" in:entries="leftEntries" in:setFilter="leftSetFilter"></filterbar>
 					</box>
 					<box height="1" out:border="headRule" out:borderColor="leftHeadRuleFg"></box>
 					<filelist in:entries="leftEntries" in:cursor="leftCursor" in:marked="leftMarked"
@@ -89,7 +89,7 @@
 						<box when="!rightFilterOn" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
 							<breadcrumbs in:segments="rightSegments" in:paneId="rightId" height="1"></breadcrumbs>
 						</box>
-						<filterbar in:query="rightFilter" in:paneId="rightId" in:filtering="filtering" in:entries="rightEntries"></filterbar>
+						<filterbar in:query="rightFilter" in:paneId="rightId" in:filtering="filtering" in:entries="rightEntries" in:setFilter="rightSetFilter"></filterbar>
 					</box>
 					<box height="1" out:border="headRule" out:borderColor="rightHeadRuleFg"></box>
 					<filelist in:entries="rightEntries" in:cursor="rightCursor" in:marked="rightMarked"

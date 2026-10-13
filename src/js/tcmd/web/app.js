@@ -88,6 +88,7 @@ function webViewBehaviors() {
 			paneId: data.leftId,
 			filtering: data.filtering,
 			entries: data.leftEntries,
+			setFilter: data.leftSetFilter,
 		}),
 		leftListView: (_self, data) => ({
 			entries: data.leftEntries,
@@ -119,6 +120,7 @@ function webViewBehaviors() {
 			paneId: data.parentId,
 			filtering: data.filtering,
 			entries: data.parentEntries,
+			setFilter: data.parentSetFilter,
 		}),
 		parentListView: (_self, data) => ({
 			entries: data.parentEntries,
@@ -176,6 +178,7 @@ function webViewBehaviors() {
 			paneId: data.rightId,
 			filtering: data.filtering,
 			entries: data.rightEntries,
+			setFilter: data.rightSetFilter,
 		}),
 		rightListView: (_self, data) => ({
 			entries: data.rightEntries,

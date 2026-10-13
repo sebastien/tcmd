@@ -132,6 +132,33 @@ describe("tui app", () => {
 		}
 	})
 
+	test("navigation leaves the previous pane frame unchanged until the listing is ready", async () => {
+		const { setup, session } = await makeSetup()
+		try {
+			const pane = session.panes.left
+			pane.cursor.set(1)
+			await settle(setup)
+			await new Promise((resolve) => setTimeout(resolve, 0))
+			await settle(setup)
+			const before = setup.captureCharFrame()
+			const readDir = session.fs.readDir
+			let finish
+			session.fs.readDir = (path) => path === "/home/tester"
+				? new Promise((resolve) => { finish = resolve })
+				: readDir(path)
+			const navigation = pane.navigate("/home/tester")
+			await settle(setup)
+			expect(setup.captureCharFrame()).toBe(before)
+			finish(await readDir("/home/tester"))
+			await navigation
+			await settle(setup)
+			expect(setup.captureCharFrame()).toContain("/home/tester")
+			expect(setup.captureCharFrame()).not.toBe(before)
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
 	test("preview shows text file content when toggled on", async () => {
 		const { setup, session } = await makeSetup()
 		try {
@@ -393,6 +420,22 @@ describe("tui app", () => {
 			await settle(setup)
 			expect(session.panes.left.entries.value.length).toBe(0)
 			expect(setup.captureCharFrame()).toContain("no match")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("typing filters re-anchor the cursor through setFilter", async () => {
+		const { setup, session } = await makeSetup()
+		try {
+			// Park the cursor on the last entry, then filter to the first one.
+			session.panes.left.cursor.set(2)
+			setup.mockInput.pressKey("/")
+			await settle(setup)
+			await setup.mockInput.typeText("tester")
+			await settle(setup)
+			expect(session.panes.left.filter.value).toBe("tester")
+			expect(session.panes.left.cursor.value).toBe(0)
 		} finally {
 			setup.renderer.destroy()
 		}

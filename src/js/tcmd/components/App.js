@@ -60,6 +60,7 @@ function createInit(session) {
 		leftLoading: left.loading,
 		leftMarked: left.marked,
 		leftSegments: left.segments,
+		leftSetFilter: (value) => left.setFilter(value),
 		notice: session.notice,
 		panelCommand: session.panelCommand,
 		panelDraft: session.panelDraft,
@@ -88,6 +89,7 @@ function createInit(session) {
 		parentLoading: parent.loading,
 		parentMarked: parent.marked,
 		parentSegments: parent.segments,
+		parentSetFilter: (value) => parent.setFilter(value),
 		preview: session.preview,
 		// The third column: the directory the inspector previews, so it reads
 		// as a pane. Over a file the inspector stays a card and these idle.
@@ -109,6 +111,7 @@ function createInit(session) {
 		rightLoading: right.loading,
 		rightMarked: right.marked,
 		rightSegments: right.segments,
+		rightSetFilter: (value) => right.setFilter(value),
 		showPreview: session.showPreview,
 		viewMode: session.viewMode,
 	})

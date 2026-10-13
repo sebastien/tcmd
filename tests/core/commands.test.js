@@ -199,7 +199,7 @@ describe("commands", () => {
 		// The mirror stays on the parent of wherever the current pane landed.
 		expect(session.panes.parent.path.value).toBe("/work")
 		// Stepping up moves the current pane too, never the mirror itself.
-		session.dispatch("pane.up")
+		await session.dispatch("pane.up")
 		expect(session.panes.left.path.value).toBe("/work")
 		expect(session.panes.parent.path.value).toBe("/")
 	})
@@ -241,6 +241,33 @@ describe("commands", () => {
 		expect(session.panes.parent.path.value).toBe("/")
 		await new Promise((resolve) => setTimeout(resolve, 0))
 		expect(parentCursorName()).toBe("work")
+	})
+
+	test("mirroring the parent column never records its history", async () => {
+		const session = makeExplorerSession()
+		await load(session)
+		session.dispatch("view.toggleMode")
+		const depth = session.panes.parent.history.stack.length
+		await session.panes.left.navigate("/work/src")
+		expect(session.panes.parent.path.value).toBe("/work")
+		expect(session.panes.parent.history.stack.length).toBe(depth)
+	})
+
+	test("back restores the focused column that initiated the move", async () => {
+		const session = makeExplorerSession()
+		await load(session)
+		session.dispatch("view.toggleMode")
+		session.dispatch("pane.activate", { paneId: "parent" })
+		const index = session.panes.parent.entries.value.findIndex((entry) => entry.name === "src")
+		session.panes.parent.cursor.set(index)
+		await session.dispatch("pane.enter")
+		expect(session.panes.left.path.value).toBe("/work/src")
+		// The user focuses the child to keep exploring, then steps back.
+		session.dispatch("pane.activate", { paneId: "left" })
+		await session.dispatch("pane.back")
+		expect(session.panes.left.path.value).toBe("/work/docs")
+		// The column that initiated the move gets focus back.
+		expect(session.active.value).toBe("parent")
 	})
 
 	test("filter.start stays on a column with a filter field and falls back otherwise", async () => {

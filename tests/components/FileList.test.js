@@ -24,6 +24,7 @@ describe("FileList", () => {
 		expect(behaviors.showLoading(null, { entries: [], loading: false })).toBe(false)
 		// Loading takes over while the read is in flight.
 		expect(behaviors.showLoading(null, { entries: [], loading: true })).toBe(true)
+		expect(behaviors.showLoading(null, { entries: [{ name: "old.txt" }], loading: true })).toBe(false)
 		expect(behaviors.showEmpty(null, { entries: [], loading: true })).toBe(false)
 		// A non-empty listing shows neither.
 		expect(behaviors.showEmpty(null, { entries: ["a"], loading: false })).toBe(false)

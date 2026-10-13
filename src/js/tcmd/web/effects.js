@@ -51,6 +51,7 @@ function connectEffects(session, root, { size, help, viewer }) {
 	const view = root.ownerDocument.defaultView ?? globalThis.window
 	const doc = view.document
 	let frame = null
+	let retries = 0
 	let disposed = false
 	const viewerOpen = () => viewer.value && size.value.width > 0 && size.value.width < INSPECTOR_INLINE_WIDTH
 	const modalOpen = () => Boolean(session.confirm.value || help.value || viewerOpen() || session.panelOpen.value || session.bookmarkOpen.value)
@@ -79,8 +80,18 @@ function connectEffects(session, root, { size, help, viewer }) {
 		// the fresh measurement) so a host that drives `size` directly is
 		// honoured too.
 		if (viewer.value && size.value.width >= INSPECTOR_INLINE_WIDTH) viewer.set(false)
-		const target = focusTarget() ?? root
-		if (target !== doc.activeElement) target.focus({ preventScroll: true })
+		// A modal's field mounts on a later frame than the flag that opens it;
+		// retry a few frames before giving up so focus lands on the overlay
+		// instead of the root.
+		const target = focusTarget()
+		if (modalOpen() && !target && retries < 8) {
+			retries += 1
+			schedule()
+			return
+		}
+		retries = 0
+		const focusable = target ?? root
+		if (focusable !== doc.activeElement) focusable.focus({ preventScroll: true })
 		for (const list of root.querySelectorAll(".file-list, .bookmark-rows, .panel-ops, .panel-args")) {
 			keepVisible(list, list.querySelector(".is-current, .is-selected, .is-focused"))
 		}
