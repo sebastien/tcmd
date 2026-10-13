@@ -22,6 +22,7 @@ import { createDispatch, getAppCommands, getCommandBarItems } from "./commands.j
 import { createNullOs } from "./os.js"
 import { PANEL_FOCUS, bindArgs, filterPanelEntries, isTextualRow, panelCommand, panelEntries, panelRowList, panelRunnable, rowAt, withArgValue } from "./panel.js"
 import { basename, extname, join, parent as parentPath } from "./path.js"
+import { indexOfPath } from "./selection.js"
 import { createPane, PANE_BUFFERS } from "./pane.js"
 import { hasMatch, score } from "../vendor/fzy.js"
 
@@ -91,13 +92,25 @@ function createSession({ fs, os, left, right, host, bookmarks } = {}) {
 	})
 	// The parent column mirrors the parent of the current directory. It never
 	// moves on its own: opening, stepping up or following a breadcrumb in it
-	// retargets the current pane instead (see `core/commands`).
+	// retargets the current pane instead (see `core/commands`). Its cursor
+	// follows the current directory, so the mirror always highlights the
+	// entry the current pane is showing.
 	effect([session.activePath, session.viewMode], ([path, mode]) => {
 		if (mode !== "explorer" || !path) return
 		// The filesystem root has no parent; mirror itself rather than read a
 		// blank path.
 		const target = parentPath(path) ?? path
-		if (session.panes.parent.path.value !== target) void session.panes.parent.navigate(target)
+		const parent = session.panes.parent
+		// Land the mirror's cursor on the current directory once its listing
+		// knows it. A sync left over from an older navigation yields: it
+		// checks the live path before writing the cursor.
+		const sync = () => {
+			if (session.activePath.value !== path) return
+			const index = indexOfPath(parent.entries.value, path)
+			if (index >= 0) parent.cursor.set(index)
+		}
+		if (parent.path.value !== target) void parent.navigate(target).then(sync)
+		else sync()
 	})
 
 	// Bookmark overlay: `bookmarkMode` is "name" while recording (an input for

@@ -46,12 +46,14 @@ describe("pane", () => {
 		expect(pane.path.value).toBe("/home")
 	})
 
-	test("up navigates to parent and resets cursor", async () => {
-		const pane = makePane("/home/tester")
+	test("up navigates to parent and lands the cursor on the directory it left", async () => {
+		const pane = makePane("/home")
 		await pane.refresh()
 		await pane.up()
-		expect(pane.path.value).toBe("/home")
-		expect(pane.entries.value.length).toBe(3)
+		expect(pane.path.value).toBe("/")
+		// `/` lists `etc` before `home`: the cursor is on `home`, the entry we
+		// came from, not the top of the listing.
+		expect(pane.currentEntry().name).toBe("home")
 	})
 
 	test("up at root is a no-op", async () => {

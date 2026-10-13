@@ -12,7 +12,7 @@
 
 import { cell, derived, effect } from "select/state/cells"
 import { viewEntries } from "./entries.js"
-import { clampCursor, currentEntry, toggleMark } from "./selection.js"
+import { clampCursor, currentEntry, indexOfPath, toggleMark } from "./selection.js"
 import { SEP, parent as parentPath, split, prefix } from "./path.js"
 
 // Function: enrichEntry
@@ -64,6 +64,9 @@ function createDirectory({ fs, path: initialPath }) {
 	// Navigation history: visited paths with the current one at
 	// `history.index`, so back/forward walk the stack like a browser.
 	dir.history = { stack: [initialPath], index: 0 }
+	// Cursor memory: the last cursor position per path, so stepping back
+	// into a directory lands on the entry that was last selected there.
+	const cursorMemory = new Map()
 
 	// A changing filter re-ranks the listing: snap the cursor back to the top
 	// match. Disposed with the directory (see `dispose`).
@@ -99,21 +102,26 @@ function createDirectory({ fs, path: initialPath }) {
 	}
 
 	// Function: apply
-	// The actual move to `path`: sets the path, resets filter, marks and
-	// cursor, then refreshes. History-neutral — navigate/back/forward record
-	// their own steps around it.
+	// The actual move to `path`: sets the path, resets filter and marks,
+	// restores the cursor remembered for `path` (0 when unknown), then
+	// refreshes. History-neutral — navigate/back/forward record their own
+	// steps around it.
 	const apply = async (path) => {
+		// Remember where the cursor was in the directory being left, so
+		// returning to it restores the selection.
+		cursorMemory.set(dir.path.value, dir.cursor.value)
 		dir.path.set(path)
 		dir.filter.set("")
 		dir.marked.set(new Set())
-		dir.cursor.set(0)
+		dir.cursor.set(cursorMemory.get(path) ?? 0)
 		await dir.refresh()
 	}
 
 	// Function: navigate
-	// Moves the directory to `path` (resetting filter, marks and cursor),
-	// records the step in the history and refreshes. Re-navigating to the
-	// current path does not duplicate the entry.
+	// Moves the directory to `path` (resetting filter and marks, restoring
+	// the cursor remembered for `path`), records the step in the history and
+	// refreshes. Re-navigating to the current path does not duplicate the
+	// entry.
 	dir.navigate = async (path) => {
 		const history = dir.history
 		if (history.stack[history.index] !== path) {
@@ -144,10 +152,16 @@ function createDirectory({ fs, path: initialPath }) {
 	}
 
 	// Function: up
-	// Navigates to the parent directory; no-op at the filesystem root.
+	// Navigates to the parent directory, landing the cursor on the entry we
+	// came from — stepping up always returns to the previously selected
+	// element. No-op at the filesystem root.
 	dir.up = async () => {
-		const target = parentPath(dir.path.value)
-		if (target) await dir.navigate(target)
+		const cameFrom = dir.path.value
+		const target = parentPath(cameFrom)
+		if (!target) return
+		await dir.navigate(target)
+		const index = indexOfPath(dir.entries.value, cameFrom)
+		if (index >= 0) dir.cursor.set(index)
 	}
 
 	// Function: clearFilter

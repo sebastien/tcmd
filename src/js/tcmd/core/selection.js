@@ -26,6 +26,14 @@ function currentEntry(entries, cursor) {
 	return entries[cursor]
 }
 
+// Function: indexOfPath
+// The index of the entry whose path is `path`, or -1. Navigations that must
+// land on a known element use it: the directory `up` stepped out of, the
+// current directory in a mirror's listing.
+function indexOfPath(entries, path) {
+	return entries.findIndex((entry) => entry.path === path)
+}
+
 // Function: toggleMark
 // Returns a new Set with `path` toggled in `marks`.
 function toggleMark(marks, path) {
@@ -38,6 +46,6 @@ function toggleMark(marks, path) {
 	return next
 }
 
-export { clampCursor, currentEntry, moveCursor, toggleMark }
+export { clampCursor, currentEntry, indexOfPath, moveCursor, toggleMark }
 
 // EOF

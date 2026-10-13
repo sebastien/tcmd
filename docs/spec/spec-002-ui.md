@@ -38,7 +38,9 @@ the current directory, the preview tracks the directory being previewed. Each
 is a real pane — own breadcrumbs, filter, cursor, marks, detail and summary —
 but only its cursor and filter are its own: opening an entry, stepping up,
 following one of its breadcrumbs or running a relative command moves the pane
-it follows, which is what keeps the mirror in step. `Tab` cycles the visible
+it follows, which is what keeps the mirror in step. Whenever the current
+directory changes, the parent mirror's cursor lands on the entry it shows, so
+the chain always highlights where it is. `Tab` cycles the visible
 columns (parent → current → preview → parent in explorer, source ⇄ destination
 in commander), and clicking a column body or one of its rows makes it active.
 

@@ -150,15 +150,19 @@ describe("commands", () => {
 		expect(session.viewMode.value).toBe("commander")
 	})
 
-	// A session over a tree with two sibling directories, so the parent column
-	// has something to descend into other than the pane it follows.
+	// A session over a tree with sibling directories, so the parent column
+	// has something to descend into other than the pane it follows — and the
+	// directory it mirrors is not the first entry, so a cursor that lands on
+	// it cannot pass by accident at the top of the listing.
 	function makeExplorerSession() {
 		const fs = createMockFs({
 			"/": [{ name: "work", isDir: true }],
 			"/work": [
+				{ name: "archive", isDir: true },
 				{ name: "docs", isDir: true },
 				{ name: "src", isDir: true },
 			],
+			"/work/archive": [{ name: "old.txt", text: "old", size: 3 }],
 			"/work/docs": [{ name: "a.txt", text: "a", size: 1 }],
 			"/work/src": [{ name: "b.txt", text: "b", size: 1 }],
 		})
@@ -198,6 +202,45 @@ describe("commands", () => {
 		session.dispatch("pane.up")
 		expect(session.panes.left.path.value).toBe("/work")
 		expect(session.panes.parent.path.value).toBe("/")
+	})
+
+	test("pane.enter and pane.up keep the cursor on the previously selected element", async () => {
+		const session = makeExplorerSession()
+		await load(session)
+		await session.panes.left.navigate("/work")
+		// Descending into `src`, then stepping up, returns to `src` — which
+		// is not the top of the listing (`archive` sorts first).
+		const srcIndex = session.panes.left.entries.value.findIndex((entry) => entry.name === "src")
+		expect(srcIndex).toBeGreaterThan(0)
+		session.panes.left.cursor.set(srcIndex)
+		await session.dispatch("pane.enter")
+		expect(session.panes.left.path.value).toBe("/work/src")
+		await session.dispatch("pane.up")
+		expect(session.panes.left.path.value).toBe("/work")
+		expect(session.panes.left.currentEntry()?.name).toBe("src")
+		// The round trip repeats with the same result.
+		await session.dispatch("pane.enter")
+		await session.dispatch("pane.up")
+		expect(session.panes.left.currentEntry()?.name).toBe("src")
+		expect(session.panes.left.cursor.value).toBe(srcIndex)
+	})
+
+	test("the explorer's parent column keeps its cursor on the current directory", async () => {
+		const session = makeExplorerSession()
+		await load(session)
+		session.dispatch("view.toggleMode")
+		const parentCursorName = () => session.panes.parent.currentEntry()?.name
+		expect(session.panes.parent.path.value).toBe("/work")
+		// The mirror opens with its cursor on the directory the pane shows.
+		expect(parentCursorName()).toBe("docs")
+		// Descending moves the mirror's cursor along with the current pane.
+		await session.panes.left.navigate("/work/src")
+		expect(parentCursorName()).toBe("src")
+		// Stepping up carries the mirror to the grandparent, cursor on `work`.
+		await session.dispatch("pane.up")
+		expect(session.panes.parent.path.value).toBe("/")
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(parentCursorName()).toBe("work")
 	})
 
 	test("filter.start stays on a column with a filter field and falls back otherwise", async () => {

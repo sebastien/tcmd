@@ -58,8 +58,9 @@ bun run tcmd         # open cwd (left) and ~ (right)
 bun run tcmd /tmp ~  # open specific directories
 ```
 
-Keys: `↑/↓` move (`^↑/^↓` jump a few lines), `Enter/→` open, `←/Bksp` parent,
-`Esc`/`⇧Esc` history back/forward, `Tab`/`⇧Tab` switch panes
+Keys: `↑/↓` move (`^↑/^↓` jump a few lines), `Enter/→` open (re-entering a
+directory restores the cursor it was left with), `←/Bksp` parent (the cursor
+lands on the directory you left), `Esc`/`⇧Esc` history back/forward, `Tab`/`⇧Tab` switch panes
 (`⇧Tab` goes back), `t` toggle the commander/explorer view, `Space` mark, `b`
 bookmark the cursor entry (or the pane
 directory) under a basename-defaulted name, `g` jump to a bookmark, `:` open the
@@ -110,7 +111,9 @@ The parent and preview columns are mirrors: they own their cursor, filter and
 marks, but opening an entry, stepping up or following one of their breadcrumbs
 moves the pane they follow, which is what keeps the mirror in step (in the
 explorer the previewed directory *is* the current column's own child, so the
-chain never drifts). `Tab` cycles through the columns the current mode shows,
+chain never drifts). The parent mirror's cursor also follows the current
+directory: it lands on the entry the current pane shows, so the chain always
+highlights where it is. `Tab` cycles through the columns the current mode shows,
 and clicking any column — the preview included — gives it the focus. A
 previewed directory always renders as a pane, in both modes: its breadcrumbs
 over its own listing, instead of a directory card.

@@ -68,6 +68,52 @@ describe("directory", () => {
 		dir.dispose()
 	})
 
+	// A tree where the directory navigated *from* is not the first entry, so
+	// landing on it cannot pass by accident with the cursor at the top.
+	function createWideFs() {
+		return createMockFs({
+			"/": [{ name: "work", isDir: true }],
+			"/work": [
+				{ name: "alpha", isDir: true },
+				{ name: "mid", isDir: true },
+				{ name: "omega", isDir: true },
+			],
+			"/work/mid": [
+				{ name: "a.txt", text: "a", size: 1 },
+				{ name: "b.txt", text: "b", size: 1 },
+				{ name: "c.txt", text: "c", size: 1 },
+			],
+		})
+	}
+
+	test("up lands the cursor on the directory it came from", async () => {
+		const dir = createDirectory({ fs: createWideFs(), path: "/work/mid" })
+		await dir.refresh()
+		await dir.up()
+		expect(dir.path.value).toBe("/work")
+		// `mid` is the second of three directories: the cursor followed it up
+		// instead of resetting to the top.
+		expect(dir.entries.value[dir.cursor.value].name).toBe("mid")
+		dir.dispose()
+	})
+
+	test("re-entering a directory restores the cursor it had", async () => {
+		const dir = createDirectory({ fs: createWideFs(), path: "/work" })
+		await dir.refresh()
+		dir.cursor.set(1) // mid
+		await dir.open() // first visit to /work/mid: the cursor starts at the top
+		expect(dir.path.value).toBe("/work/mid")
+		expect(dir.cursor.value).toBe(0)
+		dir.cursor.set(2) // c.txt
+		await dir.up() // back to /work, cursor on `mid`
+		expect(dir.path.value).toBe("/work")
+		expect(dir.entries.value[dir.cursor.value].name).toBe("mid")
+		await dir.open() // re-entering lands on c.txt again
+		expect(dir.path.value).toBe("/work/mid")
+		expect(dir.cursor.value).toBe(2)
+		dir.dispose()
+	})
+
 	test("dispose releases the reactive watchers", async () => {
 		const dir = createDirectory({ fs: createMockFs(TREE), path: "/home" })
 		await dir.refresh()
