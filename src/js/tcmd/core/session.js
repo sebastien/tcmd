@@ -89,6 +89,10 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	session.confirm = cell(null)
 	// The pane whose filter input currently owns the keyboard, or null.
 	session.filtering = cell(null)
+	// The modifier ("shift"/"ctrl") whose chords the command bar is currently
+	// advertising, or null. Presentation-only: the TUI sets it while a
+	// modifier is held (kitty keyboard protocol); the web never does.
+	session.barModifier = cell(null)
 
 	// Back/forward restore the focused column alongside the listing: each
 	// source/destination pane captures `active` into its history entries and
@@ -323,9 +327,9 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// Command bar rows: context-dependent key hints (see core/commands). The
 	// panel button is dropped when a host disables the panel.
 	session.commandBarItems = derived(
-		[session.filtering, session.bookmarkOpen, session.bookmarkMode, session.panelOpen, session.panelPicking],
-		([filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking]) =>
-			getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking }),
+		[session.filtering, session.bookmarkOpen, session.bookmarkMode, session.panelOpen, session.panelPicking, session.barModifier],
+		([filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, modifier]) =>
+			getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, modifier }),
 	)
 
 	// The entry list filtered by the typed query; `panelOpIndex` indexes into

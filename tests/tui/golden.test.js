@@ -186,8 +186,12 @@ describe("golden frames", () => {
 			await settle(setup)
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain("Keys")
-			expect(frame).toContain("Navigation")
-			expect(frame).toContain("Open")
+			expect(frame).toContain("NAVIGATION")
+			expect(frame).toContain("PANES")
+			expect(frame).toContain("[Open")
+			expect(frame).toContain("⏎]")
+			// The footer sits below a rule, as a bar shorthand.
+			expect(frame).toContain("[Close Esc]")
 		} finally {
 			setup.renderer.destroy()
 		}

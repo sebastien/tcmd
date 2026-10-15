@@ -305,8 +305,15 @@ describe("web app", () => {
 			press(host, "?")
 			await settle()
 			const help = host.querySelector(".help").textContent
-			expect(help).toContain("Commands")
+			expect(help).toContain("COMMANDS")
 			expect(help).toContain("Shell command")
+			// Two balanced columns of the command bar's own shorthands.
+			expect(host.querySelectorAll(".help-column").length).toBe(2)
+			expect(host.querySelectorAll(".help-section").length).toBeGreaterThan(0)
+			expect(help).toContain("[")
+			expect(help).toContain("⏎")
+			expect(help).toContain("COMMANDS")
+			expect(host.querySelector(".command-bar").textContent).toContain("[Help ?]")
 			expect(document.activeElement === host.querySelector(".help")).toBe(true)
 			press(host, "ArrowDown")
 			expect(session.panes.left.cursor.value).toBe(0)

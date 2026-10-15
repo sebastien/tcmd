@@ -38,6 +38,7 @@ const DEFAULT_KEYMAP = [
 	{ key: "o", shift: true, command: "file.open" },
 	{ key: "e", shift: true, command: "file.edit" },
 	{ key: "q", command: "app.quit" },
+	{ key: "?", command: "app.help" },
 ]
 
 // Function: matchKeymap
@@ -55,6 +56,33 @@ function matchKeymap(keymap, chord) {
 	return null
 }
 
-export { DEFAULT_KEYMAP, matchKeymap }
+// Function: keyGlyph
+// Human-readable label for a keymap chord ("↑", "⇧Tab", "^W", "PgUp").
+function keyGlyph(chord) {
+	const name = chord.key
+	const named = {
+		up: "↑",
+		down: "↓",
+		left: "←",
+		right: "→",
+		return: "↵",
+		enter: "↵",
+		space: "Space",
+		tab: "Tab",
+		pageup: "PgUp",
+		pagedown: "PgDn",
+		escape: "Esc",
+		backspace: "Bksp",
+		home: "Home",
+		end: "End",
+	}
+	let base = named[name] ?? (name.length === 1 ? name.toUpperCase() : `${name}`)
+	if (chord.ctrl) base = `^${base}`
+	if (chord.meta) base = `⌘${base}`
+	if (chord.shift) base = `⇧${base}`
+	return base
+}
+
+export { DEFAULT_KEYMAP, keyGlyph, matchKeymap }
 
 // EOF

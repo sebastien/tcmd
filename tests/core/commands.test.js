@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { createPane } from "../../src/js/tcmd/core/pane.js"
 import { createSession, load } from "../../src/js/tcmd/core/session.js"
-import { getCommand, getCommandBarItems, getCommands } from "../../src/js/tcmd/core/commands.js"
+import { getCommand, getCommandBarItems, getCommands, getModifierBarItems } from "../../src/js/tcmd/core/commands.js"
 import { createMockFs } from "../helpers/mock-fs.js"
 
 const TREE = {
@@ -376,6 +376,37 @@ describe("commands", () => {
 		// palette it replaced is gone.
 		expect(items.some((item) => item.id === "panel.open")).toBe(true)
 		expect(items.some((item) => item.id === "panel.toggle")).toBe(false)
+	})
+
+	test("the bar carries the `?` reference and reveals modifier chords", () => {
+		const items = getCommandBarItems({ filtering: null, bookmarkOpen: false, bookmarkMode: "list", panelOpen: false })
+		expect(items.some((item) => item.id === "app.help")).toBe(true)
+
+		const shift = getModifierBarItems("shift").map((item) => item.id)
+		expect(shift).toContain("view.maximize")
+		expect(shift).toContain("file.open")
+		expect(shift).toContain("pane.toggle")
+		expect(shift).toContain("app.help")
+		expect(getModifierBarItems("shift").find((item) => item.id === "pane.toggle").keys).toBe("⇧Tab")
+		// Only the modifier's own chords replace the default hints.
+		expect(shift).not.toContain("pane.enter")
+
+		const ctrl = getModifierBarItems("ctrl").map((item) => item.id)
+		expect(ctrl).toContain("pane.reload")
+		expect(ctrl).toContain("nav.jumpUp")
+		expect(ctrl).not.toContain("view.maximize")
+	})
+
+	test("the held modifier swaps the session's bar items", () => {
+		const session = makeSession()
+		expect(session.commandBarItems.value.some((item) => item.id === "app.help")).toBe(true)
+		session.barModifier.set("ctrl")
+		const ids = session.commandBarItems.value.map((item) => item.id)
+		expect(ids).toContain("pane.reload")
+		expect(ids).not.toContain("pane.enter")
+		// An overlay that owns the keyboard still wins over the modifier.
+		session.panelOpen.set(true)
+		expect(session.commandBarItems.value.map((item) => item.title)).toContain("Command")
 	})
 
 	test("failures land on the active pane error", async () => {

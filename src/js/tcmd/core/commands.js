@@ -15,6 +15,7 @@
 // - `bar`: true when the command appears in the command bar's key hints.
 // - `hidden`: true for internal commands that never show in the panel.
 
+import { DEFAULT_KEYMAP, keyGlyph } from "./keymap.js"
 import { basename, parent as parentOf } from "./path.js"
 import { PANEL_FOCUS, argvFor, bindingAt, missingBinding, rowAt, withArgValue, withToggledItem } from "./panel.js"
 import { clampCursor, moveCursor } from "./selection.js"
@@ -878,6 +879,19 @@ const commands = [
 		hidden: true,
 		run() {},
 	},
+	// Help: presentation-only too. Each renderer intercepts `?` and owns its
+	// own overlay cell, and routes a bar click the same way; the registry entry
+	// exists so the bar and the `?` reference can advertise it. Hidden from the
+	// panel, where it could only no-op.
+	{
+		id: "app.help",
+		title: "Help",
+		keys: "?",
+		kind: "ui",
+		bar: true,
+		hidden: true,
+		run() {},
+	},
 ]
 
 // Function: getCommands
@@ -898,14 +912,45 @@ function getCommand(id) {
 // Function: getCommandBarItems
 // Command-bar rows for the current context: the panel's key hints while it is
 // open, the filter hints while a pane filter is capturing input, the bookmark
-// hints while the picker owns the keyboard, the `bar`-flagged UI commands
-// otherwise (keymap order). Takes the context as named fields — four adjacent
-// flags are too easy to transpose.
-function getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking }) {
+// hints while the picker owns the keyboard, the held modifier's chords (see
+// `getModifierBarItems`), the `bar`-flagged UI commands otherwise (keymap
+// order). Takes the context as named fields — four adjacent flags are too easy
+// to transpose.
+function getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, modifier }) {
 	if (panelOpen) return panelPicking ? PANEL_PICK_KEYS : PANEL_HINT_KEYS
 	if (bookmarkOpen) return bookmarkMode === "name" ? BOOKMARK_NAME_KEYS : BOOKMARK_LIST_KEYS
 	if (filtering) return FILTER_KEYS
+	if (modifier) return getModifierBarItems(modifier)
 	return commands.filter((command) => command.bar).map(barRow)
+}
+
+// Function: getModifierBarItems
+// The hints revealed while a modifier ("shift"/"ctrl") is held: every command
+// bound under it in the keymap, in binding order, rendered like the bar's own
+// entries, with the `?` reference trailing. The help overlay is
+// presentation-only (each renderer intercepts `?` and owns its own cell), so it
+// is appended by hand rather than looked up through the keymap.
+function getModifierBarItems(modifier) {
+	const byId = new Map(commands.map((command) => [command.id, command]))
+	const rows = []
+	const rowsById = new Map()
+	for (const binding of DEFAULT_KEYMAP) {
+		if (!binding[modifier]) continue
+		const command = byId.get(binding.command)
+		if (!command) continue
+		const chord = keyGlyph(binding)
+		const row = rowsById.get(binding.command)
+		if (row) {
+			if (!row.keys.split("/").includes(chord)) row.keys += `/${chord}`
+		} else {
+			const item = { ...barRow(command), keys: chord }
+			rowsById.set(binding.command, item)
+			rows.push(item)
+		}
+	}
+	const help = byId.get("app.help")
+	if (help && !rowsById.has("app.help")) rows.push(barRow(help))
+	return rows
 }
 
 // Function: barRow
@@ -1168,5 +1213,6 @@ export {
 	getCommand,
 	getCommandBarItems,
 	getCommands,
+	getModifierBarItems,
 	openPanel,
 }

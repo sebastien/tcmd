@@ -25,8 +25,12 @@
 // Function: keyGlyph
 // The shorthand glyph for a shortcut label: ⏎ for Enter, ⇥ for Tab.
 function keyGlyph(keys) {
+	if (!keys) return keys
 	const GLYPHS = { Enter: "⏎", "↵": "⏎", Tab: "⇥" }
-	return GLYPHS[keys] ?? keys
+	return keys
+		.split("/")
+		.map((key) => GLYPHS[key] ?? (key.endsWith("Tab") ? `${key.slice(0, -3)}⇥` : key))
+		.join("/")
 }
 
 // Function: commandLabel

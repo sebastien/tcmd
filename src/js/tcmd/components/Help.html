@@ -1,7 +1,15 @@
 <section class="help" when="open" role="dialog" aria-modal="true" aria-label="Key reference" tabindex="-1">
 	<div class="help-dialog">
 		<header out="title"></header>
-		<pre out="text"></pre>
-		<footer out="hint"></footer>
+		<div class="help-columns">
+			<div class="help-column" out="leftRows"></div>
+			<div class="help-column" out="rightRows"></div>
+		</div>
+		<footer class="help-footer">
+			<span class="help-bracket" out="hintOpen"></span>
+			<span class="help-title" out="hintHead"></span>
+			<span class="help-key" out="hintKeys"></span>
+			<span class="help-bracket" out="hintClose"></span>
+		</footer>
 	</div>
 </section>

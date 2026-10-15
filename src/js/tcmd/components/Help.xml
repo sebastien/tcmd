@@ -3,9 +3,18 @@
 	     out:title="title" out:titleColor="titleFg" out:borderColor="borderFg"
 	     out:backgroundColor="bg" flexDirection="column"
 	     paddingLeft="2" paddingRight="2" paddingTop="1" paddingBottom="1">
-		<scrollbox flexGrow="1">
-			<text out="text" out:fg="textFg"></text>
-		</scrollbox>
-		<text out="hint" out:fg="dimFg"></text>
+		<helpscroll out="scrollbar" ref="scroll" flexGrow="1" overflow="hidden">
+			<box flexDirection="row" overflow="hidden">
+				<box out="leftRows" flexDirection="column" flexGrow="1" flexBasis="0" overflow="hidden"></box>
+				<box out="rightRows" flexDirection="column" flexGrow="1" flexBasis="0" overflow="hidden" paddingLeft="2"></box>
+			</box>
+		</helpscroll>
+		<box height="1" flexShrink="0" out:border="rule" out:borderColor="ruleFg"></box>
+		<box height="1" flexShrink="0" flexDirection="row" overflow="hidden">
+			<text out="hintOpen" out:fg="bracketFg" wrapMode="none"></text>
+			<text out="hintHead" out:fg="headFg" wrapMode="none"></text>
+			<text out="hintKeys" out:fg="keyFg" wrapMode="none"></text>
+			<text out="hintClose" out:fg="bracketFg" wrapMode="none"></text>
+		</box>
 	</box>
 </box>

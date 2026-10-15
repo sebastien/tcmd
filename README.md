@@ -107,9 +107,12 @@ on the right when the terminal is at least 100 columns wide, and becomes a
 fullscreen viewer below that; `⇧V` expands it over the whole pane row —
 parent and current included — and brings the previous layout back on the next
 press. The status bar lists every binding as a bracket
-shorthand (`[Open ⏎]`) wrapping over as many rows as the width demands — the
+shorthand (`[Open ⏎]`, `[Help ?]`) wrapping over as many rows as the width
+demands — the
 marked count trails the list, and a notice or error swaps the keys for a
-one-line status. Below 64×16
+one-line status. In the TUI, holding `Shift` or `Ctrl` swaps the bar for that
+modifier's own chords (through the kitty keyboard protocol) and releasing it
+brings the default hints back. Below 64×16
 the app shows a resize hint instead of the workspace.
 
 ### View modes
@@ -219,7 +222,7 @@ src/js/tcmd/
     FileList.js …     one `.js` per component (behaviors + pure helpers)
     FileRow.js …      row behaviors shared by both engines
     Frame.js          workspace chrome, breakpoints and command-bar geometry
-    Help.js           key-reference overlay behaviors + the grouped key text
+    Help.js           key-reference overlay behaviors + the two-column key text
     format.js         presentation helpers (sizes/counts)
   tui/      View (select.tui templates on OpenTUI)
     app.js       binds App.js + App.xml + TUI environment; size/help cells
@@ -260,8 +263,9 @@ of use.
 
 `components/Frame.js` holds the renderer-free workspace chrome (brand bar,
 responsive breakpoints, pane borders, command-bar geometry) and
-`components/Help.js` holds the key reference — behaviours and the grouped key
-text — used by both views. Web-only components live under `web/` (`header.js` +
+`components/Help.js` holds the key reference — behaviours and the two-column
+key text, with every distinct keymap chord shown in the command bar's bracket
+style — used by both views. Web-only components live under `web/` (`header.js` +
 `header.html`, plus the DOM effects in `effects.js` and the bookmark store in
 `bookmarks.js`). Shared
 behaviors only ever grow additively (a new key for a new presentation),

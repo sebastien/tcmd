@@ -268,6 +268,10 @@ function createWebApp(session, options = {}) {
 		.sub({
 			...events,
 			"commandbar:run": (self, data, event) => {
+				if (event.data === "app.help") {
+					help.set(!help.value)
+					return
+				}
 				if (event.data === "view.togglePreview" && isNarrow(data, self)) viewer.set(!viewer.value)
 				else events["commandbar:run"](self, data, event)
 			},

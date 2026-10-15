@@ -38,6 +38,37 @@ function paneCrumbs(size, session, paneId, pane) {
 	return derived([pane.segments, crumbWidthFor(size, session, paneId)], ([segments, width]) => elideCrumbs(segments, width))
 }
 
+// Function: attachModifierHint
+// TUI-only: while Shift or Ctrl is held, point the command bar at that
+// modifier's own bindings; releasing it restores the default hints. Requires
+// the kitty keyboard protocol (see `tui/index.js`), which reports modifier key
+// presses and releases; on a terminal that does not, the bar simply never
+// changes. Any ordinary chord also re-sets the state from its own modifiers, so
+// a missed release can never leave the bar stuck. Returns a teardown.
+function attachModifierHint(session, keyInput) {
+	if (!keyInput?.on) return () => {}
+	const modifierOf = (name) => {
+		if (name === "leftshift" || name === "rightshift" || name === "shift") return "shift"
+		if (name === "leftctrl" || name === "rightctrl" || name === "control") return "ctrl"
+		return null
+	}
+	const set = (value) => {
+		if (session.barModifier.value !== value) session.barModifier.set(value)
+	}
+	const onPress = (key) => {
+		set(modifierOf(key?.name) ?? (key?.ctrl ? "ctrl" : key?.shift ? "shift" : null))
+	}
+	const onRelease = (key) => {
+		if (modifierOf(key?.name)) set(null)
+	}
+	keyInput.on("keypress", onPress)
+	keyInput.on("keyrelease", onRelease)
+	return () => {
+		keyInput.off("keypress", onPress)
+		keyInput.off("keyrelease", onRelease)
+	}
+}
+
 // Function: createAppComponent
 // Builds the root component bound to a `session`.
 //
@@ -77,6 +108,7 @@ function createAppComponent(session, options = {}) {
 
 	const baseKeys = appBehaviors({ quit }).keys
 	const frame = createFrameBehaviors({ theme: tuiTheme })
+	const appSubs = appEvents({ quit })
 
 	// The active pane's border and head rule take the view mode's own accent:
 	// the Tiny blue in explorer, the gold accent in commander. An inactive
@@ -157,10 +189,21 @@ function createAppComponent(session, options = {}) {
 			rightGrow: (_self, data) =>
 				isExplorer(data) && currentColumnId(data) === "right" ? PANE_GROW : 1,
 		})
-		.sub(appEvents({ quit }))
+		.sub({
+			...appSubs,
+			// The bar's `[Help ?]` entry opens the overlay, the same path as the
+			// `?` key (the renderer owns the help cell).
+			"commandbar:run": (self, data, event) => {
+				if (event.data === "app.help") {
+					help.set(!help.value)
+					return
+				}
+				appSubs["commandbar:run"](self, data, event)
+			},
+		})
 		.using(appXml)
 }
 
-export { createAppComponent }
+export { attachModifierHint, createAppComponent }
 
 // EOF

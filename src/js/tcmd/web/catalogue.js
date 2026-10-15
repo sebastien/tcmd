@@ -28,6 +28,7 @@ import filePreviewHtml from "../components/FilePreview.html" with { type: "text"
 import fileRowHtml from "../components/FileRow.html" with { type: "text" }
 import filterBarHtml from "../components/FilterBar.html" with { type: "text" }
 import helpHtml from "../components/Help.html" with { type: "text" }
+import helpRowHtml from "../components/HelpRow.html" with { type: "text" }
 import headerHtml from "./header.html" with { type: "text" }
 import rowListHtml from "../components/RowList.html" with { type: "text" }
 import summaryHtml from "../components/Summary.html" with { type: "text" }
@@ -54,6 +55,8 @@ import {
 	fileRows,
 	filterBarBehaviors,
 	helpBehaviors,
+	helpRowBehaviors,
+	helpRows,
 	panelArgRows,
 	panelOpRows,
 	summaryBehaviors,
@@ -89,6 +92,7 @@ function createComponents() {
 	const fileRow = bind(ui, "FileRow", fileRowHtml, fileRowBehaviors(webTheme))
 	const filterBar = bind(ui, "FilterBar", filterBarHtml, filterBarBehaviors(webTheme))
 	const bookmarkRow = bind(ui, "BookmarkRow", bookmarkRowHtml, bookmarkRowBehaviors(webTheme))
+	const helpRow = bind(ui, "HelpRow", helpRowHtml, helpRowBehaviors({ theme: webTheme }))
 	return {
 		BookmarkRow: bookmarkRow,
 		CommandItem: commandItem,
@@ -131,7 +135,7 @@ function createComponents() {
 			actions: () => " Open / edit are unavailable in the browser",
 		})),
 		FilterBar: filterBar,
-		Help: bind(ui, "Help", helpHtml, helpBehaviors({ theme: webTheme })),
+		Help: bind(ui, "Help", helpHtml, helpBehaviors({ theme: webTheme, rows: helpRows(helpRow) })),
 		Header: bind(ui, "Header", headerHtml, headerBehaviors(webTheme)),
 		Summary: bind(ui, "Summary", summaryHtml, summaryBehaviors({ ...webTheme, width: paneWidth, elide })),
 	}

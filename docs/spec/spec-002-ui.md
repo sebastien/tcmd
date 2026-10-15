@@ -100,8 +100,8 @@ restores the previous layout (focus and pane widths included).
 │───────────────────────────────────││──────────────────────────────────││                                   │
 │  file · 26B          · -rw-r--r-- ││  file · 19B          · -rw-r--r--││                                   │
 └───────────────────────────────────┘└──────────────────────────────────┘╰───────────────────────────────────╯
-[Open ⏎] [Parent ←] [Reload ^R] [Switch ⇥] [Mark Spc] [Bookmark b] [Bookmarks g] [Preview v] [Commands m]
-[Palette ^P] [Filter /] [Quit q]
+[Open ⏎] [Parent ←] [Reload ^R] [Switch ⇥] [Mark Spc] [Bookmark b] [Bookmarks g] [Preview v] [Commands :]
+[Shell command !] [Filter /] [Quit q] [Help ?]
 ```
 
 ## Responsive behavior
@@ -115,7 +115,9 @@ events, with the renderer dimensions as a fallback):
   columns until the next press brings the previous layout back.
 - The status bar wraps its shorthands onto as many rows as the width demands
   (up to three at the minimum width); nothing is trimmed — the palette and the
-  `?` reference carry the same bindings.
+  `?` reference carry the same bindings. In the TUI, holding `Shift` or `Ctrl`
+  swaps the bar for that modifier's own chords (kitty keyboard protocol), and
+  releasing it restores the default hints.
 
 ## Pane filter
 
@@ -178,8 +180,13 @@ events, with the renderer dimensions as a fallback):
   jumping to a file selects it in its directory and previews it.
 - Confirm (destructive operations): centered modal with the question and
   `[y]es [n]o`.
-- Keys (`?`): a grouped reference built from the live keymap and command
-  registry, so it cannot drift from the actual bindings.
+- Keys (`?`): a keymap-and-registry reference so it cannot drift from the
+  actual bindings, laid out in two columns balanced by line count. Each entry
+  uses the command bar's bracket style (`[Open →/⏎]`), listing every distinct
+  chord for an action, with the title bright and keys in the accent colour; all
+  brackets are padded to one width so the keys align. Section headings are
+  uppercase and bold, and a `[Close Esc/?]` shorthand sits under a rule at the
+  foot.
 
 ## Operations
 

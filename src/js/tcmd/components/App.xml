@@ -143,5 +143,5 @@
 	<confirm when="confirm" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="30"
 	         in:confirm="confirm"></confirm>
 	<help when="helpOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="40"
-	      in:open="helpOpen"></help>
+	      in:open="helpOpen" in:size="uiSize"></help>
 </box>

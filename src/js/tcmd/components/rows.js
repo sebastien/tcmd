@@ -27,6 +27,7 @@
 // (`CommandArgRow.wantsFocus`), which the builders do not know.
 
 import { unwrap } from "select/state/cells"
+import { helpBlocks } from "./Help.js"
 
 // Function: isCell
 // True when `value` is a reactive cell, using the same `isReactive` marker the
@@ -196,6 +197,20 @@ function panelArgRows(CommandArgRow) {
 	}
 }
 
+// Function: helpRows
+// `{ item, index }` bags for the `?` reference's `HelpRow`s. The blocks are
+// precomputed and balanced in `Help.helpBlocks`; `side` picks the column.
+function helpRows(HelpRow) {
+	return (self, data, side) => {
+		const blocks = helpBlocks()[side] ?? []
+		return HelpRow.map(
+			blocks,
+			(item, index) => ({ item, index }),
+			(item) => item.key,
+		)
+	}
+}
+
 // Function: bookmarkRows
 // `{ item: { name, path }, index, selectedRow }` bags for `BookmarkRow` rows.
 // `selectedRow` is the plain per-row selection flag so a picker move rewrites
@@ -211,6 +226,6 @@ function bookmarkRows(BookmarkRow) {
 	}
 }
 
-export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, isSelected, panelArgRows, panelOpRows }
+export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, helpRows, isSelected, panelArgRows, panelOpRows }
 
 // EOF

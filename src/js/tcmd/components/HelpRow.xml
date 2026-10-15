@@ -1,0 +1,7 @@
+<box height="1" flexDirection="row" flexShrink="0" overflow="hidden">
+	<text when="isSection" out="section" out:fg="sectionFg" out:attributes="sectionAttrs" wrapMode="none"></text>
+	<text when="isEntry" out="open" out:fg="bracketFg" wrapMode="none"></text>
+	<text when="isEntry" out="head" out:fg="headFg" wrapMode="none"></text>
+	<text when="isEntry" out="keys" out:fg="keyFg" wrapMode="none"></text>
+	<text when="isEntry" out="close" out:fg="bracketFg" wrapMode="none"></text>
+</box>

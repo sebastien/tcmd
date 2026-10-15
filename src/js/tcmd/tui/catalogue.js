@@ -17,7 +17,7 @@
 // shared logic bound here to their `.xml` presentations; the browser view
 // binds the same modules to `.html`.
 
-import { extend, ui } from "select.tui"
+import { extend, getTags, ui } from "select.tui"
 import { unwrap } from "select/state/cells"
 import bookmarkListXml from "../components/BookmarkList.xml" with { type: "text" }
 import bookmarkRowXml from "../components/BookmarkRow.xml" with { type: "text" }
@@ -33,6 +33,7 @@ import filePreviewXml from "../components/FilePreview.xml" with { type: "text" }
 import fileRowXml from "../components/FileRow.xml" with { type: "text" }
 import filterBarXml from "../components/FilterBar.xml" with { type: "text" }
 import helpXml from "../components/Help.xml" with { type: "text" }
+import helpRowXml from "../components/HelpRow.xml" with { type: "text" }
 import rowListXml from "../components/RowList.xml" with { type: "text" }
 import summaryXml from "../components/Summary.xml" with { type: "text" }
 
@@ -58,6 +59,8 @@ import {
 	fileRows,
 	fileWindow,
 	filterBarBehaviors,
+	helpRowBehaviors,
+	helpRows,
 	iconsEnabled,
 	panelArgRows,
 	panelOpRows,
@@ -210,6 +213,7 @@ function createComponents() {
 	const fileRow = bind(ui, "FileRow", fileRowXml, fileRowBehaviors(env))
 	const filterBar = bind(ui, "FilterBar", filterBarXml, filterBarBehaviors(env))
 	const bookmarkRow = bind(ui, "BookmarkRow", bookmarkRowXml, bookmarkRowBehaviors(env))
+	const helpRow = bind(ui, "HelpRow", helpRowXml, helpRowBehaviors({ theme: tuiTheme }))
 	return {
 		BookmarkRow: bookmarkRow,
 		CommandArgRow: commandArgRow,
@@ -249,7 +253,7 @@ function createComponents() {
 		})),
 		FilePreview: bind(ui, "FilePreview", filePreviewXml, filePreviewBehaviors(env)),
 		FilterBar: filterBar,
-		Help: bind(ui, "Help", helpXml, helpBehaviors({ theme: tuiTheme })),
+		Help: bind(ui, "Help", helpXml, helpBehaviors({ theme: tuiTheme, rows: helpRows(helpRow) })),
 		Summary: bind(ui, "Summary", summaryXml, summaryBehaviors({
 			...env,
 			width: paneWidth,
@@ -261,12 +265,41 @@ function createComponents() {
 
 const components = createComponents()
 
+// Function: showScrollBar
+// select.tui hides every scrollbox's scrollbar (its lists keep the cursor on
+// screen themselves); the `?` reference has no cursor and needs a bar, so its
+// own `helpscroll` tag hands the vertical bar back to automatic overflow
+// visibility. The box defaults also leave the scrollbox on a column layout, so
+// restore the row OpenTUI's ScrollBox expects and the bar lands at the right
+// edge instead of over the first column.
+function showScrollBar(node) {
+	// The wrapper's content declares a 100% minimum width, which otherwise
+	// starves the 1-column bar and drops it over the first column. The wrapper
+	// is re-measured once the content is mounted, so apply it again on the next
+	// tick to land on the overlay's first frame.
+	const fix = () => {
+		if (node.wrapper) node.wrapper.minWidth = 0
+		node.requestRender?.()
+	}
+	fix()
+	queueMicrotask(fix)
+	const bar = node.verticalScrollBar
+	if (bar) {
+		bar.width = 1
+		bar.flexShrink = 0
+	}
+}
+
 // Function: registerComponents
 // Idempotent registration of the parent components as select.tui host tags.
 function registerComponents() {
 	if (registered) return components
 	registered = true
 	extend({
+		// A scrollbox that keeps its scrollbar (see `showScrollBar`). Built on
+		// select.tui's own scrollbox class so the renderable tree stays one
+		// OpenTUI instance.
+		helpscroll: { Class: getTags().scrollbox.Class, configure: showScrollBar },
 		bookmarklist: components.BookmarkList,
 		breadcrumbs: components.Breadcrumbs,
 		commandbar: components.CommandBar,

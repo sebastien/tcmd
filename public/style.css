@@ -882,10 +882,48 @@ input:focus-visible {
 	padding-top: 0.3rem;
 }
 
-.help-dialog pre {
-	font: inherit;
-	overflow: auto;
+.help-columns {
+	display: flex;
+	gap: 1.5rem;
+	flex: 1;
 	min-height: 0;
+	overflow: auto;
+}
+
+.help-column {
+	flex: 1;
+	min-width: 0;
+}
+
+.help-block {
+	min-height: 1.2em;
+}
+
+.help-section {
+	color: var(--text);
+	font-weight: 700;
+	letter-spacing: 0.04em;
+}
+
+.help-entry {
+	white-space: pre;
+}
+
+.help-title {
+	color: var(--text);
+}
+
+.help-key {
+	color: var(--accent);
+}
+
+.help-bracket {
+	color: var(--text-dim);
+}
+
+.help-footer {
+	border-top: 1px solid var(--accent);
+	padding-top: 0.3rem;
 }
 
 .viewer > .preview {
