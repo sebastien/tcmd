@@ -18,6 +18,7 @@
 import { DEFAULT_KEYMAP, keyGlyph } from "./keymap.js"
 import { basename, parent as parentOf } from "./path.js"
 import { PANEL_FOCUS, argvFor, bindingAt, missingBinding, rowAt, withArgValue, withToggledItem } from "./panel.js"
+import { hasBinaryByte, previewKind, SNIFF_BYTES } from "./preview.js"
 import { clampCursor, moveCursor } from "./selection.js"
 import { currentPane } from "./pane.js"
 import { runLine } from "./script.js"
@@ -165,12 +166,15 @@ const commands = [
 			if (!entry) return
 			const current = currentPane(session)
 			if (entry.isDir) return current.navigate(entry.path)
-			// A file outside the current pane pins the inspector on it.
+			// A file outside the current pane pins the inspector on it before
+			// it is opened, so the preview follows the entry that was acted on.
 			if (focused !== current) {
 				session.previewTarget.set(entry)
 				session.showPreview.set(true)
 			}
-			return undefined
+			// A file: edit it when it is a text file the host can edit,
+			// otherwise show it fullscreen (see `openFile`).
+			return openFile(session, current, entry)
 		},
 	},
 	{
@@ -436,6 +440,19 @@ const commands = [
 		},
 	},
 	{
+		id: "view.toggleViewer",
+		title: "Fullscreen",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			// The fullscreen inspector overlay. `v` opens it on a narrow
+			// terminal and Enter opens it on a file that cannot be edited (see
+			// `openFile`); the shared App controller closes it on Esc or `v`
+			// (see `components/App#createBehaviors`).
+			session.viewerOpen.set(!session.viewerOpen.value)
+		},
+	},
+	{
 		id: "view.maximize",
 		title: "Maximize preview",
 		keys: "⇧V",
@@ -482,6 +499,12 @@ const commands = [
 			const entry = session.previewEntry.value
 			if (!entry || entry.isDir) {
 				session.notice.set({ kind: "warning", text: "no file to edit" })
+				return
+			}
+			// A host without an editor (the web's null adapter) reports it, the
+			// same guard `openFile` uses, instead of tripping over the throw.
+			if (session.os?.canEdit === false) {
+				session.notice.set({ kind: "warning", text: "no editor available" })
 				return
 			}
 			return session.os.edit(entry.path).then(() => currentPane(session).refresh())
@@ -1062,6 +1085,35 @@ function retargetFromPreview(session, preview, index) {
 function pinPreview(session, pane) {
 	session.previewTarget.set(pane.currentEntry() ?? null)
 	session.showPreview.set(true)
+}
+
+// Function: openFile
+// Enter on a file. A text file the host can edit opens in `$EDITOR` and the
+// pane is refreshed afterwards (an editor may have rewritten it); anything else
+// — an image, media, a binary body, or any file on a host without an editor
+// (the web) — opens the fullscreen inspector instead.
+async function openFile(session, current, entry) {
+	if (await isEditable(session, entry)) {
+		await session.os.edit(entry.path)
+		await current.refresh()
+		return
+	}
+	session.previewTarget.set(entry)
+	session.showPreview.set(true)
+	session.viewerOpen.set(true)
+}
+
+// Function: isEditable
+// Whether Enter edits `entry` rather than previewing it: the host must have an
+// editor, the entry must preview as text (not an image/media card) and its head
+// must not be binary. The read follows symlinks, like the inspector's own, and
+// needs only the sniff window `hasBinaryByte` looks at.
+async function isEditable(session, entry) {
+	if (entry?.isDir) return false
+	if (session.os?.canEdit === false) return false
+	if (previewKind(entry?.ext) !== "text") return false
+	const head = await session.fs.readTextHead(entry.path, SNIFF_BYTES).catch(() => null)
+	return head !== null && !hasBinaryByte(head)
 }
 
 function bump(session, delta) {

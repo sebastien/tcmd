@@ -9,8 +9,9 @@
 //
 // The TUI layers two presentation-only cells on top of the shared controller:
 // `size` (viewport dimensions from the renderer's resize events) and `help`
-// (the `?` overlay). A third, `viewer`, tracks the fullscreen inspector used
-// below the inline-inspector breakpoint. None of them exist in the web view.
+// (the `?` overlay). The fullscreen inspector is not one of them: it lives in
+// the session (`viewerOpen`), so a command can open it and both renderers show
+// it (`components/Frame#showViewer`).
 
 import { cell, derived, unwrap } from "select/state/cells"
 import { ui } from "select.tui"
@@ -18,7 +19,7 @@ import appXml from "../components/App.xml" with { type: "text" }
 import { elideCrumbs } from "../components/format.js"
 import { appBehaviors, appEvents, appInit } from "../components/index.js"
 import { registerComponents } from "./catalogue.js"
-import { createFrameBehaviors, currentColumnId, isExplorer, isNarrow, paneColumnWidth, PANE_GROW } from "../components/Frame.js"
+import { createFrameBehaviors, currentColumnId, isExplorer, paneColumnWidth, PANE_GROW } from "../components/Frame.js"
 import { tuiTheme } from "./theme.js"
 
 // Columns available to a pane's breadcrumb strip: the viewport split by the
@@ -85,7 +86,10 @@ function createAppComponent(session, options = {}) {
 	registerComponents()
 	const size = options.size ?? cell({ width: 0, height: 0 })
 	const help = options.help ?? cell(false)
-	const viewer = options.viewer ?? cell(false)
+	// The fullscreen inspector overlay lives in the session (core), so a
+	// command — Enter on a file that cannot be edited — can open it; the
+	// renderer only shows it (`components/Frame#showViewer`).
+	const viewer = session.viewerOpen
 
 	// Columns available to each pane's breadcrumb strip: the pane's own share
 	// of the viewport (explorer's current column is wider, so its mirrors are
@@ -152,22 +156,8 @@ function createAppComponent(session, options = {}) {
 					help.set(true)
 					return
 				}
-				// The fullscreen viewer: Esc closes, O/E act on the file.
-				if (viewer.value && isNarrow(data, self)) {
-					if (name === "escape") {
-						viewer.set(false)
-						return
-					}
-					if (name === "o" && key.shift) return data.dispatch("file.open", { paneId: unwrap(data.active) })
-					if (name === "e" && key.shift) return data.dispatch("file.edit", { paneId: unwrap(data.active) })
-					return
-				}
-				// Below the inline breakpoint `v` toggles the viewer overlay
-				// instead of the side panel (`⇧V` still maximizes).
-				if (!busy && name === "v" && !key.shift && isNarrow(data, self)) {
-					viewer.set(!viewer.value)
-					return
-				}
+				// The viewer overlay and the narrow-`v` shortcut are shared
+				// modal routing, handled by `components/App#createBehaviors`.
 				return baseKeys(self, data, event)
 			},
 			// TUI-only presentation of the shared App state: each pane's

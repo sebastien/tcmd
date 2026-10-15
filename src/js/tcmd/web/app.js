@@ -14,7 +14,7 @@ import appHtml from "../components/App.html" with { type: "text" }
 import { appBehaviors, appEvents, appInit } from "../components/index.js"
 import { registerWebComponents } from "./catalogue.js"
 import { elideCrumbs } from "../components/format.js"
-import { createFrameBehaviors, INSPECTOR_INLINE_WIDTH, isNarrow, paneColumnWidth } from "../components/Frame.js"
+import { createFrameBehaviors, INSPECTOR_INLINE_WIDTH, paneColumnWidth } from "../components/Frame.js"
 import { connectEffects } from "./effects.js"
 import { webTheme } from "./theme.js"
 
@@ -194,7 +194,10 @@ function createWebApp(session, options = {}) {
 	registerWebComponents()
 	const size = options.size ?? cell({ width: 0, height: 0 })
 	const help = cell(false)
-	const viewer = cell(false)
+	// The fullscreen inspector overlay lives in the session (core), so a
+	// command — Enter on a file that cannot be edited — can open it; the shared
+	// controller routes its keys (`components/App#createBehaviors`).
+	const viewer = session.viewerOpen
 	const paneWidth = derived([size, session.showPreview], ([value, show]) => {
 		if (!value.width) return 0
 		const columns = show && value.width >= INSPECTOR_INLINE_WIDTH ? 3 : 2
@@ -249,19 +252,8 @@ function createWebApp(session, options = {}) {
 					help.set(true)
 					return
 				}
-				// The viewer only exists while narrow: if the viewport widened
-				// underneath it, drop the stale state and keep handling the key.
-				if (viewer.value && !isNarrow(data, self)) viewer.set(false)
-				if (viewer.value) {
-					if (key.name === "escape" || key.name === "v") viewer.set(false)
-					else if (key.shift && key.name === "o") session.dispatch("file.open")
-					else if (key.shift && key.name === "e") session.dispatch("file.edit")
-					return
-				}
-				if (!busy && key.name === "v" && !key.shift && isNarrow(data, self)) {
-					viewer.set(!viewer.value)
-					return
-				}
+				// The viewer overlay and the narrow-`v` shortcut are shared
+				// modal routing, handled by `components/App#createBehaviors`.
 				return baseKeys(self, data, event)
 			},
 		})
@@ -272,8 +264,7 @@ function createWebApp(session, options = {}) {
 					help.set(!help.value)
 					return
 				}
-				if (event.data === "view.togglePreview" && isNarrow(data, self)) viewer.set(!viewer.value)
-				else events["commandbar:run"](self, data, event)
+				events["commandbar:run"](self, data, event)
 			},
 		})
 }

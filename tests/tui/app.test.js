@@ -384,6 +384,31 @@ describe("tui app", () => {
 		}
 	})
 
+	test("enter on a file opens the fullscreen viewer it cannot edit", async () => {
+		// The helper's session uses the null host (`canEdit: false`), so Enter
+		// on a text file opens the viewer overlay, even on a wide terminal.
+		const { setup, session } = await makeSetup()
+		try {
+			session.panes.left.cursor.set(1)
+			await settle(setup)
+			setup.mockInput.pressKey("\r")
+			await settle(setup)
+			expect(session.viewerOpen.value).toBe(true)
+			// ⇧V is swallowed by the overlay: it neither closes nor maximizes.
+			setup.mockInput.pressKey("V")
+			await settle(setup)
+			expect(session.viewerOpen.value).toBe(true)
+			expect(session.previewFull.value).toBe(false)
+			// Esc closes the overlay and returns to the workspace.
+			setup.mockInput.pressEscape()
+			await new Promise((resolve) => setTimeout(resolve, 20))
+			await setup.renderOnce()
+			expect(session.viewerOpen.value).toBe(false)
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
 	test("shift-v maximizes the inspector over the pane row", async () => {
 		const { setup, session } = await makeSetup()
 		try {

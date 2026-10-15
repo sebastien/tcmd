@@ -177,6 +177,47 @@ describe("App", () => {
 		expect(calls).toEqual([{ id: "pane.forward", payload: { paneId: "left" } }])
 	})
 
+	test("the viewer overlay owns the keyboard while open", () => {
+		const behaviors = createBehaviors({ quit: () => {} })
+		const { calls, data } = makeData({ viewerOpen: true, active: "left" })
+		behaviors.keys(null, data, { name: "escape" })
+		behaviors.keys(null, data, { name: "v" })
+		// ⇧V does not close the overlay (it would maximize the column).
+		behaviors.keys(null, data, { name: "v", shift: true })
+		behaviors.keys(null, data, { name: "o", shift: true })
+		behaviors.keys(null, data, { name: "e", shift: true })
+		// Everything else is swallowed, the workspace never sees it.
+		behaviors.keys(null, data, { name: "down" })
+		expect(calls).toEqual([
+			{ id: "view.toggleViewer", payload: undefined },
+			{ id: "view.toggleViewer", payload: undefined },
+			{ id: "file.open", payload: { paneId: "left" } },
+			{ id: "file.edit", payload: { paneId: "left" } },
+		])
+	})
+
+	test("below the inline breakpoint v opens the viewer overlay", () => {
+		const behaviors = createBehaviors({ quit: () => {} })
+		const narrow = makeData({ uiSize: { width: 80, height: 20 } })
+		behaviors.keys(null, narrow.data, { name: "v" })
+		expect(narrow.calls).toEqual([{ id: "view.toggleViewer", payload: undefined }])
+		// At the inline width the keymap's `view.togglePreview` wins instead.
+		const wide = makeData({ uiSize: { width: 120, height: 20 } })
+		behaviors.keys(null, wide.data, { name: "v" })
+		expect(wide.calls).toEqual([{ id: "view.togglePreview", payload: { paneId: "left" } }])
+	})
+
+	test("the command bar's Preview opens the viewer below the breakpoint", () => {
+		const events = createEvents()
+		const narrow = makeData({ uiSize: { width: 80, height: 20 } })
+		events["commandbar:run"](null, narrow.data, { data: "view.togglePreview" })
+		expect(narrow.calls).toEqual([{ id: "view.toggleViewer", payload: undefined }])
+		// Above the breakpoint the bar entry reaches the real command.
+		const wide = makeData({ uiSize: { width: 120, height: 20 } })
+		events["commandbar:run"](null, wide.data, { data: "view.togglePreview" })
+		expect(wide.calls).toEqual([{ id: "view.togglePreview", payload: undefined }])
+	})
+
 	test("confirm mode routes y/enter to confirm.yes and n/esc to confirm.no", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
 		const { calls, data } = makeData({ confirm: { text: "erase?" } })

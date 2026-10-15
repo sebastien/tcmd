@@ -8,8 +8,6 @@
 // default-key trapping and keeping the keyboard cursor visible. select.js
 // renders without any of this, so the web binding owns it explicitly.
 
-import { INSPECTOR_INLINE_WIDTH } from "../components/Frame.js"
-
 const canvases = new WeakMap()
 
 // Function: columnWidth
@@ -53,7 +51,9 @@ function connectEffects(session, root, { size, help, viewer }) {
 	let frame = null
 	let retries = 0
 	let disposed = false
-	const viewerOpen = () => viewer.value && size.value.width > 0 && size.value.width < INSPECTOR_INLINE_WIDTH
+	// The viewer overlay is a modal at any width (Enter opens it on a file
+	// that cannot be edited); it owns focus while open.
+	const viewerOpen = () => Boolean(viewer.value)
 	const modalOpen = () => Boolean(session.confirm.value || help.value || viewerOpen() || session.panelOpen.value || session.bookmarkOpen.value)
 	const focusTarget = () => {
 		if (session.confirm.value) return root.querySelector(".confirm")
@@ -75,12 +75,6 @@ function connectEffects(session, root, { size, help, viewer }) {
 		const lineHeight = Number.parseFloat(view.getComputedStyle(root).lineHeight)
 		const height = lineHeight ? Math.floor(root.clientHeight / lineHeight) : 0
 		if (width && height && (size.value.width !== width || size.value.height !== height)) size.set({ width, height })
-		// A fullscreen viewer only exists while the viewport is narrow;
-		// widening back to the inline inspector drops the stale state so a
-		// later narrow resize does not resurrect it. Reads the cell (not just
-		// the fresh measurement) so a host that drives `size` directly is
-		// honoured too.
-		if (viewer.value && size.value.width >= INSPECTOR_INLINE_WIDTH) viewer.set(false)
 		// A modal's field mounts on a later frame than the flag that opens it;
 		// retry a few frames before giving up so focus lands on the overlay
 		// instead of the root.

@@ -292,12 +292,14 @@ function createFrameBehaviors(env) {
 			(!isExplorer(data) || currentColumnId(data) === "right") && !unwrap(data?.previewFull),
 
 		// The inline inspector shows when the preview is on and the viewport is
-		// wide enough; otherwise `v` opens the fullscreen viewer. Maximizing
-		// (`⇧V`) replaces the column with `showPreviewFull` below.
+		// wide enough; the viewer overlay shows whenever it is open, at any
+		// width (`v` on a narrow terminal, or Enter on a file that cannot be
+		// edited). Maximizing (`⇧V`) replaces the column with
+		// `showPreviewFull` below.
 		inspectorNarrow: (self, data) => isNarrow(data, self),
 		showInspectorInline: (self, data) =>
 			Boolean(unwrap(data.showPreview)) && !isNarrow(data, self) && !unwrap(data?.previewFull),
-		showViewer: (self, data) => Boolean(unwrap(data.viewerOpen)) && isNarrow(data, self),
+		showViewer: (_self, data) => Boolean(unwrap(data.viewerOpen)),
 		// The maximized inspector: the preview fills the pane row in either
 		// view mode, pushed by `view.maximize` (`⇧V`).
 		showPreviewFull: (_self, data) => Boolean(unwrap(data?.previewFull)),

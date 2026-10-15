@@ -21,12 +21,11 @@ import { createBookmarks } from "./bookmarks.js"
 import { createDispatch, getCommandBarItems } from "./commands.js"
 import { createNullOs } from "./os.js"
 import { PANEL_FOCUS, argvFor, bindArgs, filterPanelEntries, isTextualRow, panelCommand, panelEntries, panelEntryRows, panelRowList, panelRunnable, pickerRowList, rowAt, withArgValue } from "./panel.js"
-import { basename, extname, join, parent as parentPath } from "./path.js"
+import { basename, parent as parentPath } from "./path.js"
+import { hasBinaryByte, PREVIEW_BYTES, previewKind, previewSource } from "./preview.js"
 import { indexOfPath } from "./selection.js"
 import { createPane, PANE_BUFFERS } from "./pane.js"
 import { hasMatch, score } from "../vendor/fzy.js"
-
-const PREVIEW_BYTES = 65536
 
 // Function: createSession
 // Creates the shared model for a two-pane browser.
@@ -85,6 +84,13 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// command bars in place. Independent of `showPreview`, so restoring the
 	// layout returns the inline inspector to exactly what it was.
 	session.previewFull = cell(false)
+	// The fullscreen inspector overlay: a framed preview covering the whole
+	// viewport. It opens from `v` on a narrow terminal and from Enter on a file
+	// that cannot be edited (see `core/commands#pane.enter`), and closes on Esc
+	// or `v`. Core-owned so a command can request it; the renderers only show
+	// it (`components/Frame#showViewer`). Independent of `showPreview` and
+	// `previewFull`, which drive the inline and the maximized inspector.
+	session.viewerOpen = cell(false)
 	session.notice = cell(null)
 	session.confirm = cell(null)
 	// The pane whose filter input currently owns the keyboard, or null.
@@ -246,7 +252,7 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 		// kind comes from what the link points at, not from the link's own
 		// name (a `notes -> README.md` previews as markdown).
 		const source = previewSource(entry)
-		const kind = entry.isDir ? "directory" : previewKind({ ext: source.ext })
+		const kind = entry.isDir ? "directory" : previewKind(source.ext)
 		if (entry.details) {
 			session.preview.set({
 				kind,
@@ -504,34 +510,4 @@ function entrySummary(entry) {
 	}
 }
 
-// Function: previewSource
-// What the preview renders *through* a symlink: `title` names the traversal
-// (`notes -> ../real/notes`) so it is visible in the header, and `ext` is the
-// target's extension, so a link previews with the kind of what it points at
-// rather than the kind of its own name. Plain entries pass through unchanged.
-function previewSource(entry) {
-	const target = entry?.isSymlink && entry.target ? `${entry.target}` : null
-	if (!target || !entry?.path) return { title: basename(entry?.path ?? ""), ext: entry?.ext ?? null }
-	const ext = extname(target) ?? entry.ext ?? null
-	return { title: `${basename(entry.path)} -> ${target}`, ext }
-}
-
-// Function: previewKind
-// Preview classification for file entries; directories are not previewed.
-function previewKind(entry) {
-	const image = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"]
-	const media = ["mp3", "wav", "ogg", "flac", "mp4", "webm", "mkv", "mov", "pdf"]
-	if (entry.ext && image.includes(entry.ext)) return "image"
-	if (entry.ext && media.includes(entry.ext)) return "media"
-	return "text"
-}
-
-function hasBinaryByte(text) {
-	for (let i = 0; i < 2048 && i < text.length; i++) {
-		const code = text.charCodeAt(i)
-		if (code < 9 || (code > 13 && code < 32)) return true
-	}
-	return false
-}
-
-export { createSession, load, previewSource }
+export { createSession, load }

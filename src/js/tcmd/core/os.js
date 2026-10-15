@@ -14,6 +14,10 @@
 // - `edit(path)`: Promise<void> - $EDITOR (or vi)
 // - `run(command, options)`: Promise<void> - `$SHELL -c command` in
 //   `options.cwd`
+// - `canEdit`: boolean - whether `edit` can launch an editor at all. A host
+//   without one (the web's null adapter) sets it false, so Enter on a file
+//   falls back to the fullscreen inspector instead of erroring (see
+//   `core/commands#pane.enter`).
 
 // `node:child_process` is imported lazily: only `createNodeOs` needs it, so
 // bundles that use the null adapter (the web view, tests) never pull in a Node
@@ -32,6 +36,7 @@ function loadChildProcess() {
 // uses to release and restore the terminal around interactive commands.
 function createNodeOs({ suspend, resume } = {}) {
 	return {
+		canEdit: true,
 		async open(path) {
 			await openWith(path, openerCandidates())
 		},
@@ -56,6 +61,7 @@ function createNullOs() {
 		throw new Error(`${name} is not available in this environment`)
 	}
 	return {
+		canEdit: false,
 		open: unsupported("open"),
 		edit: unsupported("edit"),
 		run: unsupported("run"),

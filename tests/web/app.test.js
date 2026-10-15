@@ -399,6 +399,44 @@ describe("web app", () => {
 		}
 	})
 
+	test("enter on a file opens the fullscreen viewer when it cannot be edited", async () => {
+		// The browser host has no editor (`canEdit: false`), so Enter on a text
+		// file opens the viewer overlay instead of `$EDITOR`.
+		const { host, instance, session } = await mountApp({ viewMode: "commander" })
+		try {
+			const index = session.panes.left.entries.value.findIndex((entry) => entry.name === "notes.txt")
+			session.panes.left.cursor.set(index)
+			await settle()
+			press(host, "Enter")
+			await settle()
+			expect(session.viewerOpen.value).toBe(true)
+			const viewer = host.querySelector(".viewer")
+			expect(viewer).not.toBeNull()
+			expect(viewer.querySelector(".preview").textContent).toContain("notes.txt")
+			press(host, "Escape")
+			await settle()
+			expect(session.viewerOpen.value).toBe(false)
+			expect(host.querySelector(".viewer")).toBeNull()
+		} finally {
+			instance.unmount()
+		}
+	})
+
+	test("⇧V is swallowed by the viewer overlay, not treated as close", async () => {
+		const { host, instance, session } = await mountApp({ viewMode: "commander" })
+		try {
+			session.viewerOpen.set(true)
+			await settle()
+			expect(host.querySelector(".viewer")).not.toBeNull()
+			press(host, "V", { shiftKey: true })
+			await settle()
+			expect(session.viewerOpen.value).toBe(true)
+			expect(host.querySelector(".viewer")).not.toBeNull()
+		} finally {
+			instance.unmount()
+		}
+	})
+
 	test("pane focus, loading, empty state and marked count reach the web components", async () => {
 		const { host, instance, session } = await mountApp({ viewMode: "commander" })
 		try {

@@ -18,6 +18,7 @@
 // `/.trash` directory at the storage root, where they stay browsable.
 
 import { basename, extname, join, normalize, parent, split } from "../core/path.js"
+import { PREVIEW_BYTES } from "../core/preview.js"
 
 // Function: createOpfsFs
 // Builds the filesystem adapter. `root` overrides the OPFS root handle (tests);
@@ -139,7 +140,7 @@ function createOpfsFs({ root, home = "/home/tester" } = {}) {
 
 	// Function: readTextHead
 	// Leading `maxBytes` of a text file, decoded as UTF-8.
-	async function readTextHead(path, maxBytes = 65536) {
+	async function readTextHead(path, maxBytes = PREVIEW_BYTES) {
 		const handle = await resolveFile(normalize(path))
 		if (!handle) throw notFound(path)
 		const file = await handle.getFile()

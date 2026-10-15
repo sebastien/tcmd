@@ -84,6 +84,12 @@ the panes at ≥100 columns and becomes a fullscreen viewer (`v`) below that;
 `⇧V` maximizes it over the whole pane row in either mode, and the next `⇧V`
 restores the previous layout (focus and pane widths included).
 
+`Enter` opens the entry under the cursor: a directory descends into it, a text
+file the host can edit opens in `$EDITOR`, and anything else — an image, media,
+a binary body, or any file on a host with no editor (the web) — opens the same
+fullscreen viewer, at any width. The viewer is modal: `Esc` or `v` closes it
+and `O`/`E` still act on the file.
+
 ```text
   TinyCmd - devbox
 ┌───────────────────────────────────┐┌──────────────────────────────────┐╭─notes.txt  <TXT>──────────────────╮

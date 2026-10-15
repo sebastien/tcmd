@@ -8,7 +8,9 @@
 // an optional preview column, the command bar and the command panel overlay.
 // App is the controller seam: component events (published bubbles) and key
 // chords are translated into `session.dispatch(commandId, payload)` calls; it
-// never mutates model state directly.
+// never mutates model state directly. It also owns the shared modal key
+// routing — the fullscreen viewer overlay included — so both renderers behave
+// alike.
 //
 // Environment: `normalizeKey(event)` (optional; identity when omitted) and
 // `quit(self)`. Renderer-specific bindings (pane borders, status color) live in
@@ -17,6 +19,7 @@
 import { derived, unwrap } from "select/state/cells"
 import { DEFAULT_KEYMAP, matchKeymap } from "../core/keymap.js"
 import { PANEL_FOCUS } from "../core/panel.js"
+import { isNarrow } from "./Frame.js"
 
 // Function: createInit
 // State initializer binding the root component to a `session`.
@@ -139,10 +142,25 @@ function fieldOwnsKeys(data, focus) {
 // Published events are registered separately via `createEvents()` (`.sub`).
 function createBehaviors(env) {
 	return {
-		// Global key handling: confirm dialogs first, the command panel, then
-		// the keymap.
+		// Global key handling: the fullscreen viewer modal first, then confirm
+		// dialogs, the command panel, and finally the keymap.
 		keys: (self, data, event) => {
 			const key = env.normalizeKey ? env.normalizeKey(event) : event
+			// The fullscreen inspector overlay is modal at any width: it opens
+			// from Enter on a file the host cannot edit (see `core/commands`)
+			// and from `v` below the inline breakpoint (below). While open it
+			// owns the keyboard — Esc or `v` closes it, ⇧O/⇧E act on the file,
+			// everything else is swallowed.
+			if (unwrap(data.viewerOpen)) {
+				if (key?.name === "escape" || (key?.name === "v" && !key.shift)) {
+					data.dispatch("view.toggleViewer")
+				} else if (key?.shift && key?.name === "o") {
+					data.dispatch("file.open", { paneId: unwrap(data.active) })
+				} else if (key?.shift && key?.name === "e") {
+					data.dispatch("file.edit", { paneId: unwrap(data.active) })
+				}
+				return
+			}
 			if (unwrap(data.confirm)) {
 				const name = key?.name
 				if (name === "y" || name === "return" || name === "enter") data.dispatch("confirm.yes")
@@ -316,6 +334,13 @@ function createBehaviors(env) {
 					return
 				}
 			}
+			// Below the inline breakpoint the viewer overlay replaces the side
+			// panel, so `v` opens it instead of toggling `showPreview` (⇧V
+			// still maximizes over the columns, via the keymap).
+			if (key?.name === "v" && !key?.shift && isNarrow(data, self)) {
+				data.dispatch("view.toggleViewer")
+				return
+			}
 			const id = matchKeymap(DEFAULT_KEYMAP, key)
 			if (!id) return
 			if (id === "app.quit") {
@@ -334,9 +359,15 @@ function createBehaviors(env) {
 // entry takes the same path as the `q` key.
 function createEvents(env = {}) {
 	return {
-		"commandbar:run": (_self, data, event) => {
+		"commandbar:run": (self, data, event) => {
 			if (event.data === "app.quit") {
-				env.quit?.(_self)
+				env.quit?.(self)
+				return
+			}
+			// Below the inline breakpoint the bar's `[Preview v]` opens the
+			// viewer overlay, the same as the key (see `createBehaviors#keys`).
+			if (event.data === "view.togglePreview" && isNarrow(data, self)) {
+				data.dispatch("view.toggleViewer")
 				return
 			}
 			if (event.data) data.dispatch(event.data)

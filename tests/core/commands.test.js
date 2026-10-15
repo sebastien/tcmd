@@ -81,6 +81,79 @@ describe("commands", () => {
 		expect(session.panes.left.path.value).toBe("/home/tester")
 	})
 
+	test("pane.enter edits a text file when the host has an editor", async () => {
+		const fs = createMockFs(TREE)
+		const edits = []
+		const os = {
+			canEdit: true,
+			edit: async (path) => {
+				edits.push(path)
+			},
+		}
+		const session = createSession({
+			fs,
+			os,
+			left: createPane({ fs, path: "/home" }),
+			right: createPane({ fs, path: "/" }),
+			viewMode: "commander",
+		})
+		await load(session)
+		// `tester/` is first; the cursor lands on it. Move to `notes.txt`.
+		const index = session.panes.left.entries.value.findIndex((entry) => entry.name === "notes.txt")
+		session.panes.left.cursor.set(index)
+		await session.dispatch("pane.enter")
+		expect(edits).toEqual(["/home/notes.txt"])
+		// Editing is not a preview: the fullscreen inspector stays closed.
+		expect(session.viewerOpen.value).toBe(false)
+	})
+
+	test("pane.enter previews a non-editable file fullscreen", async () => {
+		const fs = createMockFs({
+			"/": [{ name: "home", isDir: true }],
+			"/home": [{ name: "photo.png", text: "\u0089PNG", size: 4 }],
+		})
+		// A host with an editor still previews a kind it cannot edit.
+		const os = {
+			canEdit: true,
+			edit: async () => {
+				throw new Error("should not edit an image")
+			},
+		}
+		const session = createSession({
+			fs,
+			os,
+			left: createPane({ fs, path: "/home" }),
+			right: createPane({ fs, path: "/" }),
+			viewMode: "commander",
+		})
+		await load(session)
+		session.panes.left.cursor.set(0)
+		await session.dispatch("pane.enter")
+		expect(session.viewerOpen.value).toBe(true)
+		expect(session.previewTarget.value?.path).toBe("/home/photo.png")
+		expect(session.showPreview.value).toBe(true)
+	})
+
+	test("pane.enter previews a file fullscreen on a host without an editor", async () => {
+		// The default (null) host reports `canEdit: false`, as the web does.
+		const session = makeSession()
+		await load(session)
+		const index = session.panes.left.entries.value.findIndex((entry) => entry.name === "notes.txt")
+		session.panes.left.cursor.set(index)
+		await session.dispatch("pane.enter")
+		expect(session.viewerOpen.value).toBe(true)
+		expect(session.previewTarget.value?.path).toBe("/home/notes.txt")
+	})
+
+	test("view.toggleViewer opens and closes the fullscreen inspector", async () => {
+		const session = makeSession()
+		expect(session.viewerOpen.value).toBe(false)
+		await session.dispatch("view.toggleViewer")
+		expect(session.viewerOpen.value).toBe(true)
+		await session.dispatch("view.toggleViewer")
+		expect(session.viewerOpen.value).toBe(false)
+	})
+
 	test("pane.up returns to the parent", async () => {
 		const session = makeSession()
 		await load(session)
@@ -139,6 +212,17 @@ describe("commands", () => {
 		const session = makeSession()
 		session.dispatch("view.togglePreview")
 		expect(session.showPreview.value).toBe(false)
+	})
+
+	test("file.edit warns instead of tripping over a host without an editor", async () => {
+		// The default (null) host reports `canEdit: false`, as the web does; the
+		// command reports it rather than letting `edit` throw.
+		const session = makeSession()
+		await load(session)
+		const index = session.panes.left.entries.value.findIndex((entry) => entry.name === "notes.txt")
+		session.panes.left.cursor.set(index)
+		await session.dispatch("file.edit")
+		expect(session.notice.value).toEqual({ kind: "warning", text: "no editor available" })
 	})
 
 	test("view.maximize toggles the maximized inspector", () => {

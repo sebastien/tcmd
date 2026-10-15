@@ -67,8 +67,10 @@ bun run tcmd         # open cwd (left) and ~ (right)
 bun run tcmd /tmp ~  # open specific directories
 ```
 
-Keys: `↑/↓` move (`^↑/^↓` jump a few lines), `Enter/→` open (re-entering a
-directory restores the cursor it was left with), `←/Bksp` parent (the cursor
+Keys: `↑/↓` move (`^↑/^↓` jump a few lines), `Enter/→` open (a directory
+re-opens with the cursor it was left with, a text file opens in `$EDITOR`, and
+anything that cannot be edited — an image, media, a binary, or any file on a
+host with no editor — opens the fullscreen viewer), `←/Bksp` parent (the cursor
 lands on the directory you left), `Esc`/`⇧Esc` history back/forward, `Tab`/`⇧Tab` switch panes
 (`⇧Tab` goes back), `t` toggle the commander/explorer view, `Space` mark, `b`
 bookmark the cursor entry (or the pane

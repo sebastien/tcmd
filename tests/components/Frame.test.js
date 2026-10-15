@@ -127,6 +127,9 @@ describe("components Frame", () => {
 		expect(behaviors.inspectorNarrow(narrow, on)).toBe(true)
 		expect(behaviors.showInspectorInline(narrow, on)).toBe(false)
 		expect(behaviors.showViewer(narrow, { showPreview: false, viewerOpen: true })).toBe(true)
+		// The viewer overlay is width-independent: Enter opens it on a file
+		// that cannot be edited, however wide the terminal is.
+		expect(behaviors.showViewer(wide, { showPreview: false, viewerOpen: true })).toBe(true)
 	})
 
 	test("maximizing the inspector takes the whole pane row", () => {

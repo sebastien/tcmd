@@ -119,7 +119,8 @@
 		</box>
 	</box>
 
-	<!-- Fullscreen inspector for narrow viewports. -->
+	<!-- Fullscreen inspector overlay: `v` below the inline breakpoint, or
+	     Enter on a file the host cannot edit (any width). -->
 	<box when="showViewer" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="10"
 	     alignItems="center" justifyContent="center">
 		<box width="80%" height="90%">

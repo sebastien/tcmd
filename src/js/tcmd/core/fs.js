@@ -31,6 +31,7 @@ import nodeFs from "node:fs"
 import nodeOs from "node:os"
 import nodePath from "node:path"
 import { extname, join as pathJoin } from "./path.js"
+import { PREVIEW_BYTES } from "./preview.js"
 
 // Owner-name caches, filled lazily from /etc/passwd and /etc/group. Browsers
 // and non-POSIX hosts never populate them (the adapters there omit `owner`).
@@ -137,7 +138,7 @@ function createNodeFs() {
 			const stats = await statSafe(path)
 			return Boolean(stats?.isDir)
 		},
-		async readTextHead(path, maxBytes = 65536) {
+		async readTextHead(path, maxBytes = PREVIEW_BYTES) {
 			const file = nodeFs.openSync(path, "r")
 			try {
 				const buffer = Buffer.alloc(maxBytes)

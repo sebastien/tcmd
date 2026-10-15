@@ -10,6 +10,7 @@
 // real disk.
 
 import { basename, extname, join, parent, split } from "../../src/js/tcmd/core/path.js"
+import { PREVIEW_BYTES } from "../../src/js/tcmd/core/preview.js"
 
 // Function: createMockFs
 // Builds a mutable adapter over a `{ path -> entries }` map where each entry
@@ -205,7 +206,7 @@ function createMockFs(tree) {
 		},
 		stat,
 		isDir: async (path) => (await stat(path))?.isDir === true,
-		readTextHead: async (path, maxBytes = 65536) => {
+		readTextHead: async (path, maxBytes = PREVIEW_BYTES) => {
 			const normalized = normalize(path)
 			const entry = findEntry(normalized)
 			if (!entry) throw new Error(`ENOENT: ${path}`)

@@ -21,7 +21,7 @@
 
 import { unwrap } from "select/state/cells"
 import { formatSize } from "./format.js"
-import { previewSource } from "../core/session.js"
+import { previewSource } from "../core/preview.js"
 
 const KIND_LABELS = {
 	directory: "directory",
