@@ -23,7 +23,9 @@
 //              from the cursor alone.
 // - Text:      primary, secondary (hints) and heading (titles/breadcrumbs).
 // - Borders:   secondary (pane box borders, header rules, active/inactive) and
-//              primary (the frame and the modal overlays).
+//              primary (the frame and the modal overlays). The active pane's
+//              border and head rule follow the view mode: the Tiny blue in
+//              explorer, the gold accent in commander.
 // - Accent:    primary (cursor, active pane label) and secondary (marks).
 // - Semantic:  error, warning and tip, each with a background + foreground
 //              for filled badges (the command bar status, the confirm dialog).
@@ -52,6 +54,8 @@ const DARK = {
 	// Borders
 	borderSecondaryFg: "#33508f",
 	borderSecondaryActiveFg: "#f0b429",
+	// The active pane's border/head rule in explorer mode: the Tiny blue.
+	borderActiveExplorerFg: "#4088ff",
 	borderPrimaryFg: "#3d5590",
 	borderPrimaryActiveFg: "#ffc233",
 	// Accent
@@ -99,6 +103,7 @@ const LIGHT = {
 	// Borders
 	borderSecondaryFg: "#9aabd6",
 	borderSecondaryActiveFg: "#926000",
+	borderActiveExplorerFg: "#1d4ed8",
 	borderPrimaryFg: "#8c9cc9",
 	borderPrimaryActiveFg: "#a06a00",
 	// Accent
@@ -141,6 +146,7 @@ const MONO = {
 	textHeadingFg: undefined,
 	borderSecondaryFg: undefined,
 	borderSecondaryActiveFg: undefined,
+	borderActiveExplorerFg: undefined,
 	borderPrimaryFg: undefined,
 	borderPrimaryActiveFg: undefined,
 	accentFg: undefined,

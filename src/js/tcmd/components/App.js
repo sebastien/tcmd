@@ -4,7 +4,7 @@
 // Created: 2026-09-26
 
 // Module: tcmd/components/App
-// Root component: a header, two panes (breadcrumbs + FileList + summary each),
+// Root component: a header, two panes (breadcrumbs + FileList + detail each),
 // an optional preview column, the command bar and the command panel overlay.
 // App is the controller seam: component events (published bubbles) and key
 // chords are translated into `session.dispatch(commandId, payload)` calls; it
@@ -383,6 +383,8 @@ function createEvents(env = {}) {
 		},
 		"list:select": (_self, data, event) => data.dispatch("list.cursor", event.data),
 		"pane:activate": (_self, data, event) => data.dispatch("pane.activate", { paneId: event.data }),
+		// Clicking the identity bar's view-mode word flips explorer/commander.
+		"view:toggleMode": (_self, data) => data.dispatch("view.toggleMode"),
 		"bookmark:select": (_self, data, event) => {
 			// Clicking a bookmark row selects and jumps to it.
 			if (!unwrap(data.bookmarkOpen)) return

@@ -18,14 +18,25 @@ import appXml from "../components/App.xml" with { type: "text" }
 import { elideCrumbs } from "../components/format.js"
 import { appBehaviors, appEvents, appInit } from "../components/index.js"
 import { registerComponents } from "./catalogue.js"
-import { createFrameBehaviors, currentColumnId, INSPECTOR_INLINE_WIDTH, isExplorer, isNarrow } from "../components/Frame.js"
+import { createFrameBehaviors, currentColumnId, isExplorer, isNarrow, paneColumnWidth, PANE_GROW } from "../components/Frame.js"
 import { tuiTheme } from "./theme.js"
 
-// Constant: CURRENT_GROW
-// How much wider the explorer's middle (current) column is than its
-// neighbours — enough to read as the working pane, not enough to starve the
-// parent and preview columns.
-const CURRENT_GROW = 1.35
+// Columns available to a pane's breadcrumb strip: the viewport split by the
+// panes' own grow ratios (explorer grows the current column, so its mirrors
+// are narrower than an even split), minus the pane chrome. `0` (unknown, web)
+// disables the collapse.
+function crumbWidthFor(size, session, paneId) {
+	return derived([size, session.showPreview, session.viewMode, session.currentId], ([value, showPreview, viewMode, currentId]) => {
+		const columns = paneColumnWidth(value?.width, paneId, { viewMode, currentId, showPreview })
+		return columns > 0 ? Math.max(8, columns - 8) : 0
+	})
+}
+
+// The elided breadcrumb segments for one pane (a presentation-only view of the
+// pane's own segment list; paths stay intact for clicks).
+function paneCrumbs(size, session, paneId, pane) {
+	return derived([pane.segments, crumbWidthFor(size, session, paneId)], ([segments, width]) => elideCrumbs(segments, width))
+}
 
 // Function: createAppComponent
 // Builds the root component bound to a `session`.
@@ -45,27 +56,15 @@ function createAppComponent(session, options = {}) {
 	const help = options.help ?? cell(false)
 	const viewer = options.viewer ?? cell(false)
 
-	// Columns available to a pane's breadcrumb strip: the viewport shared by
-	// the panes (plus the inline inspector), minus the pane border, the
-	// header inset, the SRC/DST slot and a safety column. `0` (unknown, web)
-	// disables the collapse.
-	const crumbWidth = derived([size, session.showPreview], ([value, showPreview]) => {
-		const width = Math.floor(value?.width ?? 0)
-		if (width <= 0) return 0
-		const columns = showPreview && width >= INSPECTOR_INLINE_WIDTH ? 3 : 2
-		return Math.max(8, Math.floor(width / columns) - 8)
-	})
-	// The elided breadcrumb segments for each pane (presentation-only view of
-	// the pane's own segment list; paths stay intact for clicks).
-	const leftCrumbs = derived([session.panes.left.segments, crumbWidth], ([segments, width]) =>
-		elideCrumbs(segments, width),
-	)
-	const rightCrumbs = derived([session.panes.right.segments, crumbWidth], ([segments, width]) =>
-		elideCrumbs(segments, width),
-	)
-	const parentCrumbs = derived([session.panes.parent.segments, crumbWidth], ([segments, width]) =>
-		elideCrumbs(segments, width),
-	)
+	// Columns available to each pane's breadcrumb strip: the pane's own share
+	// of the viewport (explorer's current column is wider, so its mirrors are
+	// narrower), minus the pane chrome. `0` (unknown, web) disables the
+	// collapse. An even `width / columns` split used to overflow the narrower
+	// mirror columns, which the renderer then mangled.
+	const leftCrumbs = paneCrumbs(size, session, "left", session.panes.left)
+	const rightCrumbs = paneCrumbs(size, session, "right", session.panes.right)
+	const parentCrumbs = paneCrumbs(size, session, "parent", session.panes.parent)
+	const previewCrumbs = paneCrumbs(size, session, "preview", session.panes.preview)
 
 	const quit = options.quit ?? ((self) => {
 		// Destroying the renderer from within a keypress deadlocks the native
@@ -79,6 +78,15 @@ function createAppComponent(session, options = {}) {
 	const baseKeys = appBehaviors({ quit }).keys
 	const frame = createFrameBehaviors({ theme: tuiTheme })
 
+	// The active pane's border and head rule take the view mode's own accent:
+	// the Tiny blue in explorer, the gold accent in commander. An inactive
+	// pane keeps the muted border. `isExplorer` defaults an absent mode to
+	// commander, matching the rest of the workspace.
+	const paneActiveFg = (data) =>
+		isExplorer(data) ? tuiTheme.borderActiveExplorerFg : tuiTheme.borderSecondaryActiveFg
+	const paneBorderFg = (paneId) => (_self, data) =>
+		unwrap(data.active) === paneId ? paneActiveFg(data) : tuiTheme.borderSecondaryFg
+
 	return ui
 		.component("App")
 		.init(() => ({
@@ -89,6 +97,7 @@ function createAppComponent(session, options = {}) {
 			leftSegments: leftCrumbs,
 			parentSegments: parentCrumbs,
 			rightSegments: rightCrumbs,
+			previewSegments: previewCrumbs,
 		}))
 		.does({
 			...frame,
@@ -129,28 +138,24 @@ function createAppComponent(session, options = {}) {
 				}
 				return baseKeys(self, data, event)
 			},
-			// TUI-only presentation of the shared App state.
-			leftBorderFg: (_self, data) =>
-				unwrap(data.active) === "left" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
-			rightBorderFg: (_self, data) =>
-				unwrap(data.active) === "right" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
-			parentBorderFg: (_self, data) =>
-				unwrap(data.active) === "parent" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
+			// TUI-only presentation of the shared App state: each pane's
+			// border and header rule track its own focus, tinted by the view
+			// mode (explorer blue, commander gold).
+			leftBorderFg: paneBorderFg("left"),
+			rightBorderFg: paneBorderFg("right"),
+			parentBorderFg: paneBorderFg("parent"),
 			// The header rule carries the same focus tint as the pane border.
-			leftHeadRuleFg: (_self, data) =>
-				unwrap(data.active) === "left" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
-			rightHeadRuleFg: (_self, data) =>
-				unwrap(data.active) === "right" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
-			parentHeadRuleFg: (_self, data) =>
-				unwrap(data.active) === "parent" ? tuiTheme.borderSecondaryActiveFg : tuiTheme.borderSecondaryFg,
+			leftHeadRuleFg: paneBorderFg("left"),
+			rightHeadRuleFg: paneBorderFg("right"),
+			parentHeadRuleFg: paneBorderFg("parent"),
 			// In explorer the current column takes the extra width; in
 			// commander both panes share the row evenly. The columns carry
 			// `flexBasis="0"` so the whole row is distributed by these
 			// growers instead of by the content each column would claim.
 			leftGrow: (_self, data) =>
-				isExplorer(data) && currentColumnId(data) === "left" ? CURRENT_GROW : 1,
+				isExplorer(data) && currentColumnId(data) === "left" ? PANE_GROW : 1,
 			rightGrow: (_self, data) =>
-				isExplorer(data) && currentColumnId(data) === "right" ? CURRENT_GROW : 1,
+				isExplorer(data) && currentColumnId(data) === "right" ? PANE_GROW : 1,
 		})
 		.sub(appEvents({ quit }))
 		.using(appXml)

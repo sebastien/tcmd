@@ -4,6 +4,8 @@ import {
 	INSPECTOR_INLINE_WIDTH,
 	MODE_SLOTS,
 	modeWord,
+	PANE_GROW,
+	paneColumnWidth,
 	VERSION,
 } from "../../src/js/tcmd/components/Frame.js"
 
@@ -77,6 +79,34 @@ describe("components Frame", () => {
 		expect(behaviors.topBarStatusFg()).toBe("dim")
 	})
 
+	test("pane columns follow the panes' own grow ratios", () => {
+		// Explorer: the current column grows by PANE_GROW, so its mirrors are
+		// narrower than an even split — the width bug that mangled the mirror
+		// breadcrumbs. 90 / 2.35 = 38, 90 * 1.35 / 2.35 = 51.
+		const explorer = { viewMode: "explorer", currentId: "left", showPreview: false }
+		expect(paneColumnWidth(90, "parent", explorer)).toBe(Math.floor(90 / (1 + PANE_GROW)))
+		expect(paneColumnWidth(90, "left", explorer)).toBe(Math.floor((90 * PANE_GROW) / (1 + PANE_GROW)))
+		expect(paneColumnWidth(90, "right", explorer)).toBe(0) // hidden mirror
+		// Flipping the current pane swaps which column is the wide one.
+		expect(paneColumnWidth(90, "right", { ...explorer, currentId: "right" })).toBe(
+			Math.floor((90 * PANE_GROW) / (1 + PANE_GROW)),
+		)
+		// The inline inspector adds an equal column: 120 / 3.35.
+		const preview = { ...explorer, showPreview: true }
+		expect(paneColumnWidth(120, "parent", preview)).toBe(Math.floor(120 / (2 + PANE_GROW)))
+		expect(paneColumnWidth(120, "left", preview)).toBe(Math.floor((120 * PANE_GROW) / (2 + PANE_GROW)))
+		expect(paneColumnWidth(120, "preview", preview)).toBe(Math.floor(120 / (2 + PANE_GROW)))
+		// Commander tiles its two panes evenly; the parent column does not exist.
+		const commander = { viewMode: "commander", currentId: "left", showPreview: false }
+		expect(paneColumnWidth(80, "left", commander)).toBe(40)
+		expect(paneColumnWidth(80, "right", commander)).toBe(40)
+		expect(paneColumnWidth(80, "parent", commander)).toBe(0)
+		// Unknown viewport, hidden pane, unknown id: all 0.
+		expect(paneColumnWidth(0, "left", commander)).toBe(0)
+		expect(paneColumnWidth(80, "preview", commander)).toBe(0)
+		expect(paneColumnWidth(80, "nope", commander)).toBe(0)
+	})
+
 	test("the minimum-size gate fires below the breakpoint", () => {
 		const behaviors = createFrameBehaviors({ theme })
 		expect(behaviors.tooSmall(selfAt(50, 12), {})).toBe(true)
@@ -128,9 +158,9 @@ describe("components Frame", () => {
 		expect(behaviors.barHeight(selfAt(20, 30), data)).toBe(2)
 		// A notice or error swaps the keys for a one-line status.
 		expect(behaviors.barHeight(selfAt(20, 30), { ...data, notice: { kind: "tip", text: "hi" } })).toBe(1)
-		// The listing windows around the chrome: eight fixed rows plus the
-		// bar. 30 - 8 - 1 = 21 listing rows with a one-row bar.
-		expect(behaviors.listViewport(selfAt(120, 30), { ...data, commandBarItems: [] })).toBe(21)
+		// The listing windows around the chrome: seven fixed rows plus the
+		// bar. 30 - 7 - 1 = 22 listing rows with a one-row bar.
+		expect(behaviors.listViewport(selfAt(120, 30), { ...data, commandBarItems: [] })).toBe(22)
 		// Unknown size: render everything to measure.
 		expect(behaviors.listViewport(selfAt(0, 0), data)).toBe(0)
 	})

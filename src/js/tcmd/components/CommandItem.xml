@@ -1,6 +1,6 @@
 <box flexDirection="row" height="1" flexShrink="0" on:click="item.id!commandbar:run">
-	<text out="itemSep" out:fg="itemSepFg" wrapMode="none"></text>
+	<text out="itemOpen" out:fg="itemOpenFg" wrapMode="none"></text>
 	<text out="itemHead" out:fg="itemFg" wrapMode="none"></text>
 	<text out="keyText" out:fg="keyFg" wrapMode="none"></text>
-	<text out="endText" out:fg="itemFg" wrapMode="none"></text>
+	<text out="itemClose" out:fg="itemCloseFg" wrapMode="none"></text>
 </box>

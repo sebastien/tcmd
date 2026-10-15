@@ -16,32 +16,33 @@ describe("CommandItem", () => {
 		expect(keyGlyph("Enter")).toBe("⏎")
 		expect(keyGlyph("Tab")).toBe("⇥")
 		expect(keyGlyph("^P")).toBe("^P")
-		expect(commandWidth({ title: "Open", keys: "Enter" }, 0)).toBe("[Open ⏎] ".length)
-		// Later entries carry the leading pipe divider.
-		expect(commandWidth({ title: "Open", keys: "Enter" }, 1)).toBe("[Open ⏎] | ".length)
+		expect(commandWidth({ title: "Open", keys: "Enter" })).toBe("[Open ⏎] ".length)
+		// Entries are separated by their trailing space alone, no divider.
+		expect(commandWidth({ title: "Parent", keys: "←" })).toBe("[Parent ←] ".length)
 		expect(isPrimary({ primary: true })).toBe(true)
 		expect(isPrimary({})).toBe(false)
 	})
 
-	test("renders the divider, the head, the accent key and the closer", () => {
+	test("renders the dim brackets, the head, the accent key and the closer", () => {
 		const behaviors = createBehaviors(behaviorEnv)
 		const primary = { item: { id: "pane.enter", title: "Open", keys: "Enter", primary: true }, index: 0 }
 		const secondary = { item: { id: "pane.up", title: "Parent", keys: "←" }, index: 1 }
-		// The first entry leads with the button; later ones a dim pipe.
-		expect(behaviors.itemSep(null, primary)).toBe("")
-		expect(behaviors.itemSep(null, secondary)).toBe("| ")
-		expect(behaviors.itemSepFg()).toBe("dim")
-		expect(behaviors.itemHead(null, primary)).toBe("[Open ")
+		// The brackets are dim, the title bright.
+		expect(behaviors.itemOpen(null, primary)).toBe("[")
+		expect(behaviors.itemOpenFg()).toBe("dim")
+		expect(behaviors.itemHead(null, primary)).toBe("Open ")
 		expect(behaviors.keyText(null, primary)).toBe("⏎")
-		expect(behaviors.endText(null, primary)).toBe("] ")
+		expect(behaviors.itemClose(null, primary)).toBe("] ")
+		expect(behaviors.itemCloseFg()).toBe("dim")
 		// Primary keys take the accent, the rest the secondary accent.
 		expect(behaviors.keyFg(null, primary)).toBe("accent")
 		expect(behaviors.keyFg(null, secondary)).toBe("mark")
 		// Heads are plain text; keyless entries are dim words without brackets.
 		expect(behaviors.itemFg(null, secondary)).toBe("text")
+		expect(behaviors.itemOpen(null, { item: { title: "3 marked" } })).toBe("")
 		expect(behaviors.itemHead(null, { item: { title: "3 marked" } })).toBe("3 marked ")
 		expect(behaviors.itemFg(null, { item: { title: "3 marked" } })).toBe("dim")
 		expect(behaviors.keyText(null, { item: { title: "3 marked" } })).toBe("")
-		expect(behaviors.endText(null, { item: { title: "3 marked" } })).toBe("")
+		expect(behaviors.itemClose(null, { item: { title: "3 marked" } })).toBe("")
 	})
 })

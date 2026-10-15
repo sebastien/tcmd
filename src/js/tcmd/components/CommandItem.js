@@ -8,16 +8,16 @@
 // both engines. `item.id` may be null for pure key hints, in which case a
 // click dispatches nothing.
 //
-// Each entry renders as a plain bracket shorthand, preceded by a dim `|`
-// divider (except the first entry):
+// Each entry renders as a plain bracket shorthand:
 //
-//   [Open ⏎]   — the bracket and title in the text colour, the key glyph in
-//                the accent (primary) or secondary accent, and a trailing
-//                space separating it from the next entry.
+//   [Open ⏎]   — the brackets in the dim text colour, the title in the text
+//                colour, the key glyph in the accent (primary) or secondary
+//                accent, and a trailing space separating it from the next
+//                entry. Entries are separated by that space alone — no
+//                divider glyph.
 //
 // Entries without a key (the marked count) render as a dimmed plain word
-// with no brackets. The web renders the same label as a single string (its
-// buttons are separated by their gap, not the pipe).
+// with no brackets. The web renders the same label as a single string.
 //
 // Environment: `accentFg` (primary), `accentSecondaryFg` (secondary),
 // `textFg`, `textSecondaryFg`.
@@ -36,16 +36,10 @@ function commandLabel(item) {
 	return item.keys ? `[${item.title} ${keyGlyph(item.keys)}] ` : `${item.title} `
 }
 
-// Constant: COMMAND_SEP
-// The divider drawn before every entry but the first: a dim pipe and the
-// space that keeps it clear of the button.
-const COMMAND_SEP = "| "
-
 // Function: commandWidth
-// Columns the entry occupies: its label plus the leading separator when it
-// is not the first entry.
-function commandWidth(item, index) {
-	return commandLabel(item).length + (index > 0 ? COMMAND_SEP.length : 0)
+// Columns the entry occupies: its label, brackets and trailing space included.
+function commandWidth(item) {
+	return commandLabel(item).length
 }
 
 // Function: isPrimary
@@ -57,23 +51,24 @@ function isPrimary(item) {
 // Function: createBehaviors
 // Builds the CommandItem behavior map for the given renderer environment.
 function createBehaviors(env) {
-	const head = (_self, data) => (data.item?.keys ? `[${data.item.title} ` : `${data.item?.title ?? ""} `)
 	return {
 		// Web: the whole shorthand as one label.
 		itemLabel: (_self, data) => commandLabel(data.item),
 		itemHint: (_self, data) => !data.item?.id,
-		// TUI: the dim pipe divider, then the bracket + title head, the
-		// accent key glyph, the closer.
-		itemSep: (_self, data) => (data.index > 0 ? COMMAND_SEP : ""),
-		itemSepFg: () => env?.textSecondaryFg,
-		itemHead: head,
+		// TUI: the dim brackets around the bright title, then the accent key
+		// glyph and the closer. Keyless entries (the marked count) render as a
+		// plain dim word, with no brackets.
+		itemOpen: (_self, data) => (data.item?.keys ? "[" : ""),
+		itemOpenFg: () => env?.textSecondaryFg,
+		itemHead: (_self, data) => `${data.item?.title ?? ""} `,
 		itemFg: (_self, data) => (data.item?.keys ? env?.textFg : env?.textSecondaryFg),
 		keyText: (_self, data) => (data.item?.keys ? keyGlyph(data.item.keys) : ""),
 		keyFg: (_self, data) => (isPrimary(data.item) ? env?.accentFg : env?.accentSecondaryFg),
-		endText: (_self, data) => (data.item?.keys ? "] " : ""),
+		itemClose: (_self, data) => (data.item?.keys ? "] " : ""),
+		itemCloseFg: () => env?.textSecondaryFg,
 	}
 }
 
-export { COMMAND_SEP, commandLabel, commandWidth, createBehaviors, isPrimary, keyGlyph }
+export { commandLabel, commandWidth, createBehaviors, isPrimary, keyGlyph }
 
 // EOF

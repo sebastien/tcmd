@@ -25,15 +25,18 @@
 			     Cmd oranges (see `modeGradient` in Frame.js). The trailing
 			     slots of the shorter word are empty and take no column. -->
 			<box flexDirection="row" flexShrink="0" overflow="hidden">
-				<text when="modeHas0" out="modeL0" out:fg="modeFg0" wrapMode="none"></text>
-				<text when="modeHas1" out="modeL1" out:fg="modeFg1" wrapMode="none"></text>
-				<text when="modeHas2" out="modeL2" out:fg="modeFg2" wrapMode="none"></text>
-				<text when="modeHas3" out="modeL3" out:fg="modeFg3" wrapMode="none"></text>
-				<text when="modeHas4" out="modeL4" out:fg="modeFg4" wrapMode="none"></text>
-				<text when="modeHas5" out="modeL5" out:fg="modeFg5" wrapMode="none"></text>
-				<text when="modeHas6" out="modeL6" out:fg="modeFg6" wrapMode="none"></text>
-				<text when="modeHas7" out="modeL7" out:fg="modeFg7" wrapMode="none"></text>
-				<text when="modeHas8" out="modeL8" out:fg="modeFg8" wrapMode="none"></text>
+				<!-- Clicking the mode word flips explorer ⇄ commander. -->
+				<box flexDirection="row" overflow="hidden" on:click="!view:toggleMode">
+					<text when="modeHas0" out="modeL0" out:fg="modeFg0" wrapMode="none"></text>
+					<text when="modeHas1" out="modeL1" out:fg="modeFg1" wrapMode="none"></text>
+					<text when="modeHas2" out="modeL2" out:fg="modeFg2" wrapMode="none"></text>
+					<text when="modeHas3" out="modeL3" out:fg="modeFg3" wrapMode="none"></text>
+					<text when="modeHas4" out="modeL4" out:fg="modeFg4" wrapMode="none"></text>
+					<text when="modeHas5" out="modeL5" out:fg="modeFg5" wrapMode="none"></text>
+					<text when="modeHas6" out="modeL6" out:fg="modeFg6" wrapMode="none"></text>
+					<text when="modeHas7" out="modeL7" out:fg="modeFg7" wrapMode="none"></text>
+					<text when="modeHas8" out="modeL8" out:fg="modeFg8" wrapMode="none"></text>
+				</box>
 				<text out="topBarStatus" out:fg="topBarStatusFg" wrapMode="none"></text>
 			</box>
 		</box>
@@ -64,7 +67,6 @@
 					          in:active="parentActive" in:paneId="parentId" in:loading="parentLoading"
 					          in:viewport="listViewport"></filelist>
 					<entrydetail in:entry="parentEntry" in:marked="parentMarked" height="2"></entrydetail>
-					<summary in:entries="parentEntries" in:disk="parentDisk" height="1"></summary>
 				</box>
 				<box when="showLeftPane" flexDirection="column" flexBasis="0" out:flexGrow="leftGrow" border borderStyle="single"
 				     out:border="leftBorder" out:borderColor="leftBorderFg"
@@ -80,7 +82,6 @@
 					          in:active="leftActive" in:paneId="leftId" in:loading="leftLoading"
 					          in:viewport="listViewport"></filelist>
 					<entrydetail in:entry="leftEntry" in:marked="leftMarked" height="2"></entrydetail>
-					<summary in:entries="leftEntries" in:disk="leftDisk" height="1"></summary>
 				</box>
 				<box when="showRightPane" flexDirection="column" flexBasis="0" out:flexGrow="rightGrow" border borderStyle="single"
 				     out:border="rightBorder" out:borderColor="rightBorderFg"
@@ -96,7 +97,6 @@
 					          in:active="rightActive" in:paneId="rightId" in:loading="rightLoading"
 					          in:viewport="listViewport"></filelist>
 					<entrydetail in:entry="rightEntry" in:marked="rightMarked" height="2"></entrydetail>
-					<summary in:entries="rightEntries" in:disk="rightDisk" height="1"></summary>
 				</box>
 				<filepreview when="showInspectorInline" in:preview="preview" in:show="showInspectorInline"
 				             in:entry="appEntry" in:paneId="previewId"

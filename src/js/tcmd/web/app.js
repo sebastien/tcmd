@@ -14,7 +14,7 @@ import appHtml from "../components/App.html" with { type: "text" }
 import { appBehaviors, appEvents, appInit } from "../components/index.js"
 import { registerWebComponents } from "./catalogue.js"
 import { elideCrumbs } from "../components/format.js"
-import { createFrameBehaviors, INSPECTOR_INLINE_WIDTH, isNarrow } from "../components/Frame.js"
+import { createFrameBehaviors, INSPECTOR_INLINE_WIDTH, isNarrow, paneColumnWidth } from "../components/Frame.js"
 import { connectEffects } from "./effects.js"
 import { webTheme } from "./theme.js"
 
@@ -59,6 +59,10 @@ function paneClass(data, paneId) {
 
 function webViewBehaviors() {
 	return {
+		// The view mode as an app-level class (`is-explorer` / `is-commander`),
+		// so the CSS can tint the active pane per mode (blue/gold).
+		appModeClass: (_self, data) =>
+			`is-${unwrap(data.viewMode) === "explorer" ? "explorer" : "commander"}`,
 		headerView: (_self, data) => ({ host: data.appHost, path: data.appPath, mode: data.viewMode }),
 		bookmarkView: (_self, data) => ({
 			items: data.bookmarkItems,
@@ -99,13 +103,8 @@ function webViewBehaviors() {
 			loading: data.leftLoading,
 		}),
 		leftPaneClass: (_self, data) => paneClass(data, "left"),
-		leftSummaryView: (_self, data) => ({
-			entries: data.leftEntries,
-			disk: data.leftDisk,
-			width: data.paneWidth,
-		}),
 		// The explorer's first column: the parent of the current directory,
-		// a full pane of its own (header, filter, listing, detail, summary).
+		// a full pane of its own (header, filter, listing, detail).
 		parentCrumbsView: (_self, data) => ({
 			segments: data.parentSegments,
 			paneId: data.parentId,
@@ -131,11 +130,6 @@ function webViewBehaviors() {
 			loading: data.parentLoading,
 		}),
 		parentPaneClass: (_self, data) => paneClass(data, "parent"),
-		parentSummaryView: (_self, data) => ({
-			entries: data.parentEntries,
-			disk: data.parentDisk,
-			width: data.paneWidth,
-		}),
 		panelView: (_self, data) => ({
 			// Cells pass through (as `in:` slots do in the TUI); `query`/`value`
 			// are written back by the inputs' `inout` two-way bindings.
@@ -191,11 +185,6 @@ function webViewBehaviors() {
 			loading: data.rightLoading,
 		}),
 		rightPaneClass: (_self, data) => paneClass(data, "right"),
-		rightSummaryView: (_self, data) => ({
-			entries: data.rightEntries,
-			disk: data.rightDisk,
-			width: data.paneWidth,
-		}),
 	}
 }
 
@@ -211,7 +200,16 @@ function createWebApp(session, options = {}) {
 		const columns = show && value.width >= INSPECTOR_INLINE_WIDTH ? 3 : 2
 		return Math.max(1, Math.floor(value.width / columns) - 4)
 	})
-	const crumbs = (pane) => derived([pane.segments, paneWidth], ([segments, width]) => elideCrumbs(segments, width))
+	// Breadcrumb budgets follow each pane's OWN share of the row (explorer
+	// grows the current column, so its mirrors are narrower than an even
+	// split), or the crumbs overflow the narrower columns.
+	const crumbWidth = (paneId) =>
+		derived([size, session.showPreview, session.viewMode, session.currentId], ([value, showPreview, viewMode, currentId]) => {
+			const columns = paneColumnWidth(value?.width, paneId, { viewMode, currentId, showPreview })
+			return columns > 0 ? Math.max(1, columns - 4) : 0
+		})
+	const crumbs = (paneId, pane) =>
+		derived([pane.segments, crumbWidth(paneId)], ([segments, width]) => elideCrumbs(segments, width))
 	const quit = (self) => self.unmount?.()
 	// DOM inputs have no native `enter` event; the root routes Enter for them.
 	const baseKeys = appBehaviors({ normalizeKey, quit }).keys
@@ -223,9 +221,10 @@ function createWebApp(session, options = {}) {
 			helpOpen: help,
 			viewerOpen: viewer,
 			paneWidth,
-			leftSegments: crumbs(session.panes.left),
-			parentSegments: crumbs(session.panes.parent),
-			rightSegments: crumbs(session.panes.right),
+			leftSegments: crumbs("left", session.panes.left),
+			parentSegments: crumbs("parent", session.panes.parent),
+			rightSegments: crumbs("right", session.panes.right),
+			previewSegments: crumbs("preview", session.panes.preview),
 		}))
 		.does({
 			...createFrameBehaviors({ theme: webTheme }),

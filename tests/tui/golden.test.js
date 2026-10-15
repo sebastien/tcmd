@@ -61,11 +61,8 @@ describe("golden frames", () => {
 			expect(frame).toContain("/home/documents")
 			expect(frame).toContain("report.txt")
 			expect(frame).not.toContain("directory: documents/")
-			expect(frame).toContain(" [Open O] [Edit E]")
-			// A rule separates the inspector's contents from its shortcuts.
-			const footer = lines.findIndex((line) => line.includes("[Open O] [Edit E]"))
-			expect(footer).toBeGreaterThan(1)
-			expect(lines[footer - 1]).toContain("─")
+			// The inspector no longer foots with the shortcut line.
+			expect(frame).not.toContain("[Open O] [Edit E]")
 			// The status bar shows bracket shorthands on the left, inside the
 			// frame — no Powerline pill caps.
 			const bar = frame.split("\n").find((line) => line.includes("[Open ⏎]"))
@@ -177,7 +174,6 @@ describe("golden frames", () => {
 			await settle(setup)
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain("(empty)")
-			expect(frame).toContain("0 dirs, 0 files")
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -355,14 +351,16 @@ describe("golden frames", () => {
 		const { setup, size } = await makeSetup(120, 30)
 		try {
 			await setup.renderOnce()
-			expect(setup.captureCharFrame()).toContain(" [Open O] [Edit E]")
+			// The inline inspector previews `documents/` as a directory column:
+			// its listing (`report.txt`) shows only while the inspector is inline.
+			expect(setup.captureCharFrame()).toContain("report.txt")
 
 			// Shrink the viewport: the inline inspector collapses and the bar
 			// wraps its shorthands onto more rows.
 			size.set({ width: 70, height: 20 })
 			await settle(setup)
 			const narrow = setup.captureCharFrame()
-			expect(narrow).not.toContain(" [Open O] [Edit E]")
+			expect(narrow).not.toContain("report.txt")
 			expect(narrow).toContain("[Switch ⇥]")
 			// The bookmark hint stays visible; the bar wraps instead of trimming.
 			expect(narrow).toContain("Bookmarks")
@@ -370,16 +368,16 @@ describe("golden frames", () => {
 			// Grow again: the inspector returns.
 			size.set({ width: 120, height: 30 })
 			await settle(setup)
-			expect(setup.captureCharFrame()).toContain(" [Open O] [Edit E]")
+			expect(setup.captureCharFrame()).toContain("report.txt")
 		} finally {
 			setup.renderer.destroy()
 		}
 	})
 
-	test("the listing fills the pane: chrome takes ten rows, not one more", async () => {
+	test("the listing fills the pane: chrome takes nine rows, not one more", async () => {
 		// A tall listing makes the visible row count readable off the frame:
 		// the fixed chrome (identity bar, pane border, header, rule, detail,
-		// summary, command bar) consumes eight rows plus the wrapped bar, which is
+		// command bar) consumes seven rows plus the wrapped bar, which is
 		// what the windowed viewport (`frame.paneListHeight`) is derived
 		// from.
 		const tall = {
@@ -390,27 +388,57 @@ describe("golden frames", () => {
 				size: i,
 			})),
 		}
-		// 120x40 → 30 listing rows (eight chrome rows + the two-row wrapped
-		// bar): the last visible row is f29, f30 is not.
+		// 120x40 → 31 listing rows (seven chrome rows + the two-row wrapped
+		// bar): the last visible row is f30, f31 is not.
 		const { setup: big } = await makeSetupTui(tall, 120, 40)
 		try {
 			await settle(big)
 			const frame = big.captureCharFrame()
-			expect(frame).toContain("f29.txt")
-			expect(frame).not.toContain("f30.txt")
+			expect(frame).toContain("f30.txt")
+			expect(frame).not.toContain("f31.txt")
 		} finally {
 			big.renderer.destroy()
 		}
 
-		// 120x30 → 20 listing rows: f19 in, f20 out.
+		// 120x30 → 21 listing rows: f20 in, f21 out.
 		const { setup: small } = await makeSetupTui(tall, 120, 30)
 		try {
 			await settle(small)
 			const frame = small.captureCharFrame()
-			expect(frame).toContain("f19.txt")
-			expect(frame).not.toContain("f20.txt")
+			expect(frame).toContain("f20.txt")
+			expect(frame).not.toContain("f21.txt")
 		} finally {
 			small.renderer.destroy()
+		}
+	})
+
+	test("explorer mirror crumbs fit their narrower column", async () => {
+		// The explorer's parent mirror is narrower than an even split (the
+		// current column grows), so an even `width / 2` breadcrumb budget used
+		// to overflow it and the renderer mangled every segment mid-name.
+		const deep = "/home/sebastien/Workspace/Perso/tcmd"
+		const tree = {
+			"/": [{ name: "home", isDir: true }],
+			"/home": [{ name: "sebastien", isDir: true }],
+			"/home/sebastien": [{ name: "Workspace", isDir: true }],
+			"/home/sebastien/Workspace": [{ name: "Perso", isDir: true }],
+			"/home/sebastien/Workspace/Perso": [{ name: "tcmd", isDir: true }],
+			[deep]: [
+				{ name: ".git", isDir: true },
+				{ name: "README.md", text: "x", size: 1 },
+			],
+			[deep + "/.git"]: [{ name: "HEAD", text: "x", size: 1 }],
+		}
+		const { setup, session } = await makeSetupTui(tree, 90, 24)
+		try {
+			await session.panes.left.navigate(deep + "/.git")
+			await settle(setup)
+			// The first column is the parent mirror (the current pane's parent).
+			const parentColumn = setup.captureCharFrame().split("\n")[2].split("││")[0]
+			expect(parentColumn).toContain("/h/s/Workspace/Perso/tcmd")
+			expect(parentColumn).not.toContain("sebastie")
+		} finally {
+			setup.renderer.destroy()
 		}
 	})
 })

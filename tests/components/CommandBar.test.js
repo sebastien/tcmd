@@ -73,13 +73,13 @@ describe("CommandBar", () => {
 		]
 		// Everything fits on one row when the width allows it.
 		expect(commandBarRowCount(items, 80)).toBe(1)
-		// "[Open ⏎] " is 9 columns, then "[Parent ←] | " 13 (the pipe divider),
-		// then "[Bookmark b] | " 15: a 30-column bar holds the first two only.
+		// "[Open ⏎] " is 9 columns, "[Parent ←] " 11, "[Bookmark b] " 13:
+		// a 30-column bar holds the first two only.
 		expect(commandBarRowCount(items, 30)).toBe(2)
 		// At 22 columns Open and Parent still share the first row.
 		expect(commandBarRowCount(items, 22)).toBe(2)
-		// At 20 the divider pushes Parent onto its own row.
-		expect(commandBarRowCount(items, 20)).toBe(3)
+		// At 20 Open and Parent exactly fill the row; Bookmark wraps.
+		expect(commandBarRowCount(items, 20)).toBe(2)
 		// At 12 every entry needs its own row.
 		expect(commandBarRowCount(items, 12)).toBe(3)
 		// Unknown width assumes a single row.

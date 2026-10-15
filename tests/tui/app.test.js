@@ -34,19 +34,15 @@ describe("tui app", () => {
 			// Command bar key hints from the command registry.
 			expect(frame).toContain("[Open ⏎]")
 			expect(frame).toContain("[Switch ⇥]")
-			// Summary counts.
-			expect(frame).toContain("files")
 			expect(session.panes.left.entries.value.length).toBe(3)
 		} finally {
 			setup.renderer.destroy()
 		}
 	})
 
-	test("the entry detail sits above the directory summary", async () => {
+	test("the entry detail renders under the listing", async () => {
 		const { setup, session } = await makeSetup()
 		try {
-			const frame = setup.captureCharFrame()
-			const lines = frame.split("\n")
 			// The cursor starts on `notes.txt` (index 1 after `tester/`).
 			session.panes.left.cursor.set(1)
 			await settle(setup)
@@ -54,12 +50,8 @@ describe("tui app", () => {
 			const detailLine = detail.split("\n").find((line) => line.includes("file · 26B"))
 			expect(detailLine).toBeDefined()
 			expect(detail).toContain("rw-r--r--")
-			// The detail block sits above the counts row, which still renders.
-			const countsIndex = detail.split("\n").findIndex((line) => line.includes("files"))
-			const detailIndex = detail.split("\n").findIndex((line) => line.includes("file · 26B"))
-			expect(detailIndex).toBeGreaterThan(-1)
-			expect(countsIndex).toBeGreaterThan(detailIndex)
-			expect(lines.length).toBeGreaterThan(0)
+			// The summary counts row is gone from the pane footer.
+			expect(detail).not.toContain(" dirs,")
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -362,6 +354,20 @@ describe("tui app", () => {
 			await setup.mockMouse.click(55, 12)
 			await settle(setup)
 			expect(session.active.value).toBe("right")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("clicking the identity bar's mode word toggles the view", async () => {
+		const { setup, session } = await makeSetup(120, 30, { viewMode: "commander" })
+		try {
+			expect(session.viewMode.value).toBe("commander")
+			// The mode word rides the right-hand end of the identity bar (row 0).
+			const row0 = setup.captureCharFrame().split("\n")[0]
+			await setup.mockMouse.click(row0.indexOf("commander") + 1, 0)
+			await settle(setup)
+			expect(session.viewMode.value).toBe("explorer")
 		} finally {
 			setup.renderer.destroy()
 		}

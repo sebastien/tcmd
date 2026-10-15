@@ -199,11 +199,13 @@ describe("App", () => {
 		events["commandbar:run"](null, data, { data: "pane.reload" })
 		events["commandbar:run"](null, data, { data: null })
 		events["pane:activate"](null, data, { data: "right" })
+		events["view:toggleMode"](null, data, {})
 		expect(calls.map((call) => call.id)).toEqual([
 			"pane.setPath",
 			"list.cursor",
 			"pane.reload",
 			"pane.activate",
+			"view.toggleMode",
 		])
 	})
 

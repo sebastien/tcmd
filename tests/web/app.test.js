@@ -85,6 +85,20 @@ describe("web app", () => {
 		}
 	})
 
+	test("the app root carries the view mode class; clicking the mode word toggles", async () => {
+		const { host, instance, session } = await mountApp({ viewMode: "commander" })
+		try {
+			// The app root wears the mode class the CSS tints the active pane by.
+			expect(host.querySelector(".app").classList.contains("is-commander")).toBe(true)
+			host.querySelector(".app-header-mode").dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await settle()
+			expect(session.viewMode.value).toBe("explorer")
+			expect(host.querySelector(".app").classList.contains("is-explorer")).toBe(true)
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
 	test("mounts the shared App over a reactive session", async () => {
 		const { host, instance } = await mountApp({ viewMode: "commander" })
 		try {
@@ -100,7 +114,7 @@ describe("web app", () => {
 			expect(host.querySelectorAll(".file-row.is-current").length).toBeGreaterThan(0)
 			expect(host.querySelectorAll(".name.is-dir").length).toBeGreaterThan(0)
 			expect(host.querySelector(".crumb.is-root")).not.toBeNull()
-			// The entry detail sits between the list and the summary.
+			// The entry detail sits between the listing and the pane's bottom border.
 			const detail = host.querySelector(".pane-left .entry-detail")
 			expect(detail).not.toBeNull()
 			// Cursor starts on the `tester/` directory.

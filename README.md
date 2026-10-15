@@ -83,17 +83,19 @@ shell command, `^R` reload, `?` key reference, `q` quit.
 The workspace opens in explorer mode with a slim identity bar (`TinyCmd -
 HOST`) — the view mode and version trailing at its right, the mode word drawn
 letter by letter along the logo's own gradients (`explorer` in the Tiny blues,
-`commander` in the Cmd oranges) and the version dim after it — over an
+`commander` in the Cmd oranges, clicking it toggles the view) and the version
+dim after it — over an
 unframed tiling of pane boxes (the two middle edges sit side by side) labelled
 **SRC** (left, source) / **DST** (right, destination) in commander, with a
 header row (label + clickable breadcrumbs — collapsed to first letters like
 `/h/s/W/Perso/tcmd` when the width demands — + the inline filter) separated by a
-rule from the listing, an entry-detail line for the selected entry, and one
-summary row, so the columns stay aligned. The detail line shows
+rule from the listing, and an entry-detail line for the selected entry. The
+detail line shows
 `date · type · size · rights` with the rights right-aligned, the date and size
-bright, and the size/rights dropping out when the pane is too narrow; the
-summary row is indented to match. The active pane's border and header
-rule are highlighted and its cursor row uses the strong cursor colour, while
+bright, and the size/rights dropping out when the pane is too narrow. The active
+pane's border and header rule take the view mode's colour — the Tiny blue in
+explorer, the gold accent in commander — and its cursor row uses the strong
+cursor colour, while
 the inactive pane stays dim with a muted cursor. Rows lead with a yazi-style
 Nerd Font icon (folder/link kind icons plus a per-extension icon, `Makefile`,
 `Dockerfile` and dotfiles included), on unless `TCMD_ICONS=0` — it needs a

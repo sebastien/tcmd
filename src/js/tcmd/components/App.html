@@ -1,4 +1,4 @@
-<div class="app" ref="root" tabindex="0" on:keydown="keys">
+<div class="app" ref="root" tabindex="0" out:class="appModeClass" on:keydown="keys">
 	<div out="headerView|Header"></div>
 	<section class="resize-hint" when="tooSmall">
 		<h2 out="minSizeTitle"></h2>
@@ -12,7 +12,6 @@
 			</div>
 			<div data-slot="list" out="parentListView|FileList"></div>
 			<div out="parentDetailView|EntryDetail"></div>
-			<div out="parentSummaryView|Summary"></div>
 		</section>
 		<section class="pane pane-left" when="showLeftPane" out:class="leftPaneClass" on:click="leftId!pane:activate">
 			<div class="pane-header">
@@ -21,7 +20,6 @@
 			</div>
 			<div data-slot="list" out="leftListView|FileList"></div>
 			<div out="leftDetailView|EntryDetail"></div>
-			<div out="leftSummaryView|Summary"></div>
 		</section>
 		<section class="pane pane-right" when="showRightPane" out:class="rightPaneClass" on:click="rightId!pane:activate">
 			<div class="pane-header">
@@ -30,7 +28,6 @@
 			</div>
 			<div data-slot="list" out="rightListView|FileList"></div>
 			<div out="rightDetailView|EntryDetail"></div>
-			<div out="rightSummaryView|Summary"></div>
 		</section>
 		<div data-slot="inspector" when="showInspectorInline" out="previewView|FilePreview"></div>
 		<div class="preview-max" when="showPreviewFull" out="previewView|FilePreview"></div>

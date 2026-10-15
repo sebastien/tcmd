@@ -8,7 +8,8 @@ reads `TinyCmd - HOST` (just `TinyCmd` without a host); the active paths live
 in the pane crumbs. Its right-hand end carries the view mode and version: the
 mode word is drawn letter by letter so every letter can carry its own gradient
 colour — `explorer` along the Tiny blues, `commander` along the Cmd oranges,
-the same two runs the logo shimmers along — and the version follows, dim,
+the same two runs the logo shimmers along, clicking it toggles the view — and
+the version follows, dim,
 after it. Inside:
 
 - Top bar: the TinyCmd identity (and host).
@@ -34,7 +35,7 @@ invisible column.
 
 The parent and preview columns are *mirrors*: the parent tracks the parent of
 the current directory, the preview tracks the directory being previewed. Each
-is a real pane — own breadcrumbs, filter, cursor, marks, detail and summary —
+is a real pane — own breadcrumbs, filter, cursor, marks and detail —
 but only its cursor and filter are its own: opening an entry, stepping up,
 following one of its breadcrumbs or running a relative command moves the pane
 it follows, which is what keeps the mirror in step. Whenever the current
@@ -45,7 +46,8 @@ in commander), and clicking a column body or one of its rows makes it active.
 
 Each pane draws all four edges (the two middle edges sit side by side), so each
 pane's border can highlight independently. The active pane's box border and
-header rule are tinted with the active border colour, and its cursor row uses
+header rule take the view mode's colour — the Tiny blue in explorer, the gold
+accent in commander — and its cursor row uses
 the strong cursor background; the inactive pane keeps the dim border and a
 muted cursor, so focus reads from the border, the rule and the cursor alike.
 
@@ -72,9 +74,7 @@ Each pane is a single-line box containing:
   It follows the pane cursor and stays blank when the listing is empty; the
   date and size (the numeric fields) are bright, the type is coloured like the
   listing, and the rights are accented. When the pane is too narrow the size
-  gives way first, then the rights, keeping the date and type;
-- one summary row (counts + disk, indented two spaces), always at the same row
-  in both panes.
+  gives way first, then the rights, keeping the date and type.
 
 The inspector is context-aware: text files show their leading content, other
 kinds show a metadata card, and a directory shows *its own listing* — the same
@@ -99,7 +99,6 @@ restores the previous layout (focus and pane widths included).
 │                                   ││                                  ││                                   │
 │───────────────────────────────────││──────────────────────────────────││                                   │
 │  file · 26B          · -rw-r--r-- ││  file · 19B          · -rw-r--r--││                                   │
-│  1 dirs, 3 files, 10.0M           ││  0 dirs, 1 files, 19B            ││ [Open O] [Edit E]                 │
 └───────────────────────────────────┘└──────────────────────────────────┘╰───────────────────────────────────╯
 [Open ⏎] [Parent ←] [Reload ^R] [Switch ⇥] [Mark Spc] [Bookmark b] [Bookmarks g] [Preview v] [Commands m]
 [Palette ^P] [Filter /] [Quit q]

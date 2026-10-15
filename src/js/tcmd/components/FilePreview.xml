@@ -1,7 +1,7 @@
 <!-- The inspector: a card/text body for a file, and a directory column
      (breadcrumbs + cursorable listing) for a directory, so a previewed
-     directory reads as a pane. The body and the column share the border and
-     the footer, and the whole column is clickable to take focus. -->
+     directory reads as a pane. The body and the column share the border, and
+     the whole column is clickable to take focus. -->
 <box when="show" out:title="headerTitle" out:titleColor="previewTitleColor" border borderStyle="rounded"
      flexDirection="column" flexGrow="1" overflow="hidden" on:click="paneId!pane:activate">
 	<box when="isDirPane" flexDirection="row" height="1" paddingLeft="1" overflow="hidden">
@@ -18,6 +18,4 @@
 		<text when="showEntryCard" out="entryText" out:fg="dimFg"></text>
 		<text when="showEmpty" out="emptyText" out:fg="dimFg"></text>
 	</scrollbox>
-	<box height="1" out:border="footRule" out:borderColor="footRuleFg"></box>
-	<box height="1"><text out="actions" out:fg="actionsFg"></text></box>
 </box>

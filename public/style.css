@@ -20,6 +20,10 @@
 	/* The command panel's argument value fields. */
 	--bg-field: #1b2a51;
 	--border: #33508f;
+	/* The active pane's border/header rule: the explorer's Tiny blue, the
+	   commander's gold accent (kept in sync with tui/theme.js). */
+	--pane-active-explorer: #4088ff;
+	--pane-active-commander: #ffc233;
 	--text: #e6ecff;
 	--text-dim: #8fa3d9;
 	--accent: #ffc233;
@@ -89,9 +93,10 @@ body {
 }
 
 /* The mode word shimmers like the brand: explorer along the Tiny blues,
-   commander along the Cmd oranges. */
+   commander along the Cmd oranges. Clicking it toggles the view mode. */
 .app-header-mode {
 	font-weight: 600;
+	cursor: pointer;
 }
 
 .app-header-mode.mode-explorer {
@@ -152,7 +157,12 @@ body {
 }
 
 .pane.is-active {
-	border-color: var(--accent);
+	border-color: var(--pane-active-commander);
+}
+
+/* Explorer tints the active pane with the Tiny blue instead of the gold. */
+.app.is-explorer .pane.is-active {
+	border-color: var(--pane-active-explorer);
 }
 
 /* Explorer mode: the middle (current) column carries the extra width, the
@@ -176,7 +186,11 @@ body {
 }
 
 .pane.is-active .pane-header {
-	border-bottom-color: var(--accent);
+	border-bottom-color: var(--pane-active-commander);
+}
+
+.app.is-explorer .pane.is-active .pane-header {
+	border-bottom-color: var(--pane-active-explorer);
 }
 
 .pane-header > div {
@@ -477,15 +491,6 @@ body {
 
 .preview-card {
 	color: var(--text-dim);
-}
-
-.preview-actions {
-	flex: none;
-	/* The rule that separates the shortcuts from the contents above them. */
-	border-top: 1px solid var(--border);
-	padding-top: 0.35rem;
-	color: var(--text-dim);
-	font-size: 11px;
 }
 
 /* Command bar ---------------------------------------------------------- */

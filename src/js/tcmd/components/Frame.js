@@ -92,6 +92,42 @@ function currentColumnId(data) {
 	return `${unwrap(data?.currentId) ?? unwrap(data?.active) ?? "left"}`
 }
 
+// Constant: PANE_GROW
+// The explorer's current column is this much wider than the parent/preview
+// mirrors — enough to read as the working pane, not enough to starve its
+// neighbours. Both renderers apply the same ratio (the TUI's pane row growers
+// and the web CSS `.pane.is-major`), so the geometry has one source of truth
+// here.
+const PANE_GROW = 1.35
+
+// Function: paneColumnWidth
+// The columns a pane's column occupies at viewport `width` for the current
+// view. Explorer leads with the parent mirror and grows the current column by
+// PANE_GROW, so its mirrors are narrower than an even split; commander tiles
+// its two panes evenly. The inline inspector adds an equal column to either.
+// Panes hidden in the view, and an unknown viewport (`width <= 0`), are 0.
+//
+// The caller subtracts its own chrome (border, inset, safety) to get a content
+// budget: feeding every pane an even `width / columns` makes the narrower
+// mirror columns overflow, and the renderer then mangles their breadcrumbs.
+function paneColumnWidth(width, paneId, { viewMode, currentId, showPreview } = {}) {
+	const total = Math.floor(width ?? 0)
+	if (total <= 0) return 0
+	const weights = {}
+	if (viewMode === "explorer") {
+		weights.parent = 1
+		weights[`${currentId}` === "right" ? "right" : "left"] = PANE_GROW
+	} else {
+		weights.left = 1
+		weights.right = 1
+	}
+	if (Boolean(showPreview) && total >= INSPECTOR_INLINE_WIDTH) weights.preview = 1
+	const weight = weights[paneId] ?? 0
+	if (weight <= 0) return 0
+	const sum = Object.values(weights).reduce((acc, value) => acc + value, 0)
+	return Math.floor((total * weight) / sum)
+}
+
 // Function: commandBarRowsFor
 // The entries the bar currently shows: the context hints or the `bar`
 // commands, plus the active pane's marked count as a trailing entry.
@@ -113,15 +149,15 @@ function commandBarLines(data, self) {
 // Function: paneListHeight
 // Rows available to a pane's listing: the viewport height minus the identity
 // bar (1), the pane's own border (2), the pane header + rule (2), the entry
-// detail (2), the summary (1) and the wrapped command bar — eight chrome rows
-// plus the bar. Fed to the windowed `filelist` so a large directory mounts
-// only the visible slice. `0` means "unknown — render everything to measure".
+// detail (2) and the wrapped command bar — seven chrome rows plus the bar.
+// Fed to the windowed `filelist` so a large directory mounts only the visible
+// slice. `0` means "unknown — render everything to measure".
 function paneListHeight(data, self) {
 	const height = Math.floor(sizeOf(data, self)?.height ?? 0)
 	if (height <= 0) return 0
 	// A notice or error swaps the keys for a one-line status.
 	const bar = commandBarStatus(data) ? 1 : commandBarLines(data, self)
-	return Math.max(1, height - 8 - bar)
+	return Math.max(1, height - 7 - bar)
 }
 
 // Function: mixHex
@@ -291,6 +327,8 @@ export {
 	MODE_SLOTS,
 	modeGradient,
 	modeWord,
+	PANE_GROW,
+	paneColumnWidth,
 	sizeOf,
 	versionTrail,
 	VERSION,
