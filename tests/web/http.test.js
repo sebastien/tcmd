@@ -92,6 +92,22 @@ describe("http fs adapter", () => {
 		expect(touch.headers["x-tcmd-token"]).toBe("secret")
 	})
 
+	test("mkdir, trashList and restore shape their requests", async () => {
+		const { fs, impl } = await makeFs(() => jsonResponse({ ok: true }))
+		await fs.mkdir("/a")
+		await fs.trashList()
+		await fs.restore(["/t/a"])
+		const [mkdir, list, restore] = impl.calls.slice(1)
+		expect(mkdir.method).toBe("POST")
+		expect(mkdir.url).toBe("http://api.test/api/mkdir")
+		expect(JSON.parse(mkdir.body)).toEqual({ path: "/a" })
+		expect(list.method).toBe("GET")
+		expect(list.url).toBe("http://api.test/api/trashList")
+		expect(restore.method).toBe("POST")
+		expect(restore.url).toBe("http://api.test/api/restore")
+		expect(JSON.parse(restore.body)).toEqual({ paths: ["/t/a"] })
+	})
+
 	test("API errors surface their message; unreachable API gets a hint", async () => {
 		const { fs } = await makeFs(() => jsonResponse({ error: "path outside /root" }, 403))
 		await expect(fs.stat("/etc/passwd")).rejects.toThrow("path outside /root")

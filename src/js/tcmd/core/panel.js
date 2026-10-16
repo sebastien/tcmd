@@ -108,17 +108,36 @@ function panelEntryRows(entries) {
 	}))
 }
 
+// Function: explorerColumnId
+// The column an explorer argument draws from: the *focused* one, so focusing
+// the parent mirror selects from its own listing — the current directory, a
+// directory — and focusing the preview selects from the directory it mirrors.
+// A focused column without a listing (the inspector over a file) falls back to
+// the pane that owns the current directory, matching `core/commands#pane`.
+function explorerColumnId(session) {
+	const active = session.active?.value
+	if (active === "parent") return active
+	if (
+		active === "preview" &&
+		session.showPreview?.value &&
+		session.previewEntry?.value?.isDir &&
+		!session.preview?.value
+	) {
+		return active
+	}
+	return currentPaneId(session)
+}
+
 // Function: resolvePaneId
 // Maps an argument role to a pane id: "source" -> the working pane (SRC in
-// commander; the pane the explorer is actually browsing, which may be either
-// side), "dest" -> DST (right), anything else -> the pane holding the current
-// directory (never an auxiliary column: operations run against the directory
-// being browsed).
+// commander; in explorer the focused column, which may be either side of the
+// chain), "dest" -> DST (right), anything else -> the pane holding the current
+// directory (the focused column in explorer, never an auxiliary column with no
+// listing, so operations run against what the cursor shows).
 function resolvePaneId(session, role) {
 	if (role === "dest") return "right"
-	if (role === "source") {
-		return session.viewMode?.value === "explorer" ? currentPaneId(session) : "left"
-	}
+	if (session.viewMode?.value === "explorer") return explorerColumnId(session)
+	if (role === "source") return "left"
 	return currentPaneId(session)
 }
 

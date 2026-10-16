@@ -2,19 +2,23 @@
 // filesystem endpoints, exercised over real HTTP on an ephemeral port.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { basename, join } from "node:path"
+import { createNodeFs } from "../../src/js/tcmd/core/fs.js"
 import { createHttpFs } from "../../src/js/tcmd/web/http.js"
 import { createWebServer } from "../../src/js/tcmd/web/server.js"
 
 let server
 let root
 let origin
+let previousDataHome
 const TOKEN = "test-token"
 
 beforeAll(async () => {
 	root = await mkdtemp(join(tmpdir(), "tcmd-web-"))
+	previousDataHome = process.env.XDG_DATA_HOME
+	process.env.XDG_DATA_HOME = join(root, "xdg")
 	await mkdir(join(root, "home", "tester"), { recursive: true })
 	await writeFile(join(root, "home", "tester", "notes.txt"), "hello\nworld\n")
 	await writeFile(join(root, "README.md"), "# root readme\n")
@@ -25,6 +29,8 @@ beforeAll(async () => {
 afterAll(async () => {
 	await server?.stop(true)
 	await rm(root, { recursive: true, force: true })
+	if (previousDataHome === undefined) delete process.env.XDG_DATA_HOME
+	else process.env.XDG_DATA_HOME = previousDataHome
 })
 
 async function api(route, { params, method = "GET", body, token = TOKEN } = {}) {
@@ -87,13 +93,60 @@ describe("web server", () => {
 		expect(await readFile(fresh, "utf8")).toBe("")
 		expect((await api("trash", { method: "POST", body: { paths: [fresh] } })).status).toBe(200)
 		await expect(readFile(fresh, "utf8")).rejects.toThrow()
+		const dir = join(root, "home", "tester", "newdir")
+		expect((await api("mkdir", { method: "POST", body: { path: dir } })).status).toBe(200)
+		expect((await api("stat", { params: { path: dir } })).json()).resolves.toMatchObject({ isDir: true })
 		expect((await api("readDir", { params: { path: join(root, "nope") } })).status).toBe(404)
+	})
+
+	test("lists the trash and restores an entry", async () => {
+		const fresh = join(root, "home", "tester", "undelete.txt")
+		await writeFile(fresh, "keep me")
+		await api("trash", { method: "POST", body: { paths: [fresh] } })
+		const rows = await (await api("trashList")).json()
+		const row = rows.find((candidate) => candidate.originalPath === fresh)
+		expect(row).toBeTruthy()
+		// Only a known trash path may be restored.
+		expect((await api("restore", { method: "POST", body: { paths: ["/nope"] } })).status).toBe(403)
+		await writeFile(fresh, "replacement")
+		expect((await api("restore", { method: "POST", body: { paths: [row.trashPath] } })).status).toBe(409)
+		expect(await readFile(fresh, "utf8")).toBe("replacement")
+		await rm(fresh)
+		expect((await api("restore", { method: "POST", body: { paths: [row.trashPath] } })).status).toBe(200)
+		expect(await readFile(fresh, "utf8")).toBe("keep me")
 	})
 
 	test("confines paths to the configured root", async () => {
 		expect((await api("stat", { params: { path: "/etc/passwd" } })).status).toBe(403)
 		expect((await api("stat", { params: { path: `${root}/../outside` } })).status).toBe(403)
 		expect((await api("erase", { method: "POST", body: { paths: ["/etc/passwd"] } })).status).toBe(403)
+	})
+
+	test("confines paths reached through symlinks", async () => {
+		const outside = join(root, "..", `${basename(root)}-symlink-target.txt`)
+		const link = join(root, "escape.txt")
+		const internalLink = join(root, "internal-home")
+		await writeFile(outside, "outside root")
+		await symlink(outside, link)
+		await symlink(join(root, "home", "tester"), internalLink)
+
+		expect((await api("stat", { params: { path: link } })).status).toBe(403)
+		expect((await api("readTextHead", { params: { path: link } })).status).toBe(403)
+		expect((await api("erase", { method: "POST", body: { paths: [link] } })).status).toBe(403)
+		const entries = await (await api("readDir", { params: { path: internalLink } })).json()
+		expect(entries.map((entry) => entry.name)).toContain("notes.txt")
+		expect(await readFile(outside, "utf8")).toBe("outside root")
+	})
+
+	test("trash listing and restore stay inside the configured root", async () => {
+		const outside = join(root, "..", `${basename(root)}-outside.txt`)
+		await writeFile(outside, "outside root")
+		const [entry] = await createNodeFs().trash([outside])
+
+		const rows = await (await api("trashList")).json()
+		expect(rows.some((row) => row.trashPath === entry.to)).toBe(false)
+		expect((await api("restore", { method: "POST", body: { paths: [entry.to] } })).status).toBe(403)
+		expect(await createNodeFs().stat(outside)).toBeNull()
 	})
 
 	test("drives the HTTP adapter end to end", async () => {

@@ -22,7 +22,7 @@ import { hasBinaryByte, previewKind, SNIFF_BYTES } from "./preview.js"
 import { clampCursor, moveCursor } from "./selection.js"
 import { currentPane } from "./pane.js"
 import { runLine } from "./script.js"
-import { getOperation, runOperation } from "./operations.js"
+import { getOperation, refreshPanes, runOperation } from "./operations.js"
 
 // Constant: PAGE / JUMP
 // Cursor movement steps: a page for PgUp/PgDn, a shorter jump for the
@@ -74,6 +74,20 @@ const PANEL_PICK_KEYS = [
 	{ id: null, title: "Here", keys: "^↵" },
 	{ id: null, title: "Up", keys: "⌫" },
 	{ id: null, title: "Back", keys: "Esc" },
+]
+
+// Constant: HISTORY_KEYS / TRASH_KEYS
+// Command-bar hints while the shared list overlay owns the keyboard.
+const HISTORY_KEYS = [
+	{ id: null, title: "Row", keys: "↑/↓" },
+	{ id: null, title: "Jump", keys: "↵", primary: true },
+	{ id: null, title: "Close", keys: "Esc" },
+]
+
+const TRASH_KEYS = [
+	{ id: null, title: "Row", keys: "↑/↓" },
+	{ id: null, title: "Restore", keys: "↵", primary: true },
+	{ id: null, title: "Close", keys: "Esc" },
 ]
 
 const commands = [
@@ -383,6 +397,126 @@ const commands = [
 		hidden: true,
 		run(session) {
 			closeBookmark(session)
+		},
+	},
+	// Undo/redo and the shared list overlay (`u` history, `⇧T` trash). The
+	// journal records reversible operations (see core/operations); the overlay
+	// is one modal list whose rows/actions depend on the active mode.
+	{
+		id: "history.undo",
+		title: "Undo",
+		keys: "^Z",
+		kind: "ui",
+		bar: true,
+		async run(session) {
+			const entry = await session.journal.undo(session)
+			if (!entry) {
+				session.notice.set({ kind: "warning", text: "nothing to undo" })
+				return
+			}
+			await refreshPanes(session)
+			session.notice.set({ kind: "tip", text: `undid ${entry.label}` })
+		},
+	},
+	{
+		id: "history.redo",
+		title: "Redo",
+		keys: "^⇧Z",
+		kind: "ui",
+		bar: true,
+		async run(session) {
+			const entry = await session.journal.redo(session)
+			if (!entry) {
+				session.notice.set({ kind: "warning", text: "nothing to redo" })
+				return
+			}
+			await refreshPanes(session)
+			session.notice.set({ kind: "tip", text: `redid ${entry.label}` })
+		},
+	},
+	{
+		id: "history.open",
+		title: "History",
+		keys: "u",
+		kind: "ui",
+		bar: true,
+		run(session) {
+			openHistory(session)
+		},
+	},
+	{
+		id: "trash.open",
+		title: "Trash",
+		keys: "⇧T",
+		kind: "ui",
+		bar: true,
+		async run(session) {
+			await openTrash(session)
+		},
+	},
+	{
+		id: "file.mkdir",
+		title: "New directory",
+		keys: "n",
+		kind: "ui",
+		bar: true,
+		run(session) {
+			// The panel opens on `mkdir` with its NAME field primed, the same
+			// way `!` lands on `run`.
+			openPanel(session, { name: "mkdir", focus: PANEL_FOCUS.ARGS })
+		},
+	},
+	{
+		id: "overlay.up",
+		title: "Previous row",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			const rows = session.overlayItems.value
+			session.overlayIndex.set(moveCursor(session.overlayIndex.value, -1, rows.length))
+		},
+	},
+	{
+		id: "overlay.down",
+		title: "Next row",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			const rows = session.overlayItems.value
+			session.overlayIndex.set(moveCursor(session.overlayIndex.value, 1, rows.length))
+		},
+	},
+	{
+		id: "overlay.setIndex",
+		title: "Highlight row",
+		kind: "ui",
+		hidden: true,
+		run(session, payload) {
+			if (payload?.index !== undefined) session.overlayIndex.set(Math.max(0, payload.index))
+		},
+	},
+	{
+		id: "overlay.activate",
+		title: "Activate row",
+		kind: "ui",
+		hidden: true,
+		async run(session) {
+			const mode = session.overlay.value
+			const rows = session.overlayItems.value
+			const row = rows[clampCursor(session.overlayIndex.value, rows.length)]
+			if (!row) return
+			if (mode === "history") return activateHistory(session, row)
+			if (mode === "trash") return activateTrash(session, row)
+			return undefined
+		},
+	},
+	{
+		id: "overlay.cancel",
+		title: "Close list",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			closeOverlay(session)
 		},
 	},
 	{
@@ -939,9 +1073,11 @@ function getCommand(id) {
 // `getModifierBarItems`), the `bar`-flagged UI commands otherwise (keymap
 // order). Takes the context as named fields — four adjacent flags are too easy
 // to transpose.
-function getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, modifier }) {
+function getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, overlay, modifier }) {
 	if (panelOpen) return panelPicking ? PANEL_PICK_KEYS : PANEL_HINT_KEYS
 	if (bookmarkOpen) return bookmarkMode === "name" ? BOOKMARK_NAME_KEYS : BOOKMARK_LIST_KEYS
+	if (overlay === "history") return HISTORY_KEYS
+	if (overlay === "trash") return TRASH_KEYS
 	if (filtering) return FILTER_KEYS
 	if (modifier) return getModifierBarItems(modifier)
 	return commands.filter((command) => command.bar).map(barRow)
@@ -1128,6 +1264,79 @@ function moveBookmark(session, delta) {
 
 function closeBookmark(session) {
 	session.bookmarkOpen.set(false)
+}
+
+// Function: openHistory
+// Opens the history overlay: one row per journal entry, the cursor parked on
+// the current position. A row carries its journal `index` so activating it can
+// rewind/replay to that point.
+function openHistory(session) {
+	const rows = session.journal.rows()
+	session.overlayItems.set(
+		rows.map((row) => ({
+			key: `h:${row.id}`,
+			text: row.label,
+			meta: row.applied ? (row.current ? "current" : "applied") : "undone",
+			index: row.index,
+			current: row.current,
+			dim: !row.applied,
+		})),
+	)
+	const current = rows.findIndex((row) => row.current)
+	session.overlayIndex.set(current >= 0 ? current : 0)
+	session.overlay.set("history")
+}
+
+// Function: openTrash
+// Opens the trash overlay on the current trash listing.
+async function openTrash(session) {
+	await loadTrash(session)
+	session.overlayIndex.set(0)
+	session.overlay.set("trash")
+}
+
+// Function: loadTrash
+// Refreshes the overlay rows from the trash listing. A row's key is its trash
+// path (`fs.restore` addresses entries by it) and its meta the original path.
+async function loadTrash(session) {
+	const rows = (await session.fs.trashList?.()) ?? []
+	session.overlayItems.set(
+		rows.map((row) => ({
+			key: row.trashPath,
+			text: row.name,
+			meta: row.originalPath ?? "",
+			trashPath: row.trashPath,
+			dim: false,
+		})),
+	)
+	return rows
+}
+
+// Function: activateHistory
+// Rewinds or replays the journal to `row.index`, refreshes the panes and closes
+// the overlay.
+async function activateHistory(session, row) {
+	await session.journal.goTo(session, row.index)
+	await refreshPanes(session)
+	closeOverlay(session)
+	session.notice.set({ kind: "tip", text: `history → ${row.text}` })
+}
+
+// Function: activateTrash
+// Restores the trashed entry under the cursor, refreshes the trash list (the
+// restored row is gone), the panes and closes nothing (the panel stays open so
+// several entries can be restored in a row).
+async function activateTrash(session, row) {
+	await session.fs.restore([row.trashPath])
+	await loadTrash(session)
+	session.overlayIndex.set(clampCursor(session.overlayIndex.value, session.overlayItems.value.length))
+	await refreshPanes(session)
+	session.notice.set({ kind: "tip", text: `restored ${row.meta || row.text}` })
+}
+
+// Function: closeOverlay
+function closeOverlay(session) {
+	session.overlay.set(null)
 }
 
 // Function: focusedBinding

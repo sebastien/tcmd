@@ -15,7 +15,8 @@
 // tool, not a sandbox: it serves the same files `bun run tcmd` can reach, so
 // do not expose the port.
 
-import { resolve as resolvePath, sep } from "node:path"
+import nodeFs from "node:fs/promises"
+import { dirname, isAbsolute, relative, resolve as resolvePath, sep } from "node:path"
 import { createNodeFs } from "../core/fs.js"
 
 // Constant: TOKEN_PLACEHOLDER
@@ -36,21 +37,53 @@ function createWebServer({
 	const fs = createNodeFs()
 	const base = resolvePath(root)
 	const rootHref = publicDir instanceof URL ? publicDir : new URL(`${publicDir.replace(/\/?$/, "/")}`, "file:///")
+	let realBasePromise
 
 	// Function: withinRoot
 	// True when `path` is the configured root or inside it.
 	function withinRoot(path) {
+		if (typeof path !== "string" || !path) return false
 		const resolved = resolvePath(path)
-		return base === sep || resolved === base || resolved.startsWith(base + sep)
+		return isWithin(base, resolved)
 	}
 
 	// Function: confine
-	// Resolves a client path and rejects it when it escapes the root.
-	function confine(path) {
+	// Resolves a client path and rejects lexical or symlink escapes from root.
+	async function confine(path) {
 		if (typeof path !== "string" || !path) throw httpError(400, "missing path")
 		const resolved = resolvePath(path)
 		if (!withinRoot(resolved)) throw httpError(403, `path outside ${base}`)
+		realBasePromise ??= nodeFs.realpath(base)
+		const realBase = await realBasePromise
+		const candidate = resolvePath(realBase, relative(base, resolved))
+		await checkSymlinks(candidate, realBase)
 		return resolved
+	}
+
+	// Function: checkSymlinks
+	// Resolves each existing symlink component and ensures its target stays in
+	// root. Dangling links are checked too, so a later write cannot follow one
+	// outside the configured tree.
+	async function checkSymlinks(path, realBase, seen = new Set()) {
+		if (!isWithin(realBase, path)) throw httpError(403, `path outside ${base}`)
+		let current = realBase
+		for (const part of relative(realBase, path).split(sep).filter(Boolean)) {
+			current = resolvePath(current, part)
+			let stats
+			try {
+				stats = await nodeFs.lstat(current)
+			} catch (error) {
+				if (error?.code === "ENOENT") return
+				throw error
+			}
+			if (!stats.isSymbolicLink()) continue
+			if (seen.has(current) || seen.size >= 40) throw httpError(403, "symbolic link loop")
+			const nextSeen = new Set(seen)
+			nextSeen.add(current)
+			const target = resolvePath(dirname(current), await nodeFs.readlink(current))
+			await checkSymlinks(target, realBase, nextSeen)
+			current = target
+		}
 	}
 
 	// Function: jsonBody
@@ -75,42 +108,61 @@ function createWebServer({
 			home: withinRoot(fs.home()) ? fs.home() : base,
 			cwd: withinRoot(fs.cwd()) ? fs.cwd() : base,
 		}),
-		"GET /api/readDir": (_request, url) => fs.readDir(confine(url.searchParams.get("path"))),
-		"GET /api/stat": (_request, url) => fs.stat(confine(url.searchParams.get("path"))),
+		"GET /api/readDir": async (_request, url) => fs.readDir(await confine(url.searchParams.get("path"))),
+		"GET /api/stat": async (_request, url) => fs.stat(await confine(url.searchParams.get("path"))),
 		"GET /api/readTextHead": async (_request, url) => {
-			const path = confine(url.searchParams.get("path"))
+			const path = await confine(url.searchParams.get("path"))
 			const maxBytes = clampBytes(url.searchParams.get("maxBytes"))
 			return fs.readTextHead(path, maxBytes)
 		},
-		"GET /api/du": (_request, url) => fs.du(confine(url.searchParams.get("path"))),
-		"GET /api/disk": (_request, url) => fs.disk(confine(url.searchParams.get("path"))),
+		"GET /api/du": async (_request, url) => fs.du(await confine(url.searchParams.get("path"))),
+		"GET /api/disk": async (_request, url) => fs.disk(await confine(url.searchParams.get("path"))),
 		"POST /api/copy": async (request) => {
 			const body = await jsonBody(request)
-			return fs.copy(confine(body.from), confine(body.to))
+			const [from, to] = await Promise.all([confine(body.from), confine(body.to)])
+			return fs.copy(from, to)
 		},
 		"POST /api/move": async (request) => {
 			const body = await jsonBody(request)
-			return fs.move(confine(body.from), confine(body.to))
+			const [from, to] = await Promise.all([confine(body.from), confine(body.to)])
+			return fs.move(from, to)
+		},
+		"POST /api/mkdir": async (request) => {
+			const body = await jsonBody(request)
+			return fs.mkdir(await confine(body.path))
 		},
 		"POST /api/trash": async (request) => {
 			const body = await jsonBody(request)
-			return fs.trash(confinePaths(body.paths))
+			return fs.trash(await confinePaths(body.paths))
+		},
+		"GET /api/trashList": async () => (await fs.trashList()).filter((row) => withinRoot(row.originalPath)),
+		"POST /api/restore": async (request) => {
+			const body = await jsonBody(request)
+			if (!Array.isArray(body.paths)) throw httpError(400, "expected a paths array")
+			// Only trash entries whose original destinations are inside this
+			// server's root are visible or restorable.
+			const known = new Set((await fs.trashList()).filter((row) => withinRoot(row.originalPath)).map((row) => row.trashPath))
+			for (const path of body.paths) {
+				if (!known.has(path)) throw httpError(403, `unknown trash entry: ${path}`)
+			}
+			// Revalidate the metadata destination at the point it is used, too.
+			return fs.restore(body.paths, { validateDestination: confine })
 		},
 		"POST /api/erase": async (request) => {
 			const body = await jsonBody(request)
-			return fs.erase(confinePaths(body.paths))
+			return fs.erase(await confinePaths(body.paths))
 		},
 		"POST /api/touch": async (request) => {
 			const body = await jsonBody(request)
-			return fs.touch(confine(body.path))
+			return fs.touch(await confine(body.path))
 		},
 	}
 
 	// Function: confinePaths
 	// Validates a `paths` array before a bulk operation.
-	function confinePaths(paths) {
+	async function confinePaths(paths) {
 		if (!Array.isArray(paths)) throw httpError(400, "expected a paths array")
-		return paths.map(confine)
+		return Promise.all(paths.map(confine))
 	}
 
 	// Function: handleApi
@@ -125,7 +177,7 @@ function createWebServer({
 			const value = await route(request, url)
 			return json(value === undefined ? { ok: true } : value)
 		} catch (error) {
-			const status = error?.status ?? (error?.code === "ENOENT" ? 404 : 500)
+			const status = error?.status ?? (error?.code === "ENOENT" ? 404 : error?.code === "EEXIST" ? 409 : 500)
 			return json({ error: `${error?.message ?? error}` }, status)
 		}
 	}
@@ -170,6 +222,11 @@ function createWebServer({
 // One-line JSON response.
 function json(payload, status = 200) {
 	return Response.json(payload, { status, headers: { "Cache-Control": "no-store" } })
+}
+
+function isWithin(root, path) {
+	const relativePath = relative(root, path)
+	return relativePath === "" || (relativePath !== ".." && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath))
 }
 
 // Function: httpError

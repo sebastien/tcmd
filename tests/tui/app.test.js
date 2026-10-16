@@ -495,4 +495,58 @@ describe("tui app", () => {
 			setup.renderer.destroy()
 		}
 	})
+
+	test("`u` opens the history overlay", async () => {
+		const { setup, session } = await makeSetup()
+		try {
+			session.journal.record({ label: "mkdir demo", undo: async () => {}, redo: async () => {} })
+			setup.mockInput.pressKey("u")
+			await settle(setup)
+			expect(session.overlay.value).toBe("history")
+			const frame = setup.captureCharFrame()
+			expect(frame).toContain("history")
+			expect(frame).toContain("mkdir demo")
+			expect(frame).toContain("[Jump ⏎]")
+			// Esc closes it (a lone Esc is parsed on a later tick).
+			setup.mockInput.pressEscape()
+			await new Promise((resolve) => setTimeout(resolve, 20))
+			await settle(setup)
+			expect(session.overlay.value).toBeNull()
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("`n` opens the command panel on mkdir", async () => {
+		const { setup, session } = await makeSetup()
+		try {
+			setup.mockInput.pressKey("n")
+			await settle(setup)
+			expect(session.panelOpen.value).toBe(true)
+			expect(session.panelEntry.value.name).toBe("mkdir")
+			expect(setup.captureCharFrame()).toContain(" Command · mkdir ")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("the trash overlay lists trashed entries and restores", async () => {
+		const { setup, session } = await makeSetup()
+		try {
+			await session.fs.trash(["/home/tester/notes.txt"])
+			await session.dispatch("trash.open")
+			await settle(setup)
+			expect(session.overlay.value).toBe("trash")
+			expect(session.overlayItems.value.length).toBe(1)
+			expect(setup.captureCharFrame()).toContain("trash")
+			// Enter restores the entry under the cursor.
+			setup.mockInput.pressEnter()
+			await new Promise((resolve) => setTimeout(resolve, 20))
+			await settle(setup)
+			expect(await session.fs.stat("/home/tester/notes.txt")).not.toBeNull()
+			expect(session.overlayItems.value.length).toBe(0)
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
 })

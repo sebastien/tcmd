@@ -38,9 +38,17 @@ describe("keymap", () => {
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "m" })).toBeNull()
 	})
 
-	test("t toggles view modes", () => {
+	test("t toggles view modes, shift-t opens the trash", () => {
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "t" })).toBe("view.toggleMode")
-		expect(matchKeymap(DEFAULT_KEYMAP, { name: "t", shift: true })).toBeNull()
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "t", shift: true })).toBe("trash.open")
+	})
+
+	test("undo/redo, history and mkdir are bound", () => {
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "z", ctrl: true })).toBe("history.undo")
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "z", ctrl: true, shift: true })).toBe("history.redo")
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "y", ctrl: true })).toBe("history.redo")
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "u" })).toBe("history.open")
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "n" })).toBe("file.mkdir")
 	})
 
 	test("v previews and shift-v maximizes the inspector", () => {

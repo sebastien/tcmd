@@ -141,6 +141,8 @@
 	<bookmarklist when="bookmarkOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="25"
 	              in:open="bookmarkOpen" in:mode="bookmarkMode" in:query="bookmarkQuery"
 	              in:target="bookmarkTarget" in:items="bookmarkItems" in:selected="bookmarkIndex"></bookmarklist>
+	<overlaylist when="overlayOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="27"
+	             in:open="overlay" in:mode="overlay" in:items="overlayItems" in:cursor="overlayIndex"></overlaylist>
 	<confirm when="confirm" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="30"
 	         in:confirm="confirm"></confirm>
 	<help when="helpOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="40"

@@ -67,6 +67,7 @@ const operations = [
 		],
 		async run(session, args) {
 			const sources = expandAll(session, [args[0]])
+			assertNoOverlappingPaths(sources, "copy")
 			const targets = expandAll(session, [args[1]])
 			if (targets.length !== 1) throw new Error("copy: TO must be a single path")
 			const [target] = targets
@@ -74,12 +75,87 @@ const operations = [
 				throw new Error("copy: TO must be an existing directory for multiple FROM")
 			}
 			const into = await isDir(session, target)
+			const copies = []
 			for (const source of sources) {
 				if (!(await session.fs.stat(source))) throw new Error(`not found: ${source}`)
-				await session.fs.copy(source, into ? join(target, basename(source)) : target)
+				const destination = into ? join(target, basename(source)) : target
+				const existed = Boolean(await session.fs.stat(destination))
+				await session.fs.copy(source, destination)
+				copies.push({ from: source, to: destination, existed })
 			}
 			await refreshPanes(session)
+			// Undo removes what was copied, but only when nothing pre-existed:
+			// erasing a target that was merged into would drop earlier content.
+			if (copies.every((copy) => !copy.existed)) {
+				let snapshots = await Promise.all(copies.map((copy) => pathSnapshot(session.fs, copy.to)))
+				if (snapshots.some((snapshot) => snapshot === null)) throw new Error("copy target disappeared")
+				recordHistory(session, {
+					label: `copy ${sources.length} path${sources.length === 1 ? "" : "s"} → ${target}`,
+					undo: async () => {
+						for (let i = 0; i < copies.length; i++) {
+							if (JSON.stringify(await pathSnapshot(session.fs, copies[i].to)) !== JSON.stringify(snapshots[i])) {
+								throw new Error(`copy target changed: ${copies[i].to}`)
+							}
+						}
+						await session.fs.erase(copies.map((copy) => copy.to))
+					},
+					redo: async () => {
+						await assertPathsAbsent(session.fs, copies.map((copy) => copy.to))
+						for (const copy of copies) await session.fs.copy(copy.from, copy.to)
+						snapshots = await Promise.all(copies.map((copy) => pathSnapshot(session.fs, copy.to)))
+					},
+				})
+			}
 			return `copied ${sources.length} path${sources.length === 1 ? "" : "s"} to ${target}`
+		},
+	},
+	{
+		name: "mkdir",
+		signature: "mkdir PATH...",
+		description: "Create directories",
+		arity: { min: 1 },
+		args: [{ name: "PATH", kind: "literal", variadic: true }],
+		async run(session, args) {
+			const paths = expandAll(session, args)
+			const requested = new Set()
+			const created = new Set()
+			for (const path of paths) {
+				const normalized = normalize(path)
+				if (requested.has(normalized)) throw new Error(`duplicate path: ${normalized}`)
+				requested.add(normalized)
+				if (await pathExists(session.fs, normalized)) throw new Error(`already exists: ${normalized}`)
+				let current = normalized
+				while (current !== "/") {
+					const stats = await session.fs.stat(current)
+					if (stats) {
+						if (!stats.isDir) throw new Error(`not a directory: ${current}`)
+						break
+					}
+					created.add(current)
+					const parent = parentOf(current)
+					if (!parent || parent === current) break
+					current = parent
+				}
+			}
+			const createdPaths = [...created]
+			try {
+				for (const path of paths) await session.fs.mkdir(path)
+			} catch (error) {
+				await removeCreatedDirs(session.fs, createdPaths)
+				throw error
+			}
+			await refreshPanes(session)
+			recordHistory(session, {
+				label: `mkdir ${paths.map((path) => basename(path)).join(", ")}`,
+				undo: async () => {
+					await removeCreatedDirs(session.fs, createdPaths)
+				},
+				redo: async () => {
+					await assertPathsAbsent(session.fs, createdPaths)
+					for (const path of paths) await session.fs.mkdir(path)
+				},
+			})
+			return `created ${createdPaths.length} director${createdPaths.length === 1 ? "y" : "ies"}`
 		},
 	},
 	{
@@ -94,6 +170,7 @@ const operations = [
 		],
 		async run(session, args) {
 			const sources = expandAll(session, [args[0]])
+			assertNoOverlappingPaths(sources, "move")
 			const targets = expandAll(session, [args[1]])
 			if (targets.length !== 1) throw new Error("move: TO must be a single path")
 			const [target] = targets
@@ -101,11 +178,29 @@ const operations = [
 				throw new Error("move: TO must be an existing directory for multiple FROM")
 			}
 			const into = await isDir(session, target)
-			for (const source of sources) {
-				if (!(await session.fs.stat(source))) throw new Error(`not found: ${source}`)
-				await session.fs.move(source, into ? join(target, basename(source)) : target)
+			const plan = sources.map((source) => ({
+				from: source,
+				to: into ? join(target, basename(source)) : target,
+			}))
+			for (const move of plan) {
+				if (!(await pathExists(session.fs, move.from))) throw new Error(`not found: ${move.from}`)
+			}
+			await assertPathsAbsent(session.fs, plan.map((move) => move.to))
+			const moves = []
+			for (const move of plan) {
+				await session.fs.move(move.from, move.to)
+				moves.push(move)
 			}
 			await refreshPanes(session)
+			recordHistory(session, {
+				label: `move ${sources.length} path${sources.length === 1 ? "" : "s"} → ${target}`,
+				undo: async () => {
+					await moveHistory(session, moves.map(({ from, to }) => ({ from: to, to: from })))
+				},
+				redo: async () => {
+					await moveHistory(session, moves)
+				},
+			})
 			return `moved ${sources.length} path${sources.length === 1 ? "" : "s"} to ${target}`
 		},
 	},
@@ -149,24 +244,37 @@ const operations = [
 			if (!replace) throw new Error("rename needs REPLACE")
 			const paths = expandAll(session, args.slice(2))
 			if (!paths.length) throw new Error("rename needs at least one path")
+			assertNoOverlappingPaths(paths, "rename")
 			const plan = renamePlan(find, replace, paths)
 			const bad = plan.find((row) => row.error)
 			if (bad) throw new Error(`rename ${basename(bad.path)}: ${bad.error}`)
 			const duplicates = duplicateTargets(plan)
 			if (duplicates.length) throw new Error(`rename: duplicate target ${duplicates[0]}`)
-			for (const row of plan) {
-				if (!row.changed) continue
-				const target = join(parentOf(row.path), row.newName)
-				if (await session.fs.stat(target)) throw new Error(`rename: ${row.newName} already exists`)
+			const renameMoves = plan
+				.filter((row) => row.changed)
+				.map((row) => ({ from: row.path, to: join(parentOf(row.path), row.newName) }))
+			for (const move of renameMoves) {
+				if (!(await pathExists(session.fs, move.from))) throw new Error(`rename: not found: ${move.from}`)
 			}
+			await assertPathsAbsent(session.fs, renameMoves.map((move) => move.to))
 			let count = 0
-			for (const row of plan) {
-				if (!row.changed) continue
-				await session.fs.move(row.path, join(parentOf(row.path), row.newName))
+			const moves = []
+			for (const move of renameMoves) {
+				await session.fs.move(move.from, move.to)
+				moves.push(move)
 				count += 1
 			}
 			await refreshPanes(session)
 			if (!count) return "rename: nothing changed"
+			recordHistory(session, {
+				label: `rename ${count} path${count === 1 ? "" : "s"}`,
+				undo: async () => {
+					await moveHistory(session, moves.map(({ from, to }) => ({ from: to, to: from })))
+				},
+				redo: async () => {
+					await moveHistory(session, moves)
+				},
+			})
 			return `renamed ${count} path${count === 1 ? "" : "s"}`
 		},
 	},
@@ -179,12 +287,39 @@ const operations = [
 		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
 		async run(session, args) {
 			const paths = expandAll(session, args)
+			assertNoOverlappingPaths(paths, "delete")
 			for (const path of paths) {
 				if (!(await session.fs.stat(path))) throw new Error(`not found: ${path}`)
 			}
-			await session.fs.trash(paths)
+			const trashed = (await session.fs.trash(paths)) ?? []
 			await refreshPanes(session)
-			return `trashed ${paths.length} path${paths.length === 1 ? "" : "s"}`
+			// The trash copies the delete can be undone from. Mutable because a
+			// redo re-trashes under fresh names.
+			let items = trashed.map((entry) => entry?.to ?? entry).filter(Boolean)
+			let restoredSnapshots = null
+			if (items.length) {
+				recordHistory(session, {
+					label: `trash ${paths.length} path${paths.length === 1 ? "" : "s"}`,
+					undo: async () => {
+						await session.fs.restore(items)
+						restoredSnapshots = await Promise.all(paths.map((path) => pathSnapshot(session.fs, path)))
+					},
+					redo: async () => {
+						for (let i = 0; i < paths.length; i++) {
+							if (JSON.stringify(await pathSnapshot(session.fs, paths[i])) !== JSON.stringify(restoredSnapshots?.[i])) {
+								throw new Error(`path changed since restore: ${paths[i]}`)
+							}
+						}
+						const again = (await session.fs.trash(paths)) ?? []
+						items = again.map((entry) => entry?.to ?? entry).filter(Boolean)
+					},
+				})
+			}
+			// Name where the entries went (the trash directory), so the delete is
+			// not a black hole: `u` history or `⇧T` trash bring them back.
+			const where = items.length ? parentOf(items[0]) : null
+			const count = `path${paths.length === 1 ? "" : "s"}`
+			return where ? `trashed ${paths.length} ${count} to ${where}` : `trashed ${paths.length} ${count}`
 		},
 	},
 	{
@@ -197,6 +332,7 @@ const operations = [
 		confirmText: (args) => `erase ${args.join(" ")} without trash?`,
 		async run(session, args) {
 			const paths = expandAll(session, args)
+			assertNoOverlappingPaths(paths, "erase")
 			await session.fs.erase(paths)
 			await refreshPanes(session)
 			return `erased ${paths.length} path${paths.length === 1 ? "" : "s"}`
@@ -444,6 +580,99 @@ async function refreshPanes(session) {
 	await Promise.all(Object.values(session.panes).map((pane) => pane.refresh()))
 }
 
+// Function: recordHistory
+// Journals a reversible operation when the session has a journal (headless
+// hosts and tests may omit it). `entry` is `{ label, undo, redo }`.
+function recordHistory(session, entry) {
+	session.journal?.record?.(entry)
+}
+
+async function pathExists(fs, path) {
+	if (await fs.stat(path)) return true
+	const parent = parentOf(path)
+	if (!parent) return false
+	try {
+		return (await fs.readDir(parent)).some((entry) => entry.name === basename(path))
+	} catch (error) {
+		if (error?.code === "ENOENT" || error?.name === "NotFoundError" || error?.name === "TypeMismatchError") return false
+		throw error
+	}
+}
+
+async function assertPathsAbsent(fs, paths) {
+	const seen = new Set()
+	for (const path of paths) {
+		if (seen.has(path) || (await pathExists(fs, path))) {
+			const error = new Error(`destination already exists: ${path}`)
+			error.code = "EEXIST"
+			throw error
+		}
+		seen.add(path)
+	}
+}
+
+function assertNoOverlappingPaths(paths, operation) {
+	for (let i = 0; i < paths.length; i++) {
+		for (let j = i + 1; j < paths.length; j++) {
+			const a = paths[i]
+			const b = paths[j]
+			if (a === b || isAncestorPath(a, b) || isAncestorPath(b, a)) {
+				throw new Error(`${operation}: overlapping paths: ${a} and ${b}`)
+			}
+		}
+	}
+}
+
+function isAncestorPath(parent, child) {
+	return child.startsWith(parent === "/" ? "/" : `${parent}/`)
+}
+
+async function moveHistory(session, moves) {
+	await assertPathsAbsent(session.fs, moves.map((move) => move.to))
+	for (const move of moves) await session.fs.move(move.from, move.to)
+}
+
+async function removeCreatedDirs(fs, paths) {
+	const existing = []
+	for (const path of paths) if (await pathExists(fs, path)) existing.push(path)
+	const existingSet = new Set(existing)
+	for (const path of existing) {
+		const expected = new Set(existing.filter((child) => parentOf(child) === path).map(basename))
+		const actual = new Set((await fs.readDir(path)).map((entry) => entry.name))
+		if (actual.size !== expected.size || [...actual].some((name) => !expected.has(name))) {
+			throw new Error(`directory changed since mkdir: ${path}`)
+		}
+	}
+	const deepestFirst = [...existingSet].sort((a, b) => b.split("/").length - a.split("/").length)
+	for (const path of deepestFirst) await fs.erase([path])
+}
+
+async function treeSnapshot(fs, path, entry = null) {
+	const stats = await fs.stat(path)
+	if (!stats) return null
+	const isSymlink = Boolean(entry?.isSymlink || stats.isSymlink)
+	const snapshot = {
+		isDir: Boolean(stats.isDir),
+		isSymlink,
+		size: stats.size ?? 0,
+		mtimeMs: stats.mtimeMs ?? 0,
+		ctimeMs: stats.ctimeMs ?? 0,
+		mode: stats.mode ?? 0,
+		target: isSymlink ? entry?.target ?? null : null,
+	}
+	if (snapshot.isDir && !isSymlink) {
+		const children = (await fs.readDir(path)).sort((a, b) => a.name.localeCompare(b.name))
+		snapshot.children = await Promise.all(children.map((child) => treeSnapshot(fs, child.path, child)))
+	}
+	return snapshot
+}
+
+async function pathSnapshot(fs, path) {
+	const parent = parentOf(path)
+	const entry = parent ? (await fs.readDir(parent)).find((candidate) => candidate.name === basename(path)) : null
+	return treeSnapshot(fs, path, entry)
+}
+
 async function previewTarget(session, path, details) {
 	const stats = await session.fs.stat(path)
 	if (!stats) throw new Error(`not found: ${path}`)
@@ -539,6 +768,8 @@ export {
 	getOperations,
 	humanSize,
 	pathToken,
+	recordHistory,
+	refreshPanes,
 	renamePlan,
 	runOperation,
 }

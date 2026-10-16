@@ -76,6 +76,33 @@ describe("opfs fs adapter", () => {
 		await expect(fs.copy("/nope", "/backup/nope")).rejects.toThrow("ENOENT")
 	})
 
+	test("copy and move preserve occupied destinations", async () => {
+		const fs = await seededFs()
+		await fs.writeText("/home/tester/occupied.txt", "keep")
+		await expect(fs.copy("/documents/welcome.txt", "/home/tester/occupied.txt")).rejects.toMatchObject({
+			code: "EEXIST",
+		})
+		await expect(fs.move("/documents/welcome.txt", "/home/tester/occupied.txt")).rejects.toMatchObject({
+			code: "EEXIST",
+		})
+		expect(await fs.readTextHead("/home/tester/occupied.txt")).toBe("keep")
+		expect(await fs.readTextHead("/documents/welcome.txt")).toBe("welcome")
+	})
+
+	test("concurrent moves to one OPFS destination preserve the losing source", async () => {
+		const fs = await seededFs()
+		await fs.writeText("/home/tester/first.txt", "first")
+		await fs.writeText("/home/tester/second.txt", "second")
+		const outcomes = await Promise.allSettled([
+			fs.move("/home/tester/first.txt", "/documents/raced.txt"),
+			fs.move("/home/tester/second.txt", "/documents/raced.txt"),
+		])
+
+		expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1)
+		expect([await fs.stat("/home/tester/first.txt"), await fs.stat("/home/tester/second.txt")].filter(Boolean)).toHaveLength(1)
+		expect(["first", "second"]).toContain(await fs.readTextHead("/documents/raced.txt"))
+	})
+
 	test("move relocates files and directories", async () => {
 		const fs = await seededFs()
 		await fs.move("/documents/welcome.txt", "/home/tester/welcome.txt")
@@ -115,6 +142,113 @@ describe("opfs fs adapter", () => {
 		expect(names.some((name) => name.endsWith("-documents"))).toBe(true)
 		const notes = trashed.find((entry) => entry.name.endsWith("-notes.txt"))
 		expect(await fs.readTextHead(notes.path)).toBe("hello\nworld\n")
+	})
+
+	test("trashList records original paths and restore brings them back", async () => {
+		const fs = await seededFs()
+		await fs.trash(["/home/tester/notes.txt"])
+		const rows = await fs.trashList()
+		expect(rows.length).toBe(1)
+		expect(rows[0].originalPath).toBe("/home/tester/notes.txt")
+		expect(await fs.stat("/home/tester/notes.txt")).toBeNull()
+		await fs.restore([rows[0].trashPath])
+		expect((await fs.stat("/home/tester/notes.txt")).size).toBe("hello\nworld\n".length)
+		expect(await fs.trashList()).toEqual([])
+	})
+
+	test("restore refuses to overwrite a recreated original path", async () => {
+		const fs = await seededFs()
+		await fs.trash(["/home/tester/notes.txt"])
+		await fs.writeText("/home/tester/notes.txt", "replacement")
+		const [row] = await fs.trashList()
+
+		await expect(fs.restore([row.trashPath])).rejects.toMatchObject({ code: "EEXIST" })
+		expect(await fs.readTextHead("/home/tester/notes.txt")).toBe("replacement")
+		expect((await fs.trashList()).length).toBe(1)
+	})
+
+	test("batch restore rejects nested destinations before restoring either item", async () => {
+		const fs = await seededFs()
+		await fs.writeText("/home/tester/parent/child.txt", "child")
+		const [child] = await fs.trash(["/home/tester/parent/child.txt"])
+		const [parent] = await fs.trash(["/home/tester/parent"])
+
+		await expect(fs.restore([child.to, parent.to])).rejects.toMatchObject({ code: "EEXIST" })
+		expect(await fs.stat("/home/tester/parent/child.txt")).toBeNull()
+		expect((await fs.trashList()).length).toBe(2)
+	})
+
+	test("batch restore rejects duplicate destinations before restoring either item", async () => {
+		const fs = await seededFs()
+		await fs.trash(["/home/tester/notes.txt"])
+		await fs.writeText("/home/tester/notes.txt", "second version")
+		await fs.trash(["/home/tester/notes.txt"])
+		const rows = await fs.trashList()
+
+		await expect(fs.restore(rows.map((row) => row.trashPath))).rejects.toMatchObject({ code: "EEXIST" })
+		expect(await fs.stat("/home/tester/notes.txt")).toBeNull()
+		expect((await fs.trashList()).length).toBe(2)
+	})
+
+	test("concurrent trash calls preserve every index record", async () => {
+		const fs = await seededFs()
+		await Promise.all([
+			fs.trash(["/home/tester/notes.txt"]),
+			fs.trash(["/documents/welcome.txt"]),
+		])
+
+		expect((await fs.trashList()).map((row) => row.originalPath).sort()).toEqual([
+			"/documents/welcome.txt",
+			"/home/tester/notes.txt",
+		])
+	})
+
+	test("internal trash metadata cannot be modified through the adapter", async () => {
+		const fs = await seededFs()
+		await fs.trash(["/home/tester/notes.txt"])
+		const before = await fs.readTextHead("/.trash/index.json")
+
+		await expect(fs.trash(["/.trash/index.json"])).rejects.toMatchObject({ code: "EPERM" })
+		await expect(fs.move("/.trash/index.json", "/home/tester/index.json")).rejects.toMatchObject({ code: "EPERM" })
+		await expect(fs.erase(["/.trash/index.json"])).rejects.toMatchObject({ code: "EPERM" })
+		await expect(fs.writeText("/.trash/index.json", "broken")).rejects.toMatchObject({ code: "EPERM" })
+		await expect(fs.mkdir("/.trash/subdir")).rejects.toMatchObject({ code: "EPERM" })
+		await expect(fs.touch("/.trash/index.json")).rejects.toMatchObject({ code: "EPERM" })
+
+		expect(await fs.readTextHead("/.trash/index.json")).toBe(before)
+		expect((await fs.trashList()).length).toBe(1)
+	})
+
+	test("large trash indexes retain old restore records", async () => {
+		const { root } = createMockOpfs()
+		const fs = createOpfsFs({ root })
+		await fs.writeText("/home/tester/new.txt", "new trash item")
+		const trashDir = await root.getDirectoryHandle(".trash", { create: true })
+		for (const [name, text] of [
+			["old.txt", "old trash item"],
+			[
+				"index.json",
+				JSON.stringify([
+					{ name: "old.txt", originalPath: "/home/tester/old.txt", deletedAt: "2026-01-01", padding: "x".repeat(1 << 20) },
+				]),
+			],
+		]) {
+			const handle = await trashDir.getFileHandle(name, { create: true })
+			const writable = await handle.createWritable()
+			await writable.write(text)
+			await writable.close()
+		}
+		await fs.trash(["/home/tester/new.txt"])
+
+		const rows = await fs.trashList()
+		expect(rows.some((row) => row.name === "old.txt")).toBe(true)
+		expect(rows.some((row) => row.name.endsWith("-new.txt"))).toBe(true)
+	})
+
+	test("mkdir creates directories recursively", async () => {
+		const fs = await seededFs()
+		await fs.mkdir("/home/tester/new/deep")
+		expect((await fs.stat("/home/tester/new/deep"))?.isDir).toBe(true)
 	})
 
 	test("disk reports null without a storage estimate; home/cwd are configurable", async () => {

@@ -12,8 +12,9 @@
 // name (`notes -> ../real/notes`, see `rowName`).
 //
 // Environment: `cursorBg`, `cursorInactiveBg`, `currentClass`,
-// `accentSecondaryFg`, `accentFg`, `linkFg`, `dirFg`, `devFg`, `fileFg`,
-// `textSecondaryFg`, `dirClass`, `icons` (show Nerd Font icons).
+// `accentSecondaryFg`, `accentFg`, `linkFg`, `dirFg`, `devFg`, `execFg`,
+// `readonlyFg`, `fileFg`, `textSecondaryFg`, `dirClass`, `execClass`,
+// `readonlyClass`, `icons` (show Nerd Font icons).
 
 import { unwrap } from "select/state/cells"
 import { formatSize } from "./format.js"
@@ -80,21 +81,64 @@ function rowIsMarked(data) {
 	return isMarked(data.item, unwrap(data.marked))
 }
 
+// Function: hasMode
+// Whether the entry carries POSIX mode bits. Backends that report no mode
+// (OPFS, some HTTP hosts) leave it 0, so such entries never read as executable
+// or read-only.
+function hasMode(entry) {
+	return Number.isFinite(entry?.mode) && entry.mode > 0
+}
+
+// Function: isExecutable
+// Whether the entry is a regular file with an execute bit set (any of the
+// owner/group/other slots). Directories, symlinks and device nodes have their
+// own colours and never read as executable here.
+function isExecutable(entry) {
+	if (!entry || entry.isDir || entry.isSymlink || entry.isDevice) return false
+	return hasMode(entry) && (entry.mode & 0o111) !== 0
+}
+
+// Function: isReadonly
+// Whether the entry is a regular file its owner cannot write (`mode` owner
+// write bit clear). Directories, symlinks and device nodes are excluded, and
+// the web backends, which report no mode, stay unaffected.
+function isReadonly(entry) {
+	if (!entry || entry.isDir || entry.isSymlink || entry.isDevice) return false
+	return hasMode(entry) && (entry.mode & 0o200) === 0
+}
+
 // Function: nameFg
 // The listing color for an entry: a symlink reads as a link, a directory as a
-// directory, a device node as a device, otherwise the plain file color.
+// directory, a device node as a device, an executable file green, a read-only
+// file dimmer than a plain file, otherwise the plain file color.
 // Symlinks win over directories, matching `dircolors` (a link to a directory
-// renders as a link).
+// renders as a link), and an executable wins over a read-only file, matching
+// `ls --color` (an executable stays green even when it cannot be written).
 function nameFg(item, env) {
 	if (item?.isSymlink) return env.linkFg
 	if (item?.isDir) return env.dirFg
 	if (item?.isDevice) return env.devFg
+	if (isExecutable(item)) return env.execFg
+	if (isReadonly(item)) return env.readonlyFg
 	return env.fileFg
+}
+
+// Function: nameClass
+// The web state classes for an entry's name, mirroring `nameFg`: `dirClass`
+// for a directory, else the executable/read-only class for a file, else null.
+// The class tokens are absent on the TUI env, which colours through
+// `rowNameFg` instead.
+function nameClass(item, env) {
+	if (item?.isDir) return env.dirClass
+	if (isExecutable(item)) return env.execClass
+	if (isReadonly(item)) return env.readonlyClass
+	return null
 }
 
 // Function: rowNameFg
 // The name color for a row: a marked row reads orange (the selection signal),
-// the cursor row the bright heading color, otherwise the entry's kind color.
+// the cursor row the bright heading color, otherwise the entry's own color
+// (kind plus executable/read-only state, see `nameFg`).
 // Marks win over the cursor so a marked-and-current row still reads as
 // marked, the same precedence the row marker follows.
 function rowNameFg(data, env) {
@@ -130,13 +174,13 @@ function createBehaviors(env) {
 		rowMarker: (_self, data) => rowMarker(data),
 		rowMarkerFg: (_self, data) => (rowIsMarked(data) ? env.accentSecondaryFg : env.accentFg),
 		rowName: (_self, data) => rowName(data.item),
-		rowNameClass: (_self, data) => (data.item?.isDir ? env.dirClass : null),
+		rowNameClass: (_self, data) => nameClass(data.item, env),
 		rowNameFg: (_self, data) => rowNameFg(data, env),
 		rowSize: (_self, data) => rowSize(data.item),
 		rowSizeFg: () => env.textSecondaryFg,
 	}
 }
 
-export { createBehaviors, isMarked, nameFg, rowIcon, rowName, rowNameFg, rowSize }
+export { createBehaviors, isExecutable, isMarked, isReadonly, nameClass, nameFg, rowIcon, rowName, rowNameFg, rowSize }
 
 // EOF

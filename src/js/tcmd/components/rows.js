@@ -226,6 +226,33 @@ function bookmarkRows(BookmarkRow) {
 	}
 }
 
-export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, helpRows, isSelected, panelArgRows, panelOpRows }
+// Function: overlayRows
+// `{ item, index, currentRow }` bags for the shared list overlay's `OverlayRow`s
+// (history / trash). `currentRow` is the plain per-row cursor flag, so a move
+// rewrites only the changed rows.
+function overlayRows(OverlayRow) {
+	return (self, data) => {
+		const items = unwrap(data.items) ?? []
+		const cursor = isCell(data.cursor) ? unwrap(data.cursor) : data.cursor
+		return OverlayRow.map(
+			items,
+			(item, index) => ({ item, index, currentRow: index === cursor }),
+			(item) => item.key ?? item.text,
+		)
+	}
+}
+
+export {
+	bookmarkRows,
+	commandItemRows,
+	crumbRows,
+	fileRows,
+	fileWindow,
+	helpRows,
+	isSelected,
+	overlayRows,
+	panelArgRows,
+	panelOpRows,
+}
 
 // EOF

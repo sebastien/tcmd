@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test"
 import { cell } from "select/state/cells"
-import { createBehaviors, isMarked, rowIcon, rowName, rowSize } from "../../src/js/tcmd/components/FileRow.js"
+import {
+	createBehaviors,
+	isExecutable,
+	isMarked,
+	isReadonly,
+	nameClass,
+	rowIcon,
+	rowName,
+	rowSize,
+} from "../../src/js/tcmd/components/FileRow.js"
 import { DIR_ICON, SYMLINK_ICON } from "../../src/js/tcmd/components/icons.js"
 import { behaviorEnv } from "../helpers/behavior-env.js"
 
@@ -8,6 +17,10 @@ const DIR = { isDir: true, name: "sub", path: "/sub", size: 0 }
 const FILE = { isDir: false, name: "a.txt", path: "/a.txt", size: 10 }
 const LINK = { isDir: false, isSymlink: true, name: "ln", path: "/ln", size: 0 }
 const DEV = { isDir: false, isDevice: true, name: "null", path: "/dev/null", size: 0 }
+const RW = { isDir: false, name: "note.txt", path: "/note.txt", size: 10, mode: 0o100644 }
+const EXEC = { isDir: false, name: "run.sh", path: "/run.sh", size: 10, mode: 0o100755 }
+const RO = { isDir: false, name: "secret", path: "/secret", size: 10, mode: 0o100400 }
+const RO_EXEC = { isDir: false, name: "ro-exec", path: "/ro-exec", size: 10, mode: 0o100500 }
 
 describe("FileRow", () => {
 	test("names, sizes and markers", () => {
@@ -105,6 +118,44 @@ describe("FileRow", () => {
 		// Untouched rows keep the kind colours.
 		expect(behaviors.rowNameFg(null, { item: FILE, currentRow: false })).toBe("file")
 		expect(behaviors.rowNameFg(null, { item: LINK, currentRow: false })).toBe("link")
+	})
+
+	test("colour-mode derives executable and read-only file states", () => {
+		// No mode (web backends, mock rows): neither state applies.
+		expect(isExecutable(FILE)).toBe(false)
+		expect(isReadonly(FILE)).toBe(false)
+		// An owner-writable regular file is plain.
+		expect(isExecutable(RW)).toBe(false)
+		expect(isReadonly(RW)).toBe(false)
+		// Any execute bit reads as executable.
+		expect(isExecutable(EXEC)).toBe(true)
+		expect(isReadonly(EXEC)).toBe(false)
+		// Owner write bit clear reads as read-only.
+		expect(isReadonly(RO)).toBe(true)
+		expect(isExecutable(RO)).toBe(false)
+		// Both hold: executable wins over read-only, like `ls --color`.
+		expect(isExecutable(RO_EXEC)).toBe(true)
+		expect(isReadonly(RO_EXEC)).toBe(true)
+		// Directories, symlinks and devices carry their own colours instead.
+		expect(isExecutable({ isDir: true, mode: 0o040755 })).toBe(false)
+		expect(isReadonly({ isSymlink: true, mode: 0o120777 })).toBe(false)
+		expect(isExecutable({ isDevice: true, mode: 0o020666 })).toBe(false)
+		expect(isReadonly({ isDevice: true, mode: 0o020444 })).toBe(false)
+	})
+
+	test("the executable and read-only states colour the name", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		expect(behaviors.rowNameFg(null, { item: EXEC })).toBe("exec")
+		expect(behaviors.rowNameFg(null, { item: RO })).toBe("readonly")
+		// A plain file, or one with no mode at all, keeps the file colour.
+		expect(behaviors.rowNameFg(null, { item: RW })).toBe("file")
+		expect(behaviors.rowNameFg(null, { item: FILE })).toBe("file")
+		// The web classes mirror the colours; a plain file gets none.
+		expect(behaviors.rowNameClass(null, { item: EXEC })).toBe("is-exec")
+		expect(behaviors.rowNameClass(null, { item: RO })).toBe("is-readonly")
+		expect(behaviors.rowNameClass(null, { item: RW })).toBeNull()
+		// The resolver itself is exported for direct use.
+		expect(nameClass(EXEC, behaviorEnv)).toBe("is-exec")
 	})
 
 	test("behaviors read reactive cursor and marks at use", () => {

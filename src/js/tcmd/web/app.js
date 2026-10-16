@@ -150,6 +150,12 @@ function webViewBehaviors() {
 			value: data.panelValue,
 		}),
 		helpView: (_self, data) => ({ open: data.helpOpen }),
+		overlayView: (_self, data) => ({
+			open: data.overlay,
+			mode: data.overlay,
+			items: data.overlayItems,
+			cursor: data.overlayIndex,
+		}),
 		previewView: (_self, data) => ({
 			preview: data.preview,
 			show: true,
@@ -243,7 +249,7 @@ function createWebApp(session, options = {}) {
 			keys: (self, data, event) => {
 				if (event.isComposing) return
 				const key = normalizeKey(event)
-				const busy = unwrap(data.confirm) || unwrap(data.bookmarkOpen) || unwrap(data.panelOpen) || unwrap(data.filtering)
+				const busy = unwrap(data.confirm) || unwrap(data.bookmarkOpen) || unwrap(data.panelOpen) || unwrap(data.filtering) || unwrap(data.overlay)
 				if (help.value) {
 					if (["escape", "q", "?"].includes(key.name)) help.set(false)
 					return

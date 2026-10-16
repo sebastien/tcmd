@@ -606,4 +606,29 @@ describe("web app", () => {
 			instance?.unmount?.()
 		}
 	})
+
+	test("`u` opens the history overlay and `n` the mkdir panel", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			session.journal.record({ label: "mkdir demo", undo: async () => {}, redo: async () => {} })
+			press(host, "u")
+			await settle()
+			expect(session.overlay.value).toBe("history")
+			expect(host.querySelector(".overlay-list")).not.toBeNull()
+			expect(host.textContent).toContain("mkdir demo")
+
+			// Esc closes the overlay.
+			press(host, "Escape")
+			await settle()
+			expect(session.overlay.value).toBeNull()
+
+			// `n` opens the command panel on the mkdir operation.
+			press(host, "n")
+			await settle()
+			expect(session.panelOpen.value).toBe(true)
+			expect(session.panelEntry.value.name).toBe("mkdir")
+		} finally {
+			instance?.unmount?.()
+		}
+	})
 })

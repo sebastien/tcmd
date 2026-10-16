@@ -23,6 +23,9 @@ function createMockFs(tree) {
 		dirs.set(normalize(path), entries.map(cloneEntry))
 	}
 	const trashed = []
+	// Trashed entries, so `trashList`/`restore` can browse and undelete them
+	// (the mock keeps the copy under `/.trash`, like the OPFS adapter).
+	const trashEntries = []
 
 	function normalize(path) {
 		return path.replace(/\/+$/, "") || "/"
@@ -94,6 +97,32 @@ function createMockFs(tree) {
 		else parentDir.push(entry)
 	}
 
+	function hasPath(path) {
+		const normalized = normalize(path)
+		return dirs.has(normalized) || Boolean(findEntry(normalized))
+	}
+
+	async function assertCopySafe(from, to) {
+		const source = normalize(from)
+		const target = normalize(to)
+		const sourceIsDir = dirs.has(source)
+		if (!sourceIsDir && !findEntry(source)) {
+			const error = new Error(`ENOENT: ${from}`)
+			error.code = "ENOENT"
+			throw error
+		}
+		if (source === target || (sourceIsDir && target.startsWith(source === "/" ? "/" : `${source}/`))) {
+			throw new Error(`cannot copy a path into itself: ${to}`)
+		}
+		if (!hasPath(target)) return
+		if (!sourceIsDir || !dirs.has(target)) {
+			const error = new Error(`destination already exists: ${to}`)
+			error.code = "EEXIST"
+			throw error
+		}
+		for (const entry of dirs.get(source)) await assertCopySafe(join(source, entry.name), join(target, entry.name))
+	}
+
 	async function stat(path) {
 		const normalized = normalize(path)
 		if (dirs.has(normalized)) {
@@ -149,6 +178,7 @@ function createMockFs(tree) {
 	async function copy(from, to) {
 		const source = normalize(from)
 		const target = normalize(to)
+		await assertCopySafe(source, target)
 		if (dirs.has(source)) {
 			dirs.set(target, dirs.get(source).map(cloneEntry))
 			upsert(target, { name: basename(target), isDir: true })
@@ -170,6 +200,16 @@ function createMockFs(tree) {
 		}
 		const stats = await stat(normalized)
 		return stats?.size ?? 0
+	}
+
+	// Function: mkdirp
+	// Creates `path` and any missing parents as empty directories.
+	async function mkdirp(path) {
+		const normalized = normalize(path)
+		if (normalized === "/" || dirs.has(normalized)) return
+		await mkdirp(parent(normalized) ?? "/")
+		dirs.set(normalized, [])
+		upsert(normalized, { name: basename(normalized), isDir: true })
 	}
 
 	return {
@@ -220,13 +260,54 @@ function createMockFs(tree) {
 		disk: async () => ({ free: 1_000_000, total: 4_000_000 }),
 		copy,
 		move: async (from, to) => {
+			if (hasPath(to)) {
+				const error = new Error(`destination already exists: ${to}`)
+				error.code = "EEXIST"
+				throw error
+			}
 			await copy(from, to)
 			await eraseOne(from)
 		},
+		mkdir: mkdirp,
 		trash: async (paths) => {
+			await mkdirp("/.trash")
+			const out = []
 			for (const path of paths) {
-				trashed.push(normalize(path))
-				await eraseOne(path)
+				const normalized = normalize(path)
+				if (normalized === "/") continue
+				const name = `${trashEntries.length + 1}-${basename(normalized)}`
+				const to = `/.trash/${name}`
+				await copy(normalized, to)
+				await eraseOne(normalized)
+				trashEntries.push({ name, from: normalized, to, deletedAt: null })
+				trashed.push(normalized)
+				out.push({ from: normalized, to, name })
+			}
+			return out
+		},
+		trashList: async () =>
+			trashEntries.map((entry) => ({
+				name: entry.name,
+				originalPath: entry.from,
+				deletedAt: entry.deletedAt,
+				trashPath: entry.to,
+				isDir: dirs.has(entry.to),
+			})),
+		restore: async (trashPaths) => {
+			for (const to of trashPaths) {
+				const normalized = normalize(to)
+				const entry = trashEntries.find((candidate) => candidate.to === normalized)
+				if (!entry) throw new Error(`unknown trash entry: ${to}`)
+				if (hasPath(entry.from)) {
+					const error = new Error(`destination already exists: ${entry.from}`)
+					error.code = "EEXIST"
+					throw error
+				}
+				await mkdirp(parent(entry.from) ?? "/")
+				await copy(normalized, entry.from)
+				await eraseOne(normalized)
+				const index = trashEntries.indexOf(entry)
+				if (index >= 0) trashEntries.splice(index, 1)
 			}
 		},
 		erase: async (paths) => {

@@ -30,6 +30,8 @@ import filterBarHtml from "../components/FilterBar.html" with { type: "text" }
 import helpHtml from "../components/Help.html" with { type: "text" }
 import helpRowHtml from "../components/HelpRow.html" with { type: "text" }
 import headerHtml from "./header.html" with { type: "text" }
+import overlayListHtml from "../components/OverlayList.html" with { type: "text" }
+import overlayRowHtml from "../components/OverlayRow.html" with { type: "text" }
 import rowListHtml from "../components/RowList.html" with { type: "text" }
 import summaryHtml from "../components/Summary.html" with { type: "text" }
 
@@ -57,6 +59,9 @@ import {
 	helpBehaviors,
 	helpRowBehaviors,
 	helpRows,
+	overlayListBehaviors,
+	overlayRowBehaviors,
+	overlayRows,
 	panelArgRows,
 	panelOpRows,
 	summaryBehaviors,
@@ -92,6 +97,7 @@ function createComponents() {
 	const fileRow = bind(ui, "FileRow", fileRowHtml, fileRowBehaviors(webTheme))
 	const filterBar = bind(ui, "FilterBar", filterBarHtml, filterBarBehaviors(webTheme))
 	const bookmarkRow = bind(ui, "BookmarkRow", bookmarkRowHtml, bookmarkRowBehaviors(webTheme))
+	const overlayRow = bind(ui, "OverlayRow", overlayRowHtml, overlayRowBehaviors(webTheme))
 	const helpRow = bind(ui, "HelpRow", helpRowHtml, helpRowBehaviors({ theme: webTheme }))
 	return {
 		BookmarkRow: bookmarkRow,
@@ -137,6 +143,10 @@ function createComponents() {
 		FilterBar: filterBar,
 		Help: bind(ui, "Help", helpHtml, helpBehaviors({ theme: webTheme, rows: helpRows(helpRow) })),
 		Header: bind(ui, "Header", headerHtml, headerBehaviors(webTheme)),
+		OverlayList: bind(ui, "OverlayList", overlayListHtml, overlayListBehaviors({
+			...webTheme,
+			rows: overlayRows(overlayRow),
+		})),
 		Summary: bind(ui, "Summary", summaryHtml, summaryBehaviors({ ...webTheme, width: paneWidth, elide })),
 	}
 }
@@ -160,6 +170,7 @@ function registerWebComponents() {
 	ui.format("FilterBar", components.FilterBar)
 	ui.format("Header", components.Header)
 	ui.format("Help", components.Help)
+	ui.format("OverlayList", components.OverlayList)
 	ui.format("Summary", components.Summary)
 	return components
 }

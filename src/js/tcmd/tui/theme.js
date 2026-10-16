@@ -29,7 +29,8 @@
 // - Accent:    primary (cursor, active pane label) and secondary (marks).
 // - Semantic:  error, warning and tip, each with a background + foreground
 //              for filled badges (the command bar status, the confirm dialog).
-// - Content:   the file-listing colors (file/link/device/directory).
+// - Content:   the file-listing colors (file/link/device/directory plus the
+//              executable and read-only file states).
 // - Brand:     the identity-bar gradient endpoints — "Tiny" stays blue, "Cmd"
 //              runs gold to saturated orange.
 
@@ -75,6 +76,10 @@ const DARK = {
 	linkFg: "#4fc3ff",
 	devFg: "#b48eff",
 	dirFg: "#5c8cff",
+	// Executable files go green, read-only files dimmer than a plain file
+	// (`ls --color` / Midnight Commander habits).
+	execFg: "#5fd67a",
+	readonlyFg: "#7d8ab8",
 	// Brand
 	brandTinyFrom: "#4088ff",
 	brandTinyTo: "#7cd0ff",
@@ -123,6 +128,8 @@ const LIGHT = {
 	linkFg: "#0369a1",
 	devFg: "#7c3aed",
 	dirFg: "#1d4ed8",
+	execFg: "#0f7a3d",
+	readonlyFg: "#6b7280",
 	// Brand
 	brandTinyFrom: "#1d4ed8",
 	brandTinyTo: "#3b82f6",
@@ -163,6 +170,8 @@ const MONO = {
 	linkFg: undefined,
 	devFg: undefined,
 	dirFg: undefined,
+	execFg: undefined,
+	readonlyFg: undefined,
 	brandTinyFrom: undefined,
 	brandTinyTo: undefined,
 	brandCmdFrom: undefined,

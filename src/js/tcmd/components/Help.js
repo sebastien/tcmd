@@ -35,16 +35,18 @@ const BOLD = 1
 
 // Constant: GROUP_ORDER / GROUP_TITLES
 // Help sections, in display order.
-const GROUP_ORDER = ["nav", "pane", "list", "bookmark", "view", "file", "panel", "filter", "app"]
+const GROUP_ORDER = ["nav", "pane", "list", "bookmark", "view", "file", "history", "trash", "panel", "filter", "app"]
 const GROUP_TITLES = {
 	app: "Session",
 	bookmark: "Bookmarks",
 	file: "Files",
 	filter: "Filter",
+	history: "History",
 	list: "Selection",
 	nav: "Navigation",
 	panel: "Commands",
 	pane: "Panes",
+	trash: "Trash",
 	view: "View",
 }
 

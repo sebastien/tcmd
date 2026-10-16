@@ -34,6 +34,8 @@ import fileRowXml from "../components/FileRow.xml" with { type: "text" }
 import filterBarXml from "../components/FilterBar.xml" with { type: "text" }
 import helpXml from "../components/Help.xml" with { type: "text" }
 import helpRowXml from "../components/HelpRow.xml" with { type: "text" }
+import overlayListXml from "../components/OverlayList.xml" with { type: "text" }
+import overlayRowXml from "../components/OverlayRow.xml" with { type: "text" }
 import rowListXml from "../components/RowList.xml" with { type: "text" }
 import summaryXml from "../components/Summary.xml" with { type: "text" }
 
@@ -62,6 +64,9 @@ import {
 	helpRowBehaviors,
 	helpRows,
 	iconsEnabled,
+	overlayListBehaviors,
+	overlayRowBehaviors,
+	overlayRows,
 	panelArgRows,
 	panelOpRows,
 	summaryBehaviors,
@@ -90,6 +95,7 @@ function tuiEnv() {
 		dirFg: tuiTheme.dirFg,
 		errorBg: tuiTheme.errorBg,
 		errorFg: tuiTheme.errorFg,
+		execFg: tuiTheme.execFg,
 		fieldBg: tuiTheme.fieldBg,
 		fileFg: tuiTheme.fileFg,
 		// Nerd Font icons in rows, on unless `TCMD_ICONS` opts out.
@@ -98,6 +104,7 @@ function tuiEnv() {
 		linkFg: tuiTheme.linkFg,
 		mutedBg: tuiTheme.mutedBg,
 		overlayBg: tuiTheme.overlayBg,
+		readonlyFg: tuiTheme.readonlyFg,
 		selectionBg: tuiTheme.selectionBg,
 		surfaceBg: tuiTheme.surfaceBg,
 		textFg: tuiTheme.textFg,
@@ -185,6 +192,11 @@ function bookmarkScrollTop(self, data) {
 	return keepVisible(self.ref.list, unwrap(data.selected) ?? 0, unwrap(data.items)?.length ?? 0)
 }
 
+// Keep the shared list overlay's cursor inside its viewport.
+function overlayScrollTop(self, data) {
+	return keepVisible(self.ref.list, unwrap(data.cursor) ?? 0, unwrap(data.items)?.length ?? 0)
+}
+
 // Keep the command panel's argument cursor inside its viewport.
 function panelArgScrollTop(self, data) {
 	return keepVisible(self.ref.args, unwrap(data.argCursor) ?? 0, unwrap(data.rows)?.length ?? 0)
@@ -213,6 +225,7 @@ function createComponents() {
 	const fileRow = bind(ui, "FileRow", fileRowXml, fileRowBehaviors(env))
 	const filterBar = bind(ui, "FilterBar", filterBarXml, filterBarBehaviors(env))
 	const bookmarkRow = bind(ui, "BookmarkRow", bookmarkRowXml, bookmarkRowBehaviors(env))
+	const overlayRow = bind(ui, "OverlayRow", overlayRowXml, overlayRowBehaviors(env))
 	const helpRow = bind(ui, "HelpRow", helpRowXml, helpRowBehaviors({ theme: tuiTheme }))
 	return {
 		BookmarkRow: bookmarkRow,
@@ -254,6 +267,11 @@ function createComponents() {
 		FilePreview: bind(ui, "FilePreview", filePreviewXml, filePreviewBehaviors(env)),
 		FilterBar: filterBar,
 		Help: bind(ui, "Help", helpXml, helpBehaviors({ theme: tuiTheme, rows: helpRows(helpRow) })),
+		OverlayList: bind(ui, "OverlayList", overlayListXml, overlayListBehaviors({
+			...env,
+			rows: overlayRows(overlayRow),
+			scrollTop: overlayScrollTop,
+		})),
 		Summary: bind(ui, "Summary", summaryXml, summaryBehaviors({
 			...env,
 			width: paneWidth,
@@ -310,6 +328,7 @@ function registerComponents() {
 		filepreview: components.FilePreview,
 		filterbar: components.FilterBar,
 		help: components.Help,
+		overlaylist: components.OverlayList,
 		summary: components.Summary,
 	})
 	return components

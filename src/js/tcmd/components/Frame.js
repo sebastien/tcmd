@@ -308,6 +308,10 @@ function createFrameBehaviors(env) {
 		// overlay has a single source of truth.
 		helpOpen: (_self, data) => Boolean(unwrap(data.helpOpen)),
 
+		// The shared list overlay (history / trash) is mounted whenever a mode
+		// is set; the component itself gates on `open`.
+		overlayOpen: (_self, data) => Boolean(unwrap(data.overlay)),
+
 		// The windowed listing height for both panes (they share the row).
 		listViewport: (self, data) => paneListHeight(data, self),
 

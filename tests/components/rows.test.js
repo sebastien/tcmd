@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { cell } from "select/state/cells"
-import { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, panelArgRows, panelOpRows } from "../../src/js/tcmd/components/rows.js"
+import { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, overlayRows, panelArgRows, panelOpRows } from "../../src/js/tcmd/components/rows.js"
 
 // Captures what each builder passes to `Component.map` and returns a sentinel.
 function fakeRow() {
@@ -176,5 +176,23 @@ describe("rows", () => {
 		const Empty = fakeRow()
 		commandItemRows(Empty)(null, {})
 		expect(Empty.calls[0].data).toEqual([])
+	})
+
+	test("overlayRows snapshots the cursor into a plain per-row flag", () => {
+		const Row = fakeRow()
+		const items = [
+			{ key: "h:1", text: "one" },
+			{ key: "h:2", text: "two" },
+		]
+		expect(overlayRows(Row)(null, { items, cursor: cell(1) })).toBe("MAPPED")
+		const [call] = Row.calls
+		expect(call.data).toBe(items)
+		expect(call.processor(items[0], 0)).toEqual({ item: items[0], index: 0, currentRow: false })
+		expect(call.processor(items[1], 1)).toEqual({ item: items[1], index: 1, currentRow: true })
+		expect(call.key(items[0])).toBe("h:1")
+		// A hand-built bag may pass a plain cursor.
+		const Plain = fakeRow()
+		overlayRows(Plain)(null, { items, cursor: 0 })
+		expect(Plain.calls[0].processor(items[0], 0).currentRow).toBe(true)
 	})
 })

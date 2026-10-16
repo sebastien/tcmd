@@ -20,8 +20,14 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   directory; `g` opens a fzf-style picker over bookmark names and paths. A
   directory bookmark opens to show its contents, a file bookmark is selected
   and previewed in its directory.
-- Operations over the current panes: copy, move, delete/erase, stat, touch,
-  selection buffers, edit/view/open and shell commands
+- Undo/redo (`⌃Z` / `⌃⇧Z` or `⌃Y`) over recorded filesystem changes (mkdir,
+  copies to new destinations, move, rename, trashed delete), with a history list
+  (`u`); a delete reports the trash directory it used and can be undone or
+  restored from the trash browser
+  (`⇧T`), which lists trashed entries by their original path. A double click on
+  a row opens it like `Enter`.
+- Operations over the current panes: copy, move, mkdir, delete/erase,
+  stat, touch, selection buffers, edit/view/open and shell commands
 - Command panel (`:`), the one entry point, a two-pane palette: the left pane
   filters (`:xxx`) over the CLI operations (copy, move, rename, delete… — the
   internal TinyCmd actions live on their own keys, not the panel). The right
@@ -29,7 +35,9 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   aligned label and its value in a boxed field (a text field to fill in), or a
   checkbox (multiple) / radio (single) list of the selected paths wrapped in its
   own border, with a lone path shown read-only — and the resolved command at its
-  foot. `Tab` cycles the filter and the argument rows; `Enter` runs a complete
+  foot. A selection argument draws from the *focused* column, so in the explorer
+  focusing the parent mirror selects the directory under its cursor.
+  `Tab` cycles the filter and the argument rows; `Enter` runs a complete
   command or jumps to the next missing argument. `!` lands straight on the shell
   command. A destination/path argument browses the filesystem in a file picker
   (`⌃O`): explorer mode has no destination pane, so a move or copy there asks
@@ -189,10 +197,14 @@ only supports OPFS); the server binds to loopback by default (`HOST`
 overrides it) and requires a per-process token injected into `index.html`.
 `TCMD_WEB_ROOT=/some/dir` confines the API
 (default `/`, the same access as `bun run tcmd`), but it is not a sandbox:
-don't expose the port. With OPFS, deleting moves entries to `/.trash`; the API
-uses the desktop trash. Open/edit/run are unavailable in the browser either
-way (the null host adapter reports it in the command bar); everything else —
-navigation, marks, scripting, copy/move/erase — works on either
+don't expose the port. Symlinks that resolve outside the root are rejected;
+root and destination checks are not race-proof against another local process
+changing the filesystem during a request. With OPFS, deleting moves entries to `/.trash`;
+the API uses the desktop trash. OPFS coordination across tabs uses Web Locks
+when available; without them, writes are coordinated per adapter only.
+Open/edit/run are unavailable in the browser
+either way (the null host adapter reports it in the command bar); everything
+else — navigation, marks, scripting, copy/move/erase — works on either
 backend. `public/index.html` is the host page; `public/main.js` is generated.
 
 ## Architecture

@@ -1,0 +1,9 @@
+<box flexDirection="row" height="1" columnGap="1" out:backgroundColor="rowBg" on:click="item.key!overlay:select">
+	<text out="rowMarker" width="2" out:fg="rowMarkerFg"></text>
+	<box flexGrow="1" minWidth="0" overflow="hidden">
+		<text out="rowText" out:fg="rowTextFg" wrapMode="none" truncate="true"></text>
+	</box>
+	<box flexShrink="0" overflow="hidden">
+		<text out="rowMeta" out:fg="rowMetaFg" wrapMode="none" truncate="true"></text>
+	</box>
+</box>

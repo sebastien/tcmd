@@ -41,13 +41,17 @@ function entryFor(name) {
 	return panelEntries().find((entry) => entry.name === name)
 }
 
-async function makeSession() {
+async function makeSession(viewMode = "commander") {
 	const fs = createMockFs(TREE)
 	const left = createPane({ fs, path: "/home" })
 	const right = createPane({ fs, path: "/tmp" })
-	// The panel's `dest` argument binds the DST pane, a commander concept.
-	const session = createSession({ fs, left, right, viewMode: "commander" })
-	await Promise.all([left.refresh(), right.refresh()])
+	// The panel's `dest` argument binds the DST pane, a commander concept; the
+	// explorer's mirrors (`parent`, `preview`) need their own listings too.
+	const session = createSession({ fs, left, right, viewMode })
+	await Promise.all(Object.values(session.panes).map((pane) => pane.refresh()))
+	// Let the explorer's parent-mirror effect land its cursor before a test
+	// reads the binding it produces.
+	await Promise.resolve()
 	return { fs, session }
 }
 
@@ -90,6 +94,19 @@ describe("panel", () => {
 		expect(bindings[0].role).toBe("active")
 		expect(paneSelectionPaths(session.panes.left)).toEqual(["/home/docs"])
 		expect(selectedPaths(bindings[0])).toEqual(["/home/docs"])
+	})
+
+	test("in explorer the selection draws from the focused column, the parent included", async () => {
+		const { session } = await makeSession("explorer")
+		// Focus the parent mirror: its cursor sits on the current directory, so
+		// the argument binds that directory, not the current pane's file.
+		session.active.set("parent")
+		await Promise.resolve()
+		expect(selectedPaths(bindArgs(session, entryFor("delete"))[0])).toEqual(["/home"])
+		// Back on the current column: the cursor entry again.
+		session.active.set("left")
+		await Promise.resolve()
+		expect(selectedPaths(bindArgs(session, entryFor("delete"))[0])).toEqual(["/home/docs"])
 	})
 
 	test("binds a selection argument to the marked set when present", async () => {

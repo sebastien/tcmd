@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { createPane } from "../../src/js/tcmd/core/pane.js"
 import { createSession, load } from "../../src/js/tcmd/core/session.js"
 import { getCommand, getCommandBarItems, getCommands, getModifierBarItems } from "../../src/js/tcmd/core/commands.js"
+import { PANEL_FOCUS } from "../../src/js/tcmd/core/panel.js"
 import { createMockFs } from "../helpers/mock-fs.js"
 
 const TREE = {
@@ -508,5 +509,72 @@ describe("commands", () => {
 		} finally {
 			command.run = original
 		}
+	})
+
+	test("file.mkdir opens the panel on mkdir with its name field focused", async () => {
+		const session = makeSession()
+		await load(session)
+		await session.dispatch("file.mkdir")
+		expect(session.panelOpen.value).toBe(true)
+		expect(session.panelEntry.value.name).toBe("mkdir")
+		expect(session.panelFocus.value).toBe(PANEL_FOCUS.ARGS)
+	})
+
+	test("history.open lists the journal and activating a row rewinds", async () => {
+		const session = makeSession()
+		const log = []
+		session.journal.record({ label: "one", undo: () => log.push("-1"), redo: () => log.push("+1") })
+		session.journal.record({ label: "two", undo: () => log.push("-2"), redo: () => log.push("+2") })
+		await session.dispatch("history.open")
+		expect(session.overlay.value).toBe("history")
+		expect(session.overlayItems.value.map((row) => row.text)).toEqual(["one", "two"])
+		expect(session.overlayItems.value[1].meta).toBe("current")
+		// Activating the first row rewinds past the second entry.
+		session.dispatch("overlay.setIndex", { index: 0 })
+		await session.dispatch("overlay.activate")
+		expect(log).toEqual(["-2"])
+		expect(session.overlay.value).toBeNull()
+	})
+
+	test("history.undo/redo report through the notice", async () => {
+		const session = makeSession()
+		await session.dispatch("history.undo")
+		expect(session.notice.value.text).toBe("nothing to undo")
+		session.journal.record({ label: "thing", undo: () => {}, redo: () => {} })
+		await session.dispatch("history.undo")
+		expect(session.notice.value.text).toContain("undid thing")
+		await session.dispatch("history.redo")
+		expect(session.notice.value.text).toContain("redid thing")
+	})
+
+	test("trash.open lists the trash and activating a row restores it", async () => {
+		const fs = createMockFs(TREE)
+		const session = createSession({
+			fs,
+			left: createPane({ fs, path: "/home" }),
+			right: createPane({ fs, path: "/" }),
+			viewMode: "commander",
+		})
+		await load(session)
+		await session.fs.trash(["/home/notes.txt"])
+		await session.dispatch("trash.open")
+		expect(session.overlay.value).toBe("trash")
+		expect(session.overlayItems.value.length).toBe(1)
+		expect(session.overlayItems.value[0].meta).toBe("/home/notes.txt")
+
+		await session.dispatch("overlay.activate")
+		expect(await session.fs.stat("/home/notes.txt")).not.toBeNull()
+		expect(session.overlayItems.value.length).toBe(0)
+		expect(session.notice.value.text).toContain("restored /home/notes.txt")
+	})
+
+	test("the bar shows overlay hints while the list overlay is open", async () => {
+		const session = makeSession()
+		await session.dispatch("history.open")
+		expect(session.commandBarItems.value.map((item) => item.title)).toContain("Jump")
+		await session.dispatch("trash.open")
+		expect(session.commandBarItems.value.map((item) => item.title)).toContain("Restore")
+		await session.dispatch("overlay.cancel")
+		expect(session.overlay.value).toBeNull()
 	})
 })

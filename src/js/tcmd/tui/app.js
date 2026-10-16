@@ -145,6 +145,7 @@ function createAppComponent(session, options = {}) {
 					unwrap(data.confirm) ||
 					unwrap(data.filtering) ||
 					unwrap(data.bookmarkOpen) ||
+					unwrap(data.overlay) ||
 					unwrap(data.panelOpen)
 
 				// Help overlay owns the keyboard while open.

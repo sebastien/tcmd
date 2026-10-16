@@ -5,6 +5,7 @@ import {
 	detailBlocks,
 	detailLine,
 	entryKind,
+	typeClass,
 	typeColor,
 } from "../../src/js/tcmd/components/EntryDetail.js"
 import { behaviorEnv } from "../helpers/behavior-env.js"
@@ -56,6 +57,18 @@ describe("EntryDetail", () => {
 		expect(typeColor({ isSymlink: true }, behaviorEnv)).toBe(behaviorEnv.linkFg)
 		expect(typeColor({ isDevice: true }, behaviorEnv)).toBe(behaviorEnv.devFg)
 		expect(typeColor({}, behaviorEnv)).toBe(behaviorEnv.fileFg)
+		// A plain file takes the same executable/read-only colour as the row.
+		expect(typeColor({ isDir: false, mode: 0o100755 }, behaviorEnv)).toBe(behaviorEnv.execFg)
+		expect(typeColor({ isDir: false, mode: 0o100400 }, behaviorEnv)).toBe(behaviorEnv.readonlyFg)
+	})
+
+	test("typeClass tags the kind, and a file's executable/read-only state", () => {
+		expect(typeClass({ isDir: true }, behaviorEnv)).toBe("is-directory")
+		expect(typeClass({ isSymlink: true }, behaviorEnv)).toBe("is-symlink")
+		expect(typeClass({ isDevice: true }, behaviorEnv)).toBe("is-device")
+		expect(typeClass({ isDir: false, mode: 0o100644 }, behaviorEnv)).toBe("is-file")
+		expect(typeClass({ isDir: false, mode: 0o100755 }, behaviorEnv)).toBe("is-file is-exec")
+		expect(typeClass({ isDir: false, mode: 0o100400 }, behaviorEnv)).toBe("is-file is-readonly")
 	})
 
 	test("behaviors gate each block and colour the numeric fields bright", () => {

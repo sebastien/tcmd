@@ -250,6 +250,29 @@ describe("App", () => {
 		])
 	})
 
+	test("a double click on the same row opens it like Enter", () => {
+		const events = createEvents()
+		const { calls, data } = makeData()
+		// First click: select only.
+		events["list:select"](null, data, { data: { paneId: "left", index: 2 } })
+		expect(calls).toEqual([{ id: "list.cursor", payload: { paneId: "left", index: 2 } }])
+		// Same row again, right away: select (idempotent) then open.
+		events["list:select"](null, data, { data: { paneId: "left", index: 2 } })
+		expect(calls.slice(1)).toEqual([
+			{ id: "list.cursor", payload: { paneId: "left", index: 2 } },
+			{ id: "pane.enter", payload: { paneId: "left" } },
+		])
+	})
+
+	test("a second click on a different row only selects", () => {
+		const events = createEvents()
+		const { calls, data } = makeData()
+		events["list:select"](null, data, { data: { paneId: "left", index: 2 } })
+		events["list:select"](null, data, { data: { paneId: "left", index: 3 } })
+		events["list:select"](null, data, { data: { paneId: "right", index: 3 } })
+		expect(calls.map((call) => call.id)).toEqual(["list.cursor", "list.cursor", "list.cursor"])
+	})
+
 	test("bookmark events route to select, save and jump", () => {
 		const events = createEvents()
 		const { calls, data } = makeData({
@@ -292,6 +315,40 @@ describe("App", () => {
 		expect(listing.calls).toEqual([
 			{ id: "bookmark.down", payload: undefined },
 			{ id: "bookmark.up", payload: undefined },
+		])
+	})
+
+	test("the list overlay owns the keyboard while open", () => {
+		const behaviors = createBehaviors({ quit: () => {} })
+		const { calls, data } = makeData({ overlay: "history" })
+		behaviors.keys(null, data, { name: "up" })
+		behaviors.keys(null, data, { name: "down" })
+		behaviors.keys(null, data, { name: "return" })
+		// The opening key closes, as do Esc and any unhandled key (swallowed).
+		behaviors.keys(null, data, { name: "u" })
+		behaviors.keys(null, data, { name: "escape" })
+		behaviors.keys(null, data, { name: "x" })
+		expect(calls).toEqual([
+			{ id: "overlay.up", payload: undefined },
+			{ id: "overlay.down", payload: undefined },
+			{ id: "overlay.activate", payload: undefined },
+			{ id: "overlay.cancel", payload: undefined },
+			{ id: "overlay.cancel", payload: undefined },
+		])
+		// Shift-T closes the trash overlay.
+		const trash = makeData({ overlay: "trash" })
+		behaviors.keys(null, trash.data, { name: "t", shift: true })
+		expect(trash.calls).toEqual([{ id: "overlay.cancel", payload: undefined }])
+	})
+
+	test("overlay events select and activate a clicked row", () => {
+		const events = createEvents()
+		const { calls, data } = makeData({ overlay: "trash", overlayItems: [{ key: "/t/a" }] })
+		events["overlay:select"](null, data, { data: "/t/a" })
+		events["overlay:select"](null, data, { data: "nope" })
+		expect(calls).toEqual([
+			{ id: "overlay.setIndex", payload: { index: 0 } },
+			{ id: "overlay.activate", payload: undefined },
 		])
 	})
 

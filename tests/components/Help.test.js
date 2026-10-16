@@ -89,6 +89,14 @@ describe("components Help", () => {
 		expect(lines).toContain("[Open →/⏎]")
 		expect(lines).toContain("[Switch ⇥/⇧⇥]")
 		expect(lines).not.toContain("Tabs")
+		// The undo/trash/mkdir bindings land in their own sections.
+		expect(groups.map((group) => group.title)).toContain("History")
+		expect(groups.map((group) => group.title)).toContain("Trash")
+		expect(lines).toContain("[Undo ^Z]")
+		expect(lines).toContain("[Redo ⇧^Z/^Y]")
+		expect(lines).toContain("[History U]")
+		expect(lines).toContain("[Trash ⇧T]")
+		expect(lines).toContain("[New directory N]")
 	})
 
 	test("splits the groups into two balanced columns", () => {

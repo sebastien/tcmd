@@ -31,6 +31,8 @@
 	--dir: #5c8cff;
 	--link: #4fc3ff;
 	--dev: #b48eff;
+	--exec: #5fd67a;
+	--readonly: #7d8ab8;
 	--mark: #ff7a1a;
 	--error: #ff4d5e;
 	--warning: #ffb020;
@@ -304,6 +306,14 @@ body {
 	font-weight: 600;
 }
 
+.name.is-exec {
+	color: var(--exec);
+}
+
+.name.is-readonly {
+	color: var(--readonly);
+}
+
 .file-row[data-kind="link"] .name {
 	color: var(--link);
 }
@@ -362,6 +372,14 @@ body {
 
 .entry-detail-type.is-device {
 	color: var(--dev);
+}
+
+.entry-detail-type.is-exec {
+	color: var(--exec);
+}
+
+.entry-detail-type.is-readonly {
+	color: var(--readonly);
 }
 
 .entry-detail-mode {
@@ -878,6 +896,93 @@ input:focus-visible {
 .help-dialog > footer,
 .bookmark-target,
 .bookmark-empty {
+	color: var(--text-dim);
+	padding-top: 0.3rem;
+}
+
+/* Shared list overlay (history / trash) --------------------------------- */
+
+.overlay-list {
+	position: fixed;
+	inset: 0;
+	z-index: 18;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1rem;
+	background: rgb(0 0 0 / 45%);
+}
+
+.overlay-dialog {
+	display: flex;
+	flex-direction: column;
+	width: min(640px, 95vw);
+	max-height: 85vh;
+	min-height: 0;
+	padding: 0.6rem;
+	border: 1px solid var(--accent);
+	border-radius: 6px;
+	background: var(--bg-panel);
+}
+
+.overlay-dialog h2 {
+	color: var(--text);
+	font: inherit;
+	font-weight: 600;
+	margin: 0 0 0.4rem;
+}
+
+.overlay-rows {
+	list-style: none;
+	margin: 0;
+	padding: 0.3rem 0;
+	overflow: auto;
+	min-height: 0;
+}
+
+.overlay-row {
+	display: flex;
+	align-items: baseline;
+	gap: 0.5rem;
+	padding: 0.15rem 0.3rem;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.overlay-row[data-current="true"] {
+	background: var(--accent-soft);
+}
+
+.overlay-marker {
+	color: var(--accent);
+	white-space: pre;
+}
+
+.overlay-text {
+	color: var(--text);
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.overlay-row[data-dim="true"] .overlay-text {
+	color: var(--text-dim);
+}
+
+.overlay-row[data-current="true"] .overlay-text {
+	color: var(--accent);
+}
+
+.overlay-meta {
+	margin-left: auto;
+	color: var(--text-dim);
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.overlay-dialog > footer,
+.overlay-empty {
 	color: var(--text-dim);
 	padding-top: 0.3rem;
 }

@@ -18,6 +18,7 @@
 
 import { cell, derived, effect } from "select/state/cells"
 import { createBookmarks } from "./bookmarks.js"
+import { createJournal } from "./journal.js"
 import { createDispatch, getCommandBarItems } from "./commands.js"
 import { createNullOs } from "./os.js"
 import { PANEL_FOCUS, argvFor, bindArgs, filterPanelEntries, isTextualRow, panelCommand, panelEntries, panelEntryRows, panelRowList, panelRunnable, pickerRowList, rowAt, withArgValue } from "./panel.js"
@@ -55,6 +56,18 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	session.host = host ?? ""
 	// Bookmark model (named paths). The store defaults to in-memory.
 	session.bookmarks = bookmarks ?? createBookmarks()
+	// Undo/redo journal: reversible file operations (`mkdir`, `copy`, `move`,
+	// `rename`, `trash`) record an inverse here; `^Z`/`^⇧Z` and the `u` history
+	// panel drive it. Session-only.
+	session.journal = createJournal()
+	// The shared list overlay (`u` history, `⇧T` trash): one modal list at a
+	// time. `overlay` is "history" | "trash" | null; `overlayItems` holds the
+	// rows the active overlay renders; `overlayIndex` is its cursor. A history
+	// row carries `index` (its position in the journal), a trash row carries
+	// `trashPath`.
+	session.overlay = cell(null)
+	session.overlayItems = cell([])
+	session.overlayIndex = cell(0)
 	// View mode: the three-column "explorer" (parent · current · preview) the
 	// workspace opens in, or the two-pane "commander". `view.toggleMode` (`t`)
 	// flips it; the workspace chrome in `components/Frame` reads it to decide
@@ -333,9 +346,9 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// Command bar rows: context-dependent key hints (see core/commands). The
 	// panel button is dropped when a host disables the panel.
 	session.commandBarItems = derived(
-		[session.filtering, session.bookmarkOpen, session.bookmarkMode, session.panelOpen, session.panelPicking, session.barModifier],
-		([filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, modifier]) =>
-			getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, modifier }),
+		[session.filtering, session.bookmarkOpen, session.bookmarkMode, session.panelOpen, session.panelPicking, session.overlay, session.barModifier],
+		([filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, overlay, modifier]) =>
+			getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, overlay, modifier }),
 	)
 
 	// The entry list filtered by the typed query; `panelOpIndex` indexes into

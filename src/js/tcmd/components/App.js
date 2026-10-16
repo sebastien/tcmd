@@ -21,6 +21,11 @@ import { DEFAULT_KEYMAP, matchKeymap } from "../core/keymap.js"
 import { PANEL_FOCUS } from "../core/panel.js"
 import { isNarrow } from "./Frame.js"
 
+// Constant: DOUBLE_CLICK_MS
+// Two clicks on the same listing row within this window count as a double
+// click, which opens the row like Enter (see `createEvents#list:select`).
+const DOUBLE_CLICK_MS = 400
+
 // Function: createInit
 // State initializer binding the root component to a `session`.
 function createInit(session) {
@@ -65,6 +70,10 @@ function createInit(session) {
 		leftSegments: left.segments,
 		leftSetFilter: (value) => left.setFilter(value),
 		notice: session.notice,
+		// The shared list overlay (`u` history / `⇧T` trash).
+		overlay: session.overlay,
+		overlayIndex: session.overlayIndex,
+		overlayItems: session.overlayItems,
 		panelCommand: session.panelCommand,
 		panelDraft: session.panelDraft,
 		panelCursorRow: session.panelCursorRow,
@@ -290,6 +299,29 @@ function createBehaviors(env) {
 				// Let the focused input handle typing the fuzzy query.
 				return
 			}
+			// The shared list overlay (history / trash) is modal: arrows move,
+			// Enter activates the row (jump in history, restore from trash), Esc
+			// closes. The key that opened it also closes it.
+			if (unwrap(data.overlay)) {
+				const mode = unwrap(data.overlay)
+				if (key?.name === "escape" || (key?.name === "u" && mode === "history") || (key?.name === "t" && key?.shift && mode === "trash")) {
+					data.dispatch("overlay.cancel")
+					return
+				}
+				if (key?.name === "up") {
+					data.dispatch("overlay.up")
+					return
+				}
+				if (key?.name === "down") {
+					data.dispatch("overlay.down")
+					return
+				}
+				if (key?.name === "return" || key?.name === "enter") {
+					data.dispatch("overlay.activate")
+					return
+				}
+				return
+			}
 			const active = unwrap(data.active)
 			if (unwrap(data.filtering) === active) {
 				// The filter input owns the keyboard: Esc clears, Enter keeps
@@ -358,6 +390,9 @@ function createBehaviors(env) {
 // environment carries the renderer's `quit` hook, so the command bar's Quit
 // entry takes the same path as the `q` key.
 function createEvents(env = {}) {
+	// Last listing row clicked, for the double-click-to-open gesture: a second
+	// click on the same row within `DOUBLE_CLICK_MS` opens it like Enter.
+	let lastRowClick = { paneId: null, index: -1, at: 0 }
 	return {
 		"commandbar:run": (self, data, event) => {
 			if (event.data === "app.quit") {
@@ -412,7 +447,21 @@ function createEvents(env = {}) {
 			if (!event.data?.path) return
 			data.dispatch("pane.setPath", event.data)
 		},
-		"list:select": (_self, data, event) => data.dispatch("list.cursor", event.data),
+		"list:select": (_self, data, event) => {
+			const paneId = event.data?.paneId
+			const index = event.data?.index
+			const now = Date.now()
+			// A click selects (focus + cursor); a second click on the same row
+			// within the window opens it like Enter. `list.cursor` activates the
+			// pane synchronously, so `pane.enter` then acts on the clicked pane.
+			const isDouble =
+				paneId === lastRowClick.paneId &&
+				index === lastRowClick.index &&
+				now - lastRowClick.at <= DOUBLE_CLICK_MS
+			lastRowClick = { paneId, index, at: isDouble ? 0 : now }
+			data.dispatch("list.cursor", event.data)
+			if (isDouble) data.dispatch("pane.enter", { paneId })
+		},
 		"pane:activate": (_self, data, event) => data.dispatch("pane.activate", { paneId: event.data }),
 		// Clicking the identity bar's view-mode word flips explorer/commander.
 		"view:toggleMode": (_self, data) => data.dispatch("view.toggleMode"),
@@ -430,9 +479,18 @@ function createEvents(env = {}) {
 			if (unwrap(data.bookmarkMode) === "name") data.dispatch("bookmark.save")
 			else data.dispatch("bookmark.select")
 		},
+		"overlay:select": (_self, data, event) => {
+			// Clicking an overlay row moves the cursor to it and activates it.
+			if (!unwrap(data.overlay)) return
+			const rows = unwrap(data.overlayItems) ?? []
+			const index = rows.findIndex((row) => row.key === event.data)
+			if (index < 0) return
+			data.dispatch("overlay.setIndex", { index })
+			data.dispatch("overlay.activate")
+		},
 	}
 }
 
-export { createBehaviors, createEvents, createInit }
+export { createBehaviors, createEvents, createInit, DOUBLE_CLICK_MS }
 
 // EOF

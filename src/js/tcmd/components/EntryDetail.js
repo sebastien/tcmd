@@ -10,7 +10,8 @@
 //
 // - `selected` (the pane's marked count, above one) leads in the mark colour;
 // - `date` (mtime) and `size` are the numeric fields, drawn bright;
-// - `type` (file/dir/link/dev) is coloured like the listing;
+// - `type` (file/dir/link/dev) is coloured like the listing, a plain file
+//   taking its executable/read-only colour too;
 // - `rights` (permission mode) is accented.
 //
 // When the pane is too narrow the trailing blocks give way first (`rights`,
@@ -21,6 +22,7 @@
 // out.
 
 import { unwrap } from "select/state/cells"
+import { isExecutable, isReadonly, nameFg } from "./FileRow.js"
 import { formatMode, formatSize, formatTime } from "./format.js"
 
 // Constant: KIND_LABELS
@@ -49,13 +51,24 @@ function entryKind(entry) {
 }
 
 // Function: typeColor
-// The listing colour for an entry's kind, mirroring `FileRow.nameFg`.
+// The listing colour for an entry's kind, delegating to `FileRow.nameFg` so
+// the detail's type reads exactly like the row's name — directory, symlink and
+// device kinds, plus the executable/read-only states of a plain file.
 function typeColor(entry, env) {
+	return nameFg(entry, env)
+}
+
+// Function: typeClass
+// The web state classes for the detail's type span: the kind's `is-<kind>`
+// class, plus the executable/read-only class when the entry is a plain file
+// (mirroring `FileRow.nameClass`, but on the type-specific `is-<kind>` base).
+function typeClass(entry, env) {
 	const kind = entryKind(entry)
-	if (kind === "symlink") return env.linkFg
-	if (kind === "directory") return env.dirFg
-	if (kind === "device") return env.devFg
-	return env.fileFg
+	const base = `is-${kind}`
+	if (kind !== "file") return base
+	if (isExecutable(entry)) return `${base} ${env.execClass}`
+	if (isReadonly(entry)) return `${base} ${env.readonlyClass}`
+	return base
 }
 
 // Function: detailBlocks
@@ -168,7 +181,7 @@ function createBehaviors(env = {}) {
 		detailTime: (self, data) => text(self, data, "time"),
 		detailHasType: (self, data) => has(self, data, "type"),
 		detailType: (self, data) => text(self, data, "type"),
-		detailTypeClass: (_self, data) => `is-${entryKind(unwrap(data.entry))}`,
+		detailTypeClass: (_self, data) => typeClass(unwrap(data.entry), env),
 		detailTypeFg: (_self, data) => typeColor(unwrap(data.entry), env),
 		detailHasSize: (self, data) => has(self, data, "size"),
 		detailSize: (self, data) => text(self, data, "size"),
@@ -190,5 +203,6 @@ export {
 	detailBlocks,
 	detailLine,
 	entryKind,
+	typeClass,
 	typeColor,
 }
