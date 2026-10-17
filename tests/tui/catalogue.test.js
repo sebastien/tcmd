@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { components, fileListScrollTop, keepVisible } from "../../src/js/tcmd/tui/catalogue.js"
+import { components, fileListScrollTop, keepVisible, registerComponents } from "../../src/js/tcmd/tui/catalogue.js"
 
 describe("tui components", () => {
 	test("Summary renders the shared summary logic", async () => {
@@ -48,6 +48,63 @@ describe("tui components", () => {
 			expect(frame).toContain("a.txt")
 			expect(frame).toContain("sub/")
 			expect(frame).toContain("* ")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+})
+
+describe("preview host tags", () => {
+	test("registers the code and image renderables", async () => {
+		registerComponents()
+		const { getTags } = await import("select.tui")
+		const tags = getTags()
+		expect(typeof tags.image?.Class).toBe("function")
+		expect(typeof tags.code?.Class).toBe("function")
+		expect(tags.code.contentProp).toBe("content")
+	})
+
+	test("FilePreview highlights a source file through the code renderable", async () => {
+		const { testRender } = await import("select.tui")
+		const setup = await testRender(components.FilePreview, {
+			data: {
+				entry: { ext: "ts", isDir: false, name: "a.ts", path: "/a.ts", size: 12 },
+				paneId: "preview",
+				preview: { ext: "ts", kind: "text", size: 12, text: "const x = 1\n", title: "a.ts" },
+				show: true,
+			},
+			height: 8,
+			width: 40,
+		})
+		try {
+			await setup.renderOnce()
+			await setup.renderOnce()
+			const frame = setup.captureCharFrame()
+			expect(frame).toContain("a.ts  <TS>")
+			expect(frame).toContain("const x = 1")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("FilePreview keeps the card for a format it cannot draw", async () => {
+		const { testRender } = await import("select.tui")
+		const setup = await testRender(components.FilePreview, {
+			data: {
+				entry: { ext: "svg", isDir: false, name: "a.svg", path: "/a.svg", size: 12 },
+				paneId: "preview",
+				preview: { ext: "svg", kind: "image", size: 12, text: null, title: "a.svg" },
+				show: true,
+			},
+			height: 8,
+			width: 40,
+		})
+		try {
+			await setup.renderOnce()
+			await setup.renderOnce()
+			// SVG has no decoder in the image renderable, so the metadata card
+			// stays in the body.
+			expect(setup.captureCharFrame()).toContain("image: a.svg")
 		} finally {
 			setup.renderer.destroy()
 		}

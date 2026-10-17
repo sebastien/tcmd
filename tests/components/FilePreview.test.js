@@ -81,4 +81,41 @@ describe("FilePreview", () => {
 			}),
 		).toBe("ln -> real.txt  <TXT>")
 	})
+
+	test("an image preview draws a decodable file and keeps the card otherwise", () => {
+		const behaviors = createBehaviors({ ...behaviorEnv, imageExts: ["png", "jpg"] })
+		const entry = { name: "a.png", path: "/a.png", isDir: false, size: 12, ext: "png" }
+		const image = { kind: "image", title: "a.png", size: 12, text: null, ext: "png" }
+		const data = { preview: image, entry }
+		expect(behaviors.showImage(null, data)).toBe(true)
+		expect(behaviors.showTextOrCard(null, data)).toBe(false)
+		expect(behaviors.previewImageSource(null, data)).toBe("/a.png")
+		// No path to load (a bare card, e.g. `stat`): the scrollbox keeps the
+		// card so the inspector is never blank.
+		const noPath = { preview: image, entry: { ...entry, path: undefined } }
+		expect(behaviors.showImage(null, noPath)).toBe(false)
+		expect(behaviors.showTextOrCard(null, noPath)).toBe(true)
+		// A format the renderer cannot decode keeps the metadata card.
+		const svg = { kind: "image", title: "a.svg", size: 12, text: null, ext: "svg" }
+		expect(behaviors.showImage(null, { preview: svg, entry: { ...entry, name: "a.svg", path: "/a.svg", ext: "svg" } })).toBe(false)
+		// A `stat` card pinned on an image wins over the image body.
+		const pinned = { ...image, details: ["mode: -rw-r--r--"] }
+		expect(behaviors.showImage(null, { preview: pinned, entry })).toBe(false)
+		// The web env has no image renderable at all.
+		expect(createBehaviors(behaviorEnv).showImage(null, data)).toBe(false)
+	})
+
+	test("a text preview asks the renderer for its filetype", () => {
+		const behaviors = createBehaviors({
+			...behaviorEnv,
+			filetype: (path) => (path.endsWith(".ts") ? "typescript" : undefined),
+		})
+		const text = { kind: "text", title: "a.ts", size: 4, text: "const x = 1", ext: "ts" }
+		expect(behaviors.showText(null, { preview: text, entry: { path: "/a.ts" } })).toBe(true)
+		expect(behaviors.codeFiletype(null, { preview: text, entry: { path: "/a.ts" } })).toBe("typescript")
+		// No bundled parser: the code renderable draws plain text.
+		expect(behaviors.codeFiletype(null, { preview: text, entry: { path: "/a.txt" } })).toBeUndefined()
+		// The web env carries no highlighter at all.
+		expect(createBehaviors(behaviorEnv).codeFiletype(null, { preview: text, entry: { path: "/a.ts" } })).toBeUndefined()
+	})
 })

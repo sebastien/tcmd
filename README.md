@@ -45,7 +45,11 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   the selection — one file replaces its whole name — previewing each
   `old → new` before it runs.
 - Keyboard and mouse navigation, inline file previews — a previewed directory
-  renders as a pane (its breadcrumbs over its own listing), in both views
+  renders as a pane (its breadcrumbs over its own listing), in both views, a
+  source file highlights with tree-sitter (JavaScript, TypeScript, Markdown and
+  Zig today) through the same `code` renderable, and an image draws in place
+  through the terminal's graphics protocol (Kitty/sixel, half-block fallback),
+  the metadata card staying for formats with no decoder
 - Symlinks are shown *and* followed: a link row prints `name -> target`
   (`notes.md -> notes.txt`, `docs/ -> ../shared`), a link to a directory is a
   directory (it sorts, opens and previews as one), and the preview reads
@@ -333,6 +337,8 @@ tests run the shared logic through select.js on a happy-dom document.
 - [x] Pane fuzzy filtering (`/` to filter, `Enter` to keep, `Esc` to clear)
 - [x] Named bookmarks (`b` records, `g` jumps, persisted to a JSON file)
 - [ ] Quick find, grep
-- [ ] Image/PDF/audio/video previews
+- [x] Image previews (terminal graphics protocol) and tree-sitter source
+      highlighting in the inspector
+- [ ] PDF/audio/video previews
 - [x] Web view on the same core (shared components rendered by select.js)
 - [x] Pane navigation history (`Esc`/`⇧Esc` back/forward)

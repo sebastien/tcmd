@@ -113,10 +113,28 @@ function createBehaviors(env) {
 	const directory = (_self, data) =>
 		isDirectoryPane(unwrap(data.preview), unwrap(data.entry))
 	const body = (_self, data) => !directory(_self, data)
+	// An image the renderer can actually decode: the card stays whenever the
+	// preview carries `stat` details, or the entry sits behind the cursor as a
+	// directory. `imageExts` is renderer knowledge (the terminal image path
+	// decodes the raster formats only), so it comes from the environment and
+	// the web — which has no image renderable — simply never matches.
+	const isImage = (_self, data) => {
+		const preview = unwrap(data.preview)
+		const entry = unwrap(data.entry)
+		if (preview?.kind !== "image" || preview.details || !entry?.path) return false
+		const ext = `${preview.ext ?? entry.ext ?? ""}`.toLowerCase()
+		return (env.imageExts ?? []).includes(ext)
+	}
 	return {
 		actions,
 		actionsFg: () => env.textSecondaryFg,
 		cardText: (_self, data) => cardText(unwrap(data.preview)),
+		// Tree-sitter filetype for the previewed text, resolved by the
+		// renderer (the web has no highlighter and supplies no `filetype`).
+		codeFiletype: (_self, data) => {
+			const entry = unwrap(data.entry)
+			return entry?.path ? env.filetype?.(entry.path) : undefined
+		},
 		// The directory column: breadcrumbs over the inspector pane's listing,
 		// shaped like a pane header (a rule separates it from the body).
 		dirCrumbsView: (_self, data) => ({ segments: data.dirSegments, paneId: data.paneId }),
@@ -141,6 +159,10 @@ function createBehaviors(env) {
 		headerTitle: (_self, data) => headerTitle(unwrap(data.preview), unwrap(data.entry)),
 		isEmpty: (_self, data) => !unwrap(data.preview) && !unwrap(data.entry),
 		isDirPane: directory,
+		// The path the image renderable loads (symlinks read through, like the
+		// text body).
+		previewImageSource: (_self, data) =>
+			isImage(_self, data) ? unwrap(data.entry)?.path : undefined,
 		previewText: (_self, data) => unwrap(data.preview)?.text ?? "",
 		previewTitle: (_self, data) => previewTitle(unwrap(data.preview)),
 		previewTitleColor: () => env.textHeadingFg,
@@ -154,7 +176,11 @@ function createBehaviors(env) {
 		showEmpty: (_self, data) => body(_self, data) && !unwrap(data.preview) && !unwrap(data.entry),
 		showEntryCard: (_self, data) =>
 			body(_self, data) && !unwrap(data.preview) && Boolean(unwrap(data.entry)),
+		// The image takes the body on its own; when the format has no decoder
+		// (or the preview is a `stat` card) the scrollbox carries the body.
+		showImage: (_self, data) => body(_self, data) && isImage(_self, data),
 		showText: (_self, data) => body(_self, data) && hasText(unwrap(data.preview)),
+		showTextOrCard: (_self, data) => body(_self, data) && !isImage(_self, data),
 		textFg: () => env.textFg,
 	}
 }

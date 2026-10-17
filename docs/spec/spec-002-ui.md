@@ -84,6 +84,16 @@ the panes at ≥100 columns and becomes a fullscreen viewer (`v`) below that;
 `⇧V` maximizes it over the whole pane row in either mode, and the next `⇧V`
 restores the previous layout (focus and pane widths included).
 
+The text body highlights through OpenTUI's tree-sitter `code` renderable against
+a shared `SyntaxStyle` built from the active theme (JavaScript, TypeScript,
+Markdown and Zig ship with `@opentui/core`; a filetype with no bundled parser
+draws plain). An image draws through the `image` renderable, whose Kitty
+graphics / sixel / half-block protocol is auto-detected from the terminal, so
+the picture lands in the inspector grid — inline and fullscreen alike. Formats
+the decoder does not handle (`bmp`, `svg`) and `stat`-pinned entries keep the
+metadata card. The browser presentation is unchanged: it renders the same
+shared behaviours as plain text and never imports the TUI's renderables.
+
 `Enter` opens the entry under the cursor: a directory descends into it, a text
 file the host can edit opens in `$EDITOR`, and anything else — an image, media,
 a binary body, or any file on a host with no editor (the web) — opens the same

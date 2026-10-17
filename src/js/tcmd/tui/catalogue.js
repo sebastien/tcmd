@@ -73,9 +73,22 @@ import {
 } from "../components/index.js"
 import { createBehaviors as helpBehaviors } from "../components/Help.js"
 import { INSPECTOR_INLINE_WIDTH } from "../components/Frame.js"
+import { CodeRenderable, ImageRenderable, pathToFiletype } from "./opentui.js"
+import { syntaxStyle } from "./syntax.js"
 import { tuiTheme } from "./theme.js"
 
 let registered = false
+
+// Class: CodeView
+// The `code` host tag: OpenTUI's tree-sitter `CodeRenderable` with the shared
+// `SyntaxStyle` injected, because the renderable reads its style at
+// construction time and a template attribute can only carry a string. Content
+// and `filetype` still arrive through the node's own `out:` bindings.
+class CodeView extends CodeRenderable {
+	constructor(ctx, options) {
+		super(ctx, { ...options, syntaxStyle: options.syntaxStyle ?? syntaxStyle() })
+	}
+}
 
 // Function: tuiEnv
 // The TUI renderer environment: OpenTUI colors plus TUI-only hooks.
@@ -98,6 +111,12 @@ function tuiEnv() {
 		execFg: tuiTheme.execFg,
 		fieldBg: tuiTheme.fieldBg,
 		fileFg: tuiTheme.fileFg,
+		// Resolves an entry path to a tree-sitter filetype (undefined when no
+		// bundled parser matches, and the preview then draws plain text).
+		filetype: (path) => pathToFiletype(path),
+		// Raster formats the `image` renderable decodes. `bmp`/`svg` are not
+		// among them, so those previews keep the metadata card.
+		imageExts: ["gif", "jpeg", "jpg", "png", "webp"],
 		// Nerd Font icons in rows, on unless `TCMD_ICONS` opts out.
 		icons: iconsEnabled(process.env),
 		lineFg: tuiTheme.textSecondaryFg,
@@ -320,6 +339,10 @@ function registerComponents() {
 		helpscroll: { Class: getTags().scrollbox.Class, configure: showScrollBar },
 		bookmarklist: components.BookmarkList,
 		breadcrumbs: components.Breadcrumbs,
+		// Tree-sitter code preview (see `CodeView`) and the Kitty/sixel/blocks
+		// image renderable; `filepreview` binds both.
+		code: { Class: CodeView, contentProp: "content" },
+		image: { Class: ImageRenderable },
 		commandbar: components.CommandBar,
 		commandpanel: components.CommandPanel,
 		confirm: components.Confirm,

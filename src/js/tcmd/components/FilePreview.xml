@@ -1,6 +1,8 @@
 <!-- The inspector: a card/text body for a file, and a directory column
      (breadcrumbs + cursorable listing) for a directory, so a previewed
-     directory reads as a pane. The body and the column share the border, and
+     directory reads as a pane. A text body highlights through the `code`
+     tree-sitter renderable; an image draws through the `image` renderable's
+     terminal graphics protocol. The body and the column share the border, and
      the whole column is clickable to take focus. -->
 <box when="show" out:title="headerTitle" out:titleColor="previewTitleColor" border borderStyle="rounded"
      flexDirection="column" flexGrow="1" overflow="hidden" on:click="paneId!pane:activate">
@@ -12,10 +14,17 @@
 	<box when="isDirPane" height="1" out:border="headRule" out:borderColor="headRuleFg"></box>
 	<filelist when="isDirPane" in:entries="dirEntries" in:cursor="dirCursor" in:marked="dirMarked"
 	          in:active="dirActive" in:paneId="paneId" in:loading="dirLoading"></filelist>
-	<scrollbox when="showBody" flexGrow="1">
-		<text when="showText" out="previewText" out:fg="textFg"></text>
-		<text when="showCard" out="cardText" out:fg="dimFg"></text>
-		<text when="showEntryCard" out="entryText" out:fg="dimFg"></text>
-		<text when="showEmpty" out="emptyText" out:fg="dimFg"></text>
-	</scrollbox>
+	<box when="showBody" flexGrow="1" position="relative" overflow="hidden">
+		<scrollbox when="showTextOrCard" flexGrow="1">
+			<code when="showText" out="previewText" out:fg="textFg" out:filetype="codeFiletype"></code>
+			<text when="showCard" out="cardText" out:fg="dimFg"></text>
+			<text when="showEntryCard" out="entryText" out:fg="dimFg"></text>
+			<text when="showEmpty" out="emptyText" out:fg="dimFg"></text>
+		</scrollbox>
+		<!-- Image files draw through the terminal's graphics protocol
+		     (Kitty/sixel, half-block fallback). Formats with no decoder
+		     (`bmp`, `svg`) keep the metadata card instead. -->
+		<image when="showImage" position="absolute" top="0" left="0" width="100%" height="100%"
+		       fit="fit" protocol="auto" out:source="previewImageSource"></image>
+	</box>
 </box>
