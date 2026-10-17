@@ -92,21 +92,33 @@ describe("rows", () => {
 		expect(call.data.length).toBe(36)
 	})
 
-	test("fileRows falls back to the measured scrollbox height", () => {
+	test("fileRows mounts the full listing when no viewport is threaded", () => {
 		const Row = fakeRow()
 		const entries = Array.from({ length: 100 }, (_, i) => ({ path: `/f${i}` }))
 		const data = { entries, cursor: 50, marked: new Set() }
-		// No threaded viewport: the builder measures the mounted scrollbox.
+		// No threaded viewport (the inspector's directory column): the listing
+		// is mounted in full so its scrollbox can scroll all of it. Measuring
+		// the scrollbox instead used to cap it at `height + 2 * margin` rows.
 		const self = { ref: { list: { height: 20 } } }
 		expect(fileRows(Row)(self, data)).toBe("MAPPED")
-		const [call] = Row.calls
-		// A 20-row viewport windows to 20 + 2 * 8 = 36 rows around the cursor.
-		expect(call.data.length).toBe(36)
-		expect(call.data[0].path).toBe(`/f${50 - 8}`)
-		// Without either source the whole list is mounted so it can be measured.
+		expect(Row.calls[0].data.length).toBe(100)
 		const Bare = fakeRow()
 		fileRows(Bare)(null, data)
 		expect(Bare.calls[0].data.length).toBe(100)
+	})
+
+	test("fileRows bounds a huge uninstrumented listing around the cursor", () => {
+		const Row = fakeRow()
+		const entries = Array.from({ length: 5000 }, (_, i) => ({ path: `/f${i}` }))
+		// Past `UNWINDOWED_ROWS` the mount is capped (the terminal renderer
+		// cannot create unbounded rows); the window still follows the cursor.
+		fileRows(Row)(null, { entries, cursor: 4000, marked: new Set() })
+		const [call] = Row.calls
+		expect(call.data.length).toBe(500)
+		expect(call.data[0].path).toBe(`/f${4000 - 250}`)
+		expect(call.data[call.data.length - 1].path).toBe(`/f${4000 + 249}`)
+		// The cursor keeps its absolute index.
+		expect(call.processor(call.data[250], 250)).toMatchObject({ index: 4000, currentRow: true })
 	})
 
 	test("fileWindow falls back to the full list when the viewport is unknown", () => {

@@ -59,11 +59,11 @@ import {
 	filePreviewBehaviors,
 	fileRowBehaviors,
 	fileRows,
-	fileWindow,
 	filterBarBehaviors,
 	helpRowBehaviors,
 	helpRows,
 	iconsEnabled,
+	listingWindow,
 	overlayListBehaviors,
 	overlayRowBehaviors,
 	overlayRows,
@@ -193,17 +193,14 @@ function keepVisible(box, index, total) {
 	return top
 }
 
-// Keep the file-list cursor row inside the viewport. When the list is windowed
-// (a `viewport` height is threaded down) the scrollbox holds only the window,
-// so it scrolls to the cursor's index inside that window against the window
-// length; otherwise it scrolls the full listing.
+// Keep the file-list cursor row inside the viewport. The window comes from
+// `listingWindow`, the same helper the row builder uses, so the scrollbox
+// content and the scroll keeper never disagree (a windowed pane scrolls the
+// cursor inside its window; an inspector without a threaded viewport mounts
+// the full listing and scrolls it by absolute index).
 function fileListScrollTop(self, data) {
-	const viewport = unwrap(data.viewport)
-	if (viewport > 0) {
-		const { local, len } = fileWindow(data, viewport)
-		return keepVisible(self.ref.list, local, len)
-	}
-	return keepVisible(self.ref.list, unwrap(data.cursor) ?? 0, unwrap(data.entries)?.length ?? 0)
+	const { local, len } = listingWindow(data, unwrap(data.viewport) ?? 0)
+	return keepVisible(self.ref.list, local, len)
 }
 
 // Keep the bookmark picker selection inside its viewport.

@@ -8,8 +8,7 @@
 // `(self, data) → Component.map(…)`: it turns a parent's data bag into the
 // `{ item, index, … }` bags its row components receive, so the bag shape is
 // defined once and both renderers stay in sync. `self` is the parent list
-// instance — only `fileRows` uses it, to fall back to the measured scrollbox
-// height when no viewport is threaded down.
+// instance, kept in the signature for the shared `(self, data)` contract.
 //
 // Row state (cursor, marks, selection) is snapshotted into plain per-row
 // booleans (`currentRow`, `markedRow`, `selectedRow`) instead of broadcasting
@@ -50,6 +49,15 @@ function isSelected(data) {
 // list, so a scroll step or a cursor nudge does not first expose a blank row.
 const ROW_WINDOW_MARGIN = 8
 
+// Constant: UNWINDOWED_ROWS
+// How many rows a list without a threaded viewport (the inspector's directory
+// column, the web) mounts before it windows around the cursor. Such a list
+// renders its *whole* listing so its scrollbox can scroll all of it, but the
+// terminal renderer cannot create unbounded rows — a many-thousand-row
+// directory fails to render — so the mount is bounded here. The bound sits
+// well under that limit and leaves normal directories fully mounted.
+const UNWINDOWED_ROWS = 500
+
 // Function: fileWindow
 // The windowed slice of a file listing: only `[start, start+len)` rows are
 // mounted around the cursor, so a large directory does not lay out thousands of
@@ -69,6 +77,26 @@ function fileWindow(data, viewport) {
 	const maxStart = Math.max(0, total - count)
 	const start = Math.max(0, Math.min(cursor - ROW_WINDOW_MARGIN, maxStart))
 	const len = Math.min(count, total - start)
+	return { start, len, local: cursor - start, total }
+}
+
+// Function: listingWindow
+// The rows a `FileList` mounts, shared by the row builder and the scroll
+// keeper so they always agree on the window. A threaded viewport (the panes)
+// windows around the cursor with a margin. Without one (the inspector's
+// directory column) the whole listing is mounted — so its scrollbox scrolls
+// all of it — up to `UNWINDOWED_ROWS`; beyond that the same cursor-anchored
+// window keeps the mount bounded while the cursor still reaches every row.
+function listingWindow(data, viewport) {
+	const vp = Math.floor(viewport ?? 0)
+	if (vp > 0) return fileWindow(data, vp)
+	const entries = unwrap(data.entries) ?? []
+	const total = entries.length
+	const cursor = isCell(data.cursor) ? unwrap(data.cursor) : (data.cursor ?? 0)
+	if (total <= UNWINDOWED_ROWS) return { start: 0, len: total, local: cursor, total }
+	const maxStart = Math.max(0, total - UNWINDOWED_ROWS)
+	const start = Math.max(0, Math.min(cursor - Math.floor(UNWINDOWED_ROWS / 2), maxStart))
+	const len = Math.min(UNWINDOWED_ROWS, total - start)
 	return { start, len, local: cursor - start, total }
 }
 
@@ -100,11 +128,11 @@ function fileRows(FileRow) {
 		const entries = unwrap(data.entries) ?? []
 		const cursor = isCell(data.cursor) ? unwrap(data.cursor) : data.cursor
 		const marked = isCell(data.marked) ? unwrap(data.marked) : data.marked
-		// The viewport height is threaded down reactively (from `uiSize`), so the
-		// window is correct from the first render; fall back to the measured
-		// scrollbox height on renderers that do not provide it.
-		const viewport = unwrap(data.viewport) || self?.ref?.list?.height || 0
-		const { start, len } = fileWindow(data, viewport)
+		// The window is shared with `fileListScrollTop` (see `listingWindow`).
+		// The panes window around their cursor; the inspector mounts its whole
+		// listing so its scrollbox can scroll all of it, bounded for the
+		// terminal renderer.
+		const { start, len } = listingWindow(data, unwrap(data.viewport) ?? 0)
 		const bag = (item, index) => ({
 			item,
 			index,
@@ -250,6 +278,7 @@ export {
 	fileWindow,
 	helpRows,
 	isSelected,
+	listingWindow,
 	overlayRows,
 	panelArgRows,
 	panelOpRows,

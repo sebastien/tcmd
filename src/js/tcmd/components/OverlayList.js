@@ -31,7 +31,7 @@ function overlayTitle(mode) {
 function overlayFooter(mode) {
 	return overlayMode(mode) === "trash"
 		? "↑↓ move   ↵ restore   Esc close"
-		: "↑↓ move   ↵ jump   Esc close"
+		: "↑↓ move   ↵ jump   ^Z undo   ^⇧Z redo   Esc close"
 }
 
 // Function: overlayEmpty

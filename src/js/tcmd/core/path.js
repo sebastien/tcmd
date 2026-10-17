@@ -37,9 +37,11 @@ function split(p) {
 
 // Function: extname
 // Lowercased extension of the last segment, without the dot; null when the
-// name has no extension (or is a dotfile).
+// name has no extension (or is a dotfile). A bare filename (no separator), the
+// common case when building a listing, skips the `basename` split.
 function extname(p) {
-	const name = basename(p)
+	const text = `${p ?? ""}`
+	const name = text.indexOf(SEP) < 0 ? text : basename(text)
 	const at = name.lastIndexOf(".")
 	return at > 0 ? name.slice(at + 1).toLowerCase() : null
 }

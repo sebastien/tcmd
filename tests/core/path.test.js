@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { basename, join, normalize, parent, prefix, split } from "../../src/js/tcmd/core/path.js"
+import { basename, extname, join, normalize, parent, prefix, split } from "../../src/js/tcmd/core/path.js"
 
 describe("path", () => {
 	test("normalize collapses duplicate separators", () => {
@@ -25,5 +25,18 @@ describe("path", () => {
 		expect(prefix("/a/b/c", 2)).toBe("/a/b")
 		expect(prefix("/a/b/c", 3)).toBe("/a/b/c")
 		expect(basename("/a/b/c.txt")).toBe("c.txt")
+	})
+
+	test("extname reads a bare filename, a path, and the dotfile cases", () => {
+		// The bare-filename fast path (a listing passes names, not paths).
+		expect(extname("a.txt")).toBe("txt")
+		expect(extname("archive.tar.gz")).toBe("gz")
+		expect(extname("noext")).toBeNull()
+		// A leading dot is not an extension; a dot on a path resolves on the
+		// basename.
+		expect(extname(".gitignore")).toBeNull()
+		expect(extname("/a/b/c.TXT")).toBe("txt")
+		expect(extname("")).toBeNull()
+		expect(extname(null)).toBeNull()
 	})
 })

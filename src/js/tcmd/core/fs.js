@@ -40,7 +40,8 @@ import fs from "node:fs/promises"
 import nodeFs from "node:fs"
 import nodeOs from "node:os"
 import nodePath from "node:path"
-import { extname, join as pathJoin } from "./path.js"
+import { createLimiter, mapLimit } from "./concurrency.js"
+import { SEP, extname, join as pathJoin, normalize } from "./path.js"
 import { PREVIEW_BYTES } from "./preview.js"
 
 // Owner-name caches, filled lazily from /etc/passwd and /etc/group. Browsers
@@ -50,18 +51,34 @@ let groupNames = null
 // ponytail: process-local destination locks serialize callers here; cross-process no-replace moves need native support.
 const pathLocks = new Map()
 
-// Function: resolveOwner
-// "user:group" for a uid/gid, resolving names from /etc/passwd and /etc/group
-// (cached once). Falls back to the numeric ids, or "" when both are absent.
-async function resolveOwner(uid, gid) {
-	if (uid == null && gid == null) return ""
+// Function: loadOwners
+// Fills the passwd/group caches once, so `ownerOf` can resolve synchronously.
+// A listing resolves its owners after a single `loadOwners()`, instead of one
+// async round-trip per entry.
+async function loadOwners() {
 	if (process.platform !== "win32") {
 		passwdNames ??= await parseColonFile("/etc/passwd", 2)
 		groupNames ??= await parseColonFile("/etc/group", 2)
 	}
+}
+
+// Function: ownerOf
+// "user:group" for a uid/gid from the (already loaded) names maps. Falls back
+// to the numeric ids, or "" when both are absent.
+function ownerOf(uid, gid) {
+	if (uid == null && gid == null) return ""
 	const user = uid == null ? "" : passwdNames?.get(uid) ?? `${uid}`
 	const group = gid == null ? "" : groupNames?.get(gid) ?? `${gid}`
 	return user && group ? `${user}:${group}` : user || group
+}
+
+// Function: resolveOwner
+// "user:group" for a uid/gid, loading the names maps on first use. Falls back
+// to the numeric ids, or "" when both are absent.
+async function resolveOwner(uid, gid) {
+	if (uid == null && gid == null) return ""
+	await loadOwners()
+	return ownerOf(uid, gid)
 }
 
 // Function: parseColonFile
@@ -82,11 +99,15 @@ async function parseColonFile(path, nameColumn) {
 	return map
 }
 
-function toEntry(name, dirPath, isDir, stats) {
+// Function: toEntry
+// Builds a listing entry. `prefix` is the directory path already ending in the
+// separator, so the listing joins it once instead of normalizing the directory
+// path per entry.
+function toEntry(name, prefix, isDir, stats) {
 	const stat = stats || {}
 	return {
 		name,
-		path: pathJoin(dirPath, name),
+		path: prefix + name,
 		isDir,
 		isSymlink: Boolean(stat.isSymlink),
 		// The raw `readlink` text — relative when the link was written that
@@ -111,24 +132,41 @@ function isDeviceNode(node) {
 	)
 }
 
+// Constant: READDIR_CONCURRENCY
+// Per-entry stats in a listing are issued concurrently, bounded so a huge
+// directory does not queue tens of thousands of requests at once. The Node
+// threadpool services a handful of filesystem calls at a time, so a modest
+// bound keeps it saturated without the memory churn of one promise per entry.
+const READDIR_CONCURRENCY = 64
+
+// Constant: DU_CONCURRENCY
+// Global in-flight bound for the recursive `du` walk, shared across every
+// directory level (see `duSafe`).
+const DU_CONCURRENCY = 64
+
 // Function: createNodeFs
 // Node/Bun-backed implementation of the filesystem adapter.
 function createNodeFs() {
 	const adapter = {
 		async readDir(path) {
 			const dirents = await fs.readdir(path, { withFileTypes: true })
-			const entries = new Array(dirents.length)
-			for (let i = 0; i < dirents.length; i++) {
-				const d = dirents[i]
-				const full = pathJoin(path, d.name)
-				const stats = await statSafe(full)
+			// Normalize the directory once, not per entry: `toEntry` appends the
+			// name to this prefix.
+			const normalized = normalize(path)
+			const prefix = normalized === SEP ? SEP : normalized + SEP
+			// Resolve owners from the cached maps, once, up front: the per-entry
+			// work below then stays purely filesystem-bound and parallel.
+			await loadOwners()
+			return mapLimit(dirents, READDIR_CONCURRENCY, async (d) => {
+				const full = prefix + d.name
+				const stats = await statDetails(full)
 				const isLink = d.isSymbolicLink()
 				// The dirent type describes the link itself, not what it
 				// points at: resolve through the followed stat so a link to a
 				// directory is listed (sorted, opened, previewed) as one. A
 				// broken link has no stats and stays a plain entry.
 				const isDir = d.isDirectory() || (isLink && Boolean(stats?.isDir))
-				entries[i] = toEntry(d.name, path, isDir, {
+				const entry = toEntry(d.name, prefix, isDir, {
 					isSymlink: isLink,
 					target: isLink ? await readLinkSafe(full) : null,
 					isDevice: isDeviceNode(d),
@@ -139,9 +177,9 @@ function createNodeFs() {
 					uid: stats?.uid ?? null,
 					gid: stats?.gid ?? null,
 				})
-				entries[i].owner = await resolveOwner(stats?.uid, stats?.gid)
-			}
-			return entries
+				entry.owner = ownerOf(stats?.uid, stats?.gid)
+				return entry
+			})
 		},
 		async stat(path) {
 			return statSafe(path)
@@ -454,7 +492,10 @@ function pathExistsError(path) {
 	return error
 }
 
-async function statSafe(path) {
+// Function: statDetails
+// The stat fields a listing needs, with no owner lookup — `readDir` resolves
+// owners itself, from the cached maps, so the per-entry work stays parallel.
+async function statDetails(path) {
 	try {
 		const stats = await fs.stat(path)
 		return {
@@ -467,11 +508,16 @@ async function statSafe(path) {
 			mode: stats.mode,
 			uid: stats.uid,
 			gid: stats.gid,
-			owner: await resolveOwner(stats.uid, stats.gid),
 		}
 	} catch (error) {
 		return null
 	}
+}
+
+async function statSafe(path) {
+	const details = await statDetails(path)
+	if (!details) return null
+	return { ...details, owner: await resolveOwner(details.uid, details.gid) }
 }
 
 // Function: readLinkSafe
@@ -486,26 +532,29 @@ async function readLinkSafe(path) {
 }
 
 // Function: duSafe
-// Recursive disk usage; unreadable entries contribute 0 and never throw.
+// Recursive disk usage; unreadable entries contribute 0 and never throw. The
+// walk fans out per directory but every filesystem call takes a slot from one
+// global limiter, so a deep tree cannot multiply the concurrency per level.
+const duLimit = createLimiter(DU_CONCURRENCY)
 async function duSafe(path) {
-	const stats = await statSafe(path)
+	const stats = await duLimit(() => statDetails(path))
 	if (!stats) return 0
 	if (!stats.isDir) return stats.size
-	let total = 0
 	let dirents
 	try {
-		dirents = await fs.readdir(path, { withFileTypes: true })
+		dirents = await duLimit(() => fs.readdir(path, { withFileTypes: true }))
 	} catch (error) {
 		return 0
 	}
-	for (const d of dirents) {
+	const sizes = await mapLimit(dirents, DU_CONCURRENCY, (d) => {
+		// A symlink contributes nothing, matching the old link guard.
+		if (d.isSymbolicLink()) return 0
 		const full = pathJoin(path, d.name)
-		if (d.isDirectory()) total += await duSafe(full)
-		else if (!d.isSymbolicLink()) {
-			const child = await statSafe(full)
-			total += child?.size ?? 0
-		}
-	}
+		if (d.isDirectory()) return duSafe(full)
+		return duLimit(() => statDetails(full)).then((child) => child?.size ?? 0)
+	})
+	let total = 0
+	for (const size of sizes) total += size
 	return total
 }
 

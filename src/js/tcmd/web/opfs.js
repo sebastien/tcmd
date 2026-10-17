@@ -19,8 +19,13 @@
 // `/.trash/index.json` so `trashList()`/`restore()` can browse and undelete
 // them across reloads.
 
+import { mapLimit } from "../core/concurrency.js"
 import { basename, extname, join, normalize, parent, split } from "../core/path.js"
 import { PREVIEW_BYTES } from "../core/preview.js"
+
+// Constant: OPFS_READDIR_CONCURRENCY
+// Bounded window for the per-entry `getFile` metadata calls of a listing.
+const OPFS_READDIR_CONCURRENCY = 64
 
 // Function: createOpfsFs
 // Builds the filesystem adapter. `root` overrides the OPFS root handle (tests);
@@ -132,12 +137,15 @@ function createOpfsFs({ root, home = "/home/tester" } = {}) {
 	}
 
 	// Function: readDir
-	// Lists `path` as FileEntry-like rows.
+	// Lists `path` as FileEntry-like rows. Directory handles arrive through an
+	// async iterator, but each file's metadata (`getFile`) is an independent
+	// async call, so the entries are mapped with a bounded window instead of
+	// one await at a time.
 	async function readDir(path) {
 		const directory = await resolveDir(normalize(path))
-		const entries = []
-		for await (const handle of directory.values()) entries.push(await toEntry(path, handle))
-		return entries
+		const handles = []
+		for await (const handle of directory.values()) handles.push(handle)
+		return mapLimit(handles, OPFS_READDIR_CONCURRENCY, (handle) => toEntry(path, handle))
 	}
 
 	// Function: readTextHead

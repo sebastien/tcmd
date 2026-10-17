@@ -52,6 +52,52 @@ describe("node fs adapter", () => {
 		expect(await fs.stat("/definitely/not/here")).toBeNull()
 	})
 
+	test("du sums regular files recursively and ignores symlinks", async () => {
+		const root = await mkdtemp(join(tmpdir(), "tcmd-fs-du-"))
+		try {
+			await writeFile(join(root, "a.txt"), "12345")
+			await mkdir(join(root, "sub"))
+			await writeFile(join(root, "sub", "b.txt"), "1234567")
+			await mkdir(join(root, "sub", "deep"))
+			await writeFile(join(root, "sub", "deep", "c.txt"), "1")
+			// A symlink contributes nothing, matching `du`'s find semantics.
+			await symlink("a.txt", join(root, "link.txt"))
+			const fs = createNodeFs()
+			expect(await fs.du(root)).toBe(5 + 7 + 1)
+			expect(await fs.du(join(root, "a.txt"))).toBe(5)
+		} finally {
+			await rm(root, { recursive: true, force: true })
+		}
+	})
+
+	test("readDir lists a large directory completely and joins paths once", async () => {
+		const root = await mkdtemp(join(tmpdir(), "tcmd-fs-many-"))
+		try {
+			// Enough entries that the bounded concurrent stat pass must drain
+			// several worker batches, and a subdirectory plus a link so the
+			// classification still holds under the parallel reads.
+			const count = 250
+			await Promise.all(
+				Array.from({ length: count }, (_, i) => writeFile(join(root, `file-${i}.txt`), `${i}`)),
+			)
+			await mkdir(join(root, "sub"))
+			await symlink("file-0.txt", join(root, "link"))
+			const fs = createNodeFs()
+			const entries = await fs.readDir(root)
+			expect(entries.length).toBe(count + 2)
+			const byName = Object.fromEntries(entries.map((entry) => [entry.name, entry]))
+			expect(byName["sub"].isDir).toBe(true)
+			expect(byName["link"].isSymlink).toBe(true)
+			expect(byName["link"].target).toBe("file-0.txt")
+			expect(byName["file-7.txt"].size).toBe("7".length)
+			for (const entry of entries) {
+				expect(entry.path).toBe(`${root}/${entry.name}`)
+			}
+		} finally {
+			await rm(root, { recursive: true, force: true })
+		}
+	})
+
 	test("readTextHead reads the head of this file", async () => {
 		const fs = createNodeFs()
 		const head = await fs.readTextHead(new URL(import.meta.url).pathname, 64)
