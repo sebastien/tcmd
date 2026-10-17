@@ -6,12 +6,10 @@
 // Module: tcmd/components/Help
 // Shared behavior for the `?` key reference overlay, plus the reference data
 // itself. The categories are built from the live keymap and command registry,
-// so they cannot drift from the actual bindings, and every entry reuses the
-// command bar's own bracket shorthand (`[Open ⏎]`) with the key in the accent
-// colour — so the reference reads exactly like the bottom bar. The rows are
-// laid out in two columns balanced by line count, the section headings are
-// uppercase and bright, and every bracket is padded to one width so the keys
-// line up down each column. Both presentations (`Help.xml` / `Help.html`)
+// so they cannot drift from the actual bindings. The TUI keeps the bracket
+// shorthand (`[Open ⏎]`); the web renders toolbar-like action chips with Lucide
+// icons and key badges. Rows are balanced across two columns with bright
+// uppercase section headings. Both presentations (`Help.xml` / `Help.html`)
 // render the same row data through `HelpRow`.
 
 import { unwrap } from "select/state/cells"
@@ -50,11 +48,47 @@ const GROUP_TITLES = {
 	view: "View",
 }
 
+// Toolbar actions and key-reference entries share Lucide icons in the web UI.
+// The TUI keeps its compact textual row layout.
+const HELP_ICONS = {
+	"nav.up": "arrow-up",
+	"nav.down": "arrow-down",
+	"nav.jumpUp": "arrow-up",
+	"nav.jumpDown": "arrow-down",
+	"nav.pageUp": "arrow-up",
+	"nav.pageDown": "arrow-down",
+	"nav.home": "arrow-up",
+	"nav.end": "arrow-down",
+	"pane.enter": "arrow-right",
+	"pane.up": "arrow-up",
+	"pane.back": "arrow-left",
+	"pane.forward": "arrow-right",
+	"pane.toggle": "columns-2",
+	"pane.reload": "refresh-cw",
+	"list.mark": "check",
+	"bookmark.record": "bookmark",
+	"bookmark.jump": "bookmark",
+	"view.togglePreview": "panel-right",
+	"view.maximize": "maximize",
+	"view.toggleMode": "columns-2",
+	"file.mkdir": "folder-plus",
+	"file.open": "file",
+	"file.edit": "file-text",
+	"history.open": "refresh-cw",
+	"history.undo": "arrow-left",
+	"history.redo": "arrow-right",
+	"trash.open": "trash",
+	"panel.open": "terminal",
+	"panel.shell": "terminal",
+	"filter.start": "search",
+	"app.quit": "power",
+	"app.help": "circle-question-mark",
+}
+
 // Function: helpGroups
 // The categorized key reference as `{ title, rows }` groups in display order.
 // One row per command, with every distinct chord from the live keymap. The
-// registry provides the action title; the keymap remains authoritative for the
-// displayed bindings, including aliases and modifiers.
+// registry provides the action title.
 function helpGroups() {
 	const byId = new Map(getCommands().map((command) => [command.id, command]))
 	const groups = new Map()
@@ -104,6 +138,7 @@ function helpLines() {
 // down each column (keys right-aligned against the closing bracket).
 function helpBlocks() {
 	const groups = helpGroups()
+	const commands = new Map(getCommands().map((command) => [command.id, command]))
 	let titleWidth = 0
 	let keyWidth = 0
 	for (const group of groups) {
@@ -118,9 +153,14 @@ function helpBlocks() {
 		const at = loads[0] <= loads[1] ? 0 : 1
 		columns[at].push({ type: "section", key: `section:${group.title}`, label: group.title.toUpperCase() })
 		for (const row of group.rows) {
+			const command = commands.get(row.id)
+			const shortcut = command?.bar ? keyLabelGlyph(command.keys) : keyLabelGlyph(row.keys)
 			columns[at].push({
 				type: "entry",
 				key: `entry:${row.id}`,
+				icon: HELP_ICONS[row.id] ?? "chevron-right",
+				title: row.title,
+				shortcut,
 				open: OPEN,
 				head: `${row.title.padEnd(titleWidth)} `,
 				keys: keyLabelGlyph(row.keys).padStart(keyWidth),
@@ -202,6 +242,11 @@ function createRowBehaviors(env) {
 		head: (_self, data) => data.item?.head ?? "",
 		keys: (_self, data) => data.item?.keys ?? "",
 		close: (_self, data) => data.item?.close ?? "",
+		hasIcon: (_self, data) => Boolean(env.theme.lucideIcons && data.item?.icon),
+		iconHref: (_self, data) =>
+			env.theme.lucideIcons && data.item?.icon ? `#lucide-${data.item.icon}` : "",
+		actionTitle: (_self, data) => data.item?.title ?? `${data.item?.head ?? ""}`.trim(),
+		shortcut: (_self, data) => data.item?.shortcut ?? `${data.item?.keys ?? ""}`.trim(),
 		bracketFg: () => env.theme.textSecondaryFg,
 		headFg: () => env.theme.textFg,
 		keyFg: () => env.theme.accentFg,

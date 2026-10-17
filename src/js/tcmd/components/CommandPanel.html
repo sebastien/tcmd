@@ -1,5 +1,5 @@
-<section class="command-panel" when="open" role="dialog" aria-modal="true" aria-label="Command panel" tabindex="-1">
-	<div class="command-dialog">
+<section class="command-panel" when="open" role="dialog" aria-modal="true" aria-label="Command panel" tabindex="-1" on:click="!dialog:panel-cancel">
+	<div class="command-dialog" on:click="dialogStop">
 		<header out="title"></header>
 		<div class="panel-columns">
 			<div class="panel-command-column">
@@ -14,7 +14,7 @@
 				<div class="panel-picker" when="picking">
 					<p class="panel-picker-path" out="pickerPath"></p>
 					<label class="panel-picker-line">
-						<span out="pickerSign"></span>
+						<svg class="panel-picker-icon ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-search"></use></svg>
 						<input class="panel-picker-query" type="text" inout="pickerQuery" aria-label="Filter entries" />
 					</label>
 				</div>

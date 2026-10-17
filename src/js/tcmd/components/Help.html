@@ -1,5 +1,5 @@
-<section class="help" when="open" role="dialog" aria-modal="true" aria-label="Key reference" tabindex="-1">
-	<div class="help-dialog">
+<section class="help" when="open" role="dialog" aria-modal="true" aria-label="Key reference" tabindex="-1" on:click="!dialog:help-cancel">
+	<div class="help-dialog" on:click="dialogStop">
 		<header out="title"></header>
 		<div class="help-columns">
 			<div class="help-column" out="leftRows"></div>

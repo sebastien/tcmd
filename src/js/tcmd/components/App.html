@@ -1,5 +1,57 @@
 <div class="app" ref="root" tabindex="0" out:class="appModeClass" on:keydown="keys">
-	<div out="headerView|Header"></div>
+	<svg class="lucide-defs" aria-hidden="true" focusable="false">
+		<defs>
+			<symbol id="lucide-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+			<symbol id="lucide-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+			<symbol id="lucide-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+			<symbol id="lucide-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+			<symbol id="lucide-refresh-cw" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+			<symbol id="lucide-columns-2" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></symbol>
+			<symbol id="lucide-panel-right" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></symbol>
+			<symbol id="lucide-terminal" viewBox="0 0 24 24"><path d="M12 19h8"/><path d="m4 17 6-6-6-6"/></symbol>
+			<symbol id="lucide-circle-question-mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+			<symbol id="lucide-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+			<symbol id="lucide-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+			<symbol id="lucide-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+			<symbol id="lucide-bookmark" viewBox="0 0 24 24"><path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/></symbol>
+			<symbol id="lucide-maximize" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+			<symbol id="lucide-trash" viewBox="0 0 24 24"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+			<symbol id="lucide-power" viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></symbol>
+			<symbol id="lucide-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></symbol>
+			<symbol id="lucide-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+			<symbol id="lucide-link-2" viewBox="0 0 24 24"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></symbol>
+			<symbol id="lucide-cpu" viewBox="0 0 24 24"><path d="M12 20v2"/><path d="M12 2v2"/><path d="M17 20v2"/><path d="M17 2v2"/><path d="M2 12h2"/><path d="M2 17h2"/><path d="M2 7h2"/><path d="M20 12h2"/><path d="M20 17h2"/><path d="M20 7h2"/><path d="M7 20v2"/><path d="M7 2v2"/><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/></symbol>
+			<symbol id="lucide-file" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/></symbol>
+			<symbol id="lucide-file-code" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="m10 13-2 2 2 2"/><path d="m14 13 2 2-2 2"/></symbol>
+			<symbol id="lucide-file-text" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+			<symbol id="lucide-file-image" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><circle cx="10" cy="12" r="2"/><path d="m20 17-1.296-1.296a2.41 2.41 0 0 0-3.408 0L9 22"/></symbol>
+			<symbol id="lucide-audio-lines" viewBox="0 0 24 24"><path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/></symbol>
+			<symbol id="lucide-video" viewBox="0 0 24 24"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></symbol>
+			<symbol id="lucide-file-archive" viewBox="0 0 24 24"><path d="M13.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v11.5"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M8 12v-1"/><path d="M8 18v-2"/><path d="M8 7V6"/><circle cx="8" cy="20" r="2"/></symbol>
+			<symbol id="lucide-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+			<symbol id="lucide-settings" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></symbol>
+		</defs>
+	</svg>
+	<div when="!desktopMode" out="headerView|Header"></div>
+	<div class="desktop-toolbar" when="desktopMode" role="toolbar" aria-label="File browser">
+		<div class="desktop-toolbar-group">
+			<button class="desktop-toolbar-button is-primary" type="button" title="Open a folder" aria-label="Open a folder" on:click="!toolbar:open-folder"><svg class="toolbar-icon ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-folder-plus"></use></svg><span>Open folder</span></button>
+			<button class="desktop-toolbar-button" type="button" title="Go back" aria-label="Go back" on:click="!toolbar:back"><svg class="toolbar-icon ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-arrow-left"></use></svg><span>Back</span></button>
+			<button class="desktop-toolbar-button" type="button" title="Go forward" aria-label="Go forward" on:click="!toolbar:forward"><svg class="toolbar-icon ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-arrow-right"></use></svg><span>Forward</span></button>
+			<button class="desktop-toolbar-button" type="button" title="Go to the parent folder" aria-label="Go to the parent folder" on:click="!toolbar:up"><svg class="toolbar-icon ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-arrow-up"></use></svg><span>Up</span></button>
+			<button class="desktop-toolbar-button" type="button" title="Refresh the active folder" aria-label="Refresh the active folder" on:click="!toolbar:refresh"><svg class="toolbar-icon ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-refresh-cw"></use></svg><span>Refresh</span></button>
+		</div>
+		<span class="desktop-toolbar-separator" aria-hidden="true"></span>
+		<div class="desktop-toolbar-group">
+			<button class="desktop-toolbar-button" type="button" title="Switch between Explorer and Commander" aria-label="Switch view mode" on:click="!toolbar:toggle-mode"><svg class="toolbar-icon ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-columns-2"></use></svg><span out="desktopViewLabel"></span></button>
+			<button class="desktop-toolbar-button" type="button" title="Toggle the preview pane" aria-label="Toggle the preview pane" on:click="!toolbar:toggle-preview"><svg class="toolbar-icon ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-panel-right"></use></svg><span out="desktopPreviewLabel"></span></button>
+		</div>
+		<span class="desktop-toolbar-spacer"></span>
+		<div class="desktop-toolbar-group">
+			<button class="desktop-toolbar-button" type="button" title="Open the command panel" aria-label="Open the command panel" on:click="!toolbar:commands"><svg class="toolbar-icon ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-terminal"></use></svg><span>Commands</span><svg class="toolbar-chevron ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-chevron-right"></use></svg></button>
+			<button class="desktop-toolbar-button" type="button" title="Show keyboard shortcuts" aria-label="Show keyboard shortcuts" on:click="!toolbar:help"><svg class="toolbar-icon ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-circle-question-mark"></use></svg><span>Help</span></button>
+		</div>
+	</div>
 	<section class="resize-hint" when="tooSmall">
 		<h2 out="minSizeTitle"></h2>
 		<p out="minSizeHint"></p>
@@ -33,7 +85,7 @@
 		<div class="preview-max" when="showPreviewFull" out="previewView|FilePreview"></div>
 	</main>
 	<div out="commandBarView|CommandBar"></div>
-	<div class="viewer" when="showViewer" role="dialog" aria-modal="true" aria-label="File inspector" tabindex="-1" out="previewView|FilePreview"></div>
+	<div class="viewer" when="showViewer" role="dialog" aria-modal="true" aria-label="File inspector" tabindex="-1" on:click="!dialog:viewer-cancel" out="previewView|FilePreview"></div>
 	<div when="panelOpen" out="panelView|CommandPanel"></div>
 	<div when="bookmarkOpen" out="bookmarkView|BookmarkList"></div>
 	<div when="overlayOpen" out="overlayView|OverlayList"></div>

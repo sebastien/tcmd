@@ -12,8 +12,8 @@ import { createWebApp } from "./app.js"
 
 // Function: main
 // Mounts the web UI for `session` into `selector` (default "#app").
-function main(session, selector = "#app") {
-	const App = createWebApp(session)
+function main(session, selector = "#app", options = {}) {
+	const App = createWebApp(session, options)
 	return App.new().mount(selector)
 }
 

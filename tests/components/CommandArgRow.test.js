@@ -63,6 +63,9 @@ describe("CommandArgRow", () => {
 		expect(wantsFocus({ type: "op" })).toBe("ops")
 		expect(wantsFocus({ type: "arg" })).toBe("args")
 		expect(wantsFocus({ type: "item" })).toBe("args")
+		const behaviors = createBehaviors(behaviorEnv)
+		expect(behaviors.isOp(null, { row: { type: "op" } })).toBe(true)
+		expect(behaviors.isOp(null, { row: { type: "arg" } })).toBe(false)
 	})
 
 	test("focus requires the right column and index", () => {

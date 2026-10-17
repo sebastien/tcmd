@@ -187,6 +187,140 @@ function iconFor(entry) {
 	return NAME_ICONS[plain] ?? EXTENSION_ICONS[extensionOf(name)] ?? FILE_ICON
 }
 
+// Function: lucideIconFor
+// Lucide's outline icons are used by the web renderers, where SVG works without
+// a patched terminal font. The TUI keeps the detailed Nerd Font mapping above;
+// the web uses a smaller set of semantic file-kind icons.
+const LUCIDE_NAME_ICONS = {
+	cmakelists: "file-code",
+	dockerfile: "file-code",
+	env: "settings",
+	gitattributes: "settings",
+	gitconfig: "settings",
+	gitignore: "settings",
+	gitmodules: "settings",
+	gnumakefile: "file-code",
+	license: "file-text",
+	licence: "file-text",
+	makefile: "file-code",
+	npmrc: "settings",
+	readme: "file-text",
+}
+const LUCIDE_EXTENSION_ICONS = {
+	"7z": "file-archive",
+	aac: "audio-lines",
+	avi: "video",
+	bmp: "file-image",
+	bz2: "file-archive",
+	c: "file-code",
+	cc: "file-code",
+	cjs: "file-code",
+	clj: "file-code",
+	cmake: "file-code",
+	csv: "file-text",
+	cfg: "settings",
+	conf: "settings",
+	cpp: "file-code",
+	cs: "file-code",
+	css: "file-code",
+	d: "file-code",
+	db: "database",
+	diff: "file-code",
+	ex: "file-code",
+	exs: "file-code",
+	env: "settings",
+	flac: "audio-lines",
+	gif: "file-image",
+	go: "file-code",
+	gql: "file-code",
+	graphql: "file-code",
+	gz: "file-archive",
+	h: "file-code",
+	hbs: "file-code",
+	hs: "file-code",
+	hpp: "file-code",
+	htm: "file-code",
+	html: "file-code",
+	ini: "settings",
+	java: "file-code",
+	jar: "file-archive",
+	jpeg: "file-image",
+	jpg: "file-image",
+	js: "file-code",
+	jsx: "file-code",
+	json: "file-code",
+	kt: "file-code",
+	kts: "file-code",
+	less: "file-code",
+	lock: "settings",
+	log: "file-text",
+	lua: "file-code",
+	m4a: "audio-lines",
+	md: "file-text",
+	markdown: "file-text",
+	mk: "file-code",
+	mkv: "video",
+	mov: "video",
+	mp3: "audio-lines",
+	mp4: "video",
+	mjs: "file-code",
+	nim: "file-code",
+	ogg: "audio-lines",
+	pdf: "file-text",
+	perl: "file-code",
+	patch: "file-code",
+	php: "file-code",
+	pl: "file-code",
+	png: "file-image",
+	ps1: "file-code",
+	py: "file-code",
+	r: "file-code",
+	rb: "file-code",
+	rar: "file-archive",
+	rs: "file-code",
+	sass: "file-code",
+	scala: "file-code",
+	scss: "file-code",
+	sh: "file-code",
+	sql: "file-code",
+	sqlite: "database",
+	sqlite3: "database",
+	svg: "file-image",
+	swift: "file-code",
+	tar: "file-archive",
+	text: "file-text",
+	toml: "settings",
+	ts: "file-code",
+	tsv: "file-text",
+	txt: "file-text",
+	tsx: "file-code",
+	vim: "file-code",
+	vue: "file-code",
+	wav: "audio-lines",
+	webm: "video",
+	webp: "file-image",
+	xml: "file-code",
+	xz: "file-archive",
+	yaml: "file-code",
+	yml: "file-code",
+	zip: "file-archive",
+	zsh: "file-code",
+}
+
+function lucideIconFor(entry) {
+	if (!entry) return ""
+	if (entry.isSymlink) return "link-2"
+	if (entry.isDevice) return "cpu"
+	if (entry.isDir) return "folder"
+
+	const name = `${entry.name ?? ""}`
+	const basename = name.slice(name.lastIndexOf("/") + 1)
+	const extension = extensionOf(basename)
+	const stem = extension ? basename.slice(0, -(extension.length + 1)) : basename
+	const plain = (basename.startsWith(".") ? basename.slice(1) : basename).toLowerCase()
+	return LUCIDE_NAME_ICONS[plain] ?? LUCIDE_NAME_ICONS[stem.toLowerCase()] ?? LUCIDE_EXTENSION_ICONS[extension] ?? "file"
+}
+
 // Function: iconsEnabled
 // Whether rows show icons: on by default, `TCMD_ICONS=0|false|off` opts out
 // for terminals without a Nerd Font.
@@ -213,6 +347,7 @@ export {
 	extensionOf,
 	iconFor,
 	iconsEnabled,
+	lucideIconFor,
 	sourceMarker,
 }
 

@@ -1,5 +1,6 @@
 <li class="bookmark-row" out:class="rowClass" on:click="item.name!bookmark:select">
 	<span class="bookmark-marker" out="rowMarker"></span>
+	<svg class="bookmark-icon ui-icon" when="hasIcon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use out:href="rowIconHref"></use></svg>
 	<span class="bookmark-name" out="rowName"></span>
 	<span class="bookmark-path" out="rowPath"></span>
 </li>

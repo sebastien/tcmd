@@ -1,5 +1,5 @@
-<div class="overlay-list" when="open" role="dialog" aria-modal="true" aria-label="History and trash">
-	<div class="overlay-dialog">
+<div class="overlay-list" when="open" role="dialog" aria-modal="true" aria-label="History and trash" on:click="!dialog:overlay-cancel">
+	<div class="overlay-dialog" on:click="dialogStop">
 		<h2 out="title"></h2>
 		<p class="overlay-empty" when="emptyVisible" out="empty"></p>
 		<ul class="overlay-rows" out="rows"></ul>

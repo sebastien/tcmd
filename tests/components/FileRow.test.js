@@ -7,6 +7,7 @@ import {
 	isReadonly,
 	nameClass,
 	rowIcon,
+	rowIconHref,
 	rowName,
 	rowSize,
 } from "../../src/js/tcmd/components/FileRow.js"
@@ -104,6 +105,14 @@ describe("FileRow", () => {
 		// Without the flag (web, non-Nerd-Font hosts) the slot collapses.
 		expect(createBehaviors(behaviorEnv).hasIcon()).toBe(false)
 		expect(createBehaviors(behaviorEnv).rowIcon(null, { item: DIR })).toBe("")
+	})
+
+	test("web rows expose local Lucide icon references", () => {
+		const behaviors = createBehaviors({ ...behaviorEnv, lucideIcons: true })
+		expect(behaviors.hasIcon()).toBe(true)
+		expect(behaviors.rowIconHref(null, { item: DIR })).toBe("#lucide-folder")
+		expect(rowIconHref({ name: "readme.md" }, true)).toBe("#lucide-file-text")
+		expect(createBehaviors(behaviorEnv).rowIconHref(null, { item: DIR })).toBe("")
 	})
 
 	test("marked rows read orange and the cursor row brighter", () => {

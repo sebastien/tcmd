@@ -1,5 +1,6 @@
 <li class="file-row" out:class="rowClass" out:data-marked="rowMarked" out:data-active="rowActive" out:data-kind="rowKind" on:click="paneId:paneId,index:index!list:select">
 	<span class="marker" out="rowMarker"></span>
+	<svg class="file-row-icon ui-icon" when="hasIcon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use out:href="rowIconHref"></use></svg>
 	<span class="name" out:class="rowNameClass" out="rowName"></span>
 	<span class="size" out="rowSize"></span>
 </li>

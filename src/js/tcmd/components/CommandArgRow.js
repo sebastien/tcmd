@@ -124,6 +124,7 @@ function createBehaviors(env) {
 		// --- layout branches ---
 		isArg: (_self, data) => type(data) === "arg",
 		isItem: (_self, data) => type(data) === "item",
+		isOp: (_self, data) => type(data) === "op",
 		isFrame: (_self, data) => type(data) === "frame",
 		isList: (_self, data) => isList(data),
 		isPlain: (_self, data) => !isList(data) && type(data) !== "arg",

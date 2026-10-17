@@ -15,7 +15,7 @@ import { appBehaviors, appEvents, appInit } from "../components/index.js"
 import { registerWebComponents } from "./catalogue.js"
 import { elideCrumbs } from "../components/format.js"
 import { createFrameBehaviors, INSPECTOR_INLINE_WIDTH, paneColumnWidth } from "../components/Frame.js"
-import { connectEffects } from "./effects.js"
+import { connectEffects, isToolbarTarget } from "./effects.js"
 import { webTheme } from "./theme.js"
 
 // Map DOM key names to the core keymap chord names.
@@ -61,9 +61,13 @@ function webViewBehaviors() {
 	return {
 		// The view mode as an app-level class (`is-explorer` / `is-commander`),
 		// so the CSS can tint the active pane per mode (blue/gold).
-		appModeClass: (_self, data) =>
+		appModeClass: (_self, data) => [
 			`is-${unwrap(data.viewMode) === "explorer" ? "explorer" : "commander"}`,
+			unwrap(data.desktopMode) ? "is-desktop" : null,
+		].filter(Boolean).join(" "),
 		headerView: (_self, data) => ({ host: data.appHost, path: data.appPath, mode: data.viewMode }),
+		desktopViewLabel: (_self, data) => unwrap(data.viewMode) === "explorer" ? "Explorer" : "Commander",
+		desktopPreviewLabel: (_self, data) => unwrap(data.showPreview) ? "Hide preview" : "Show preview",
 		bookmarkView: (_self, data) => ({
 			items: data.bookmarkItems,
 			mode: data.bookmarkMode,
@@ -74,6 +78,7 @@ function webViewBehaviors() {
 		}),
 		commandBarView: (_self, data) => ({
 			items: data.commandBarItems,
+			desktopMode: data.desktopMode,
 			leftError: data.leftError,
 			notice: data.notice,
 			rightError: data.rightError,
@@ -219,13 +224,14 @@ function createWebApp(session, options = {}) {
 		})
 	const crumbs = (paneId, pane) =>
 		derived([pane.segments, crumbWidth(paneId)], ([segments, width]) => elideCrumbs(segments, width))
-	const quit = (self) => self.unmount?.()
+	const quit = options.onQuit ?? ((self) => self.unmount?.())
 	// DOM inputs have no native `enter` event; the root routes Enter for them.
 	const baseKeys = appBehaviors({ normalizeKey, quit }).keys
 	const events = appEvents({ quit })
 	return ui(appHtml)
 		.init(() => ({
 			...appInit(session)(),
+			desktopMode: Boolean(options.desktopMode),
 			uiSize: size,
 			helpOpen: help,
 			viewerOpen: viewer,
@@ -248,8 +254,23 @@ function createWebApp(session, options = {}) {
 			},
 			keys: (self, data, event) => {
 				if (event.isComposing) return
-				const key = normalizeKey(event)
 				const busy = unwrap(data.confirm) || unwrap(data.bookmarkOpen) || unwrap(data.panelOpen) || unwrap(data.filtering) || unwrap(data.overlay)
+				if (event.key === "F6" && unwrap(data.desktopMode) && !busy && !help.value && !viewer.value) {
+					event.preventDefault()
+					const target = isToolbarTarget(event.target) ? self.ref.root : self.ref.root.querySelector(".desktop-toolbar button")
+					target?.focus({ preventScroll: true })
+					return
+				}
+				// Native controls own their activation and traversal keys, not the
+				// pane underneath them. Escape hands focus back to the workspace.
+				if (isToolbarTarget(event.target)) {
+					if (event.key === "Escape") {
+						event.preventDefault()
+						self.ref.root.focus({ preventScroll: true })
+					}
+					return
+				}
+				const key = normalizeKey(event)
 				if (help.value) {
 					if (["escape", "q", "?"].includes(key.name)) help.set(false)
 					return
@@ -262,9 +283,44 @@ function createWebApp(session, options = {}) {
 				// modal routing, handled by `components/App#createBehaviors`.
 				return baseKeys(self, data, event)
 			},
+			dialogStop: (_self, _data, event) => event.stopPropagation(),
 		})
 		.sub({
 			...events,
+			"dialog:panel-cancel": (_self, data) => {
+				if (!unwrap(data.desktopMode)) return
+				data.dispatch(unwrap(data.panelPicking) ? "panel.pick.cancel" : "panel.cancel")
+			},
+			"dialog:bookmark-cancel": (_self, data) => {
+				if (unwrap(data.desktopMode)) data.dispatch("bookmark.cancel")
+			},
+			"dialog:overlay-cancel": (_self, data) => {
+				if (unwrap(data.desktopMode)) data.dispatch("overlay.cancel")
+			},
+			"dialog:confirm-cancel": (_self, data) => {
+				if (unwrap(data.desktopMode)) data.dispatch("confirm.no")
+			},
+			"dialog:help-cancel": (_self, data) => {
+				if (unwrap(data.desktopMode)) help.set(false)
+			},
+			"dialog:viewer-cancel": (_self, data) => {
+				if (unwrap(data.desktopMode)) data.dispatch("view.toggleViewer")
+			},
+			"toolbar:open-folder": async () => {
+				try {
+					await options.onOpenFolder?.()
+				} catch (error) {
+					await options.onError?.(error)
+				}
+			},
+			"toolbar:back": (_self, data) => data.dispatch("pane.back"),
+			"toolbar:forward": (_self, data) => data.dispatch("pane.forward"),
+			"toolbar:up": (_self, data) => data.dispatch("pane.up"),
+			"toolbar:refresh": (_self, data) => data.dispatch("pane.reload"),
+			"toolbar:toggle-mode": (_self, data) => data.dispatch("view.toggleMode"),
+			"toolbar:toggle-preview": (_self, data) => data.dispatch("view.togglePreview"),
+			"toolbar:commands": (_self, data) => data.dispatch("panel.open"),
+			"toolbar:help": () => help.set(true),
 			"commandbar:run": (self, data, event) => {
 				if (event.data === "app.help") {
 					help.set(!help.value)

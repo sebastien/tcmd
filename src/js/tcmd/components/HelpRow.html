@@ -1,9 +1,8 @@
 <div class="help-block">
 	<span class="help-section" when="isSection" out="section"></span>
-	<span class="help-entry" when="isEntry">
-		<span class="help-bracket" out="open"></span>
-		<span class="help-title" out="head"></span>
-		<span class="help-key" out="keys"></span>
-		<span class="help-bracket" out="close"></span>
+	<span class="help-entry" when="isEntry" role="group">
+		<svg class="help-icon ui-icon" when="hasIcon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use out:href="iconHref"></use></svg>
+		<span class="help-title" out="actionTitle"></span>
+		<kbd class="help-key" out="shortcut"></kbd>
 	</span>
 </div>

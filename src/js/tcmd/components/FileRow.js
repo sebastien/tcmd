@@ -18,7 +18,7 @@
 
 import { unwrap } from "select/state/cells"
 import { formatSize } from "./format.js"
-import { iconFor } from "./icons.js"
+import { iconFor, lucideIconFor } from "./icons.js"
 
 // Function: rowName
 // The entry name with the directory slash (the icon is its own slot, so it
@@ -36,6 +36,12 @@ function rowName(entry) {
 // rows icon-free.
 function rowIcon(entry, icons) {
 	return icons ? iconFor(entry) : ""
+}
+
+// Function: rowIconHref
+// The current-file SVG reference used by the browser presentation.
+function rowIconHref(entry, icons) {
+	return icons ? `#lucide-${lucideIconFor(entry)}` : ""
 }
 
 // Function: rowSize
@@ -168,8 +174,9 @@ function createBehaviors(env) {
 		rowKind: (_self, data) => data.item?.isSymlink ? "link" : data.item?.isDir ? "dir" : data.item?.isDevice ? "dev" : "file",
 		// The icon is its own slot so it can sit dimmer than the name; it
 		// collapses when the environment keeps rows icon-free.
-		hasIcon: () => Boolean(env.icons),
+		hasIcon: () => Boolean(env.icons || env.lucideIcons),
 		rowIcon: (_self, data) => rowIcon(data.item, Boolean(env.icons)),
+		rowIconHref: (_self, data) => rowIconHref(data.item, Boolean(env.lucideIcons)),
 		rowIconFg: () => env.textSecondaryFg,
 		rowMarker: (_self, data) => rowMarker(data),
 		rowMarkerFg: (_self, data) => (rowIsMarked(data) ? env.accentSecondaryFg : env.accentFg),
@@ -181,6 +188,6 @@ function createBehaviors(env) {
 	}
 }
 
-export { createBehaviors, isExecutable, isMarked, isReadonly, nameClass, nameFg, rowIcon, rowName, rowNameFg, rowSize }
+export { createBehaviors, isExecutable, isMarked, isReadonly, nameClass, nameFg, rowIcon, rowIconHref, rowName, rowNameFg, rowSize }
 
 // EOF

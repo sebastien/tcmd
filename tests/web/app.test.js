@@ -85,6 +85,173 @@ describe("web app", () => {
 		}
 	})
 
+	test("desktop mode replaces the identity header with a working toolbar", async () => {
+		let folderPicks = 0
+		const { host, instance, session } = await mountApp({
+			desktopMode: true,
+			onOpenFolder: async () => folderPicks++,
+		})
+		try {
+			expect(host.querySelector(".app-header")).toBeNull()
+			expect(host.querySelector('[role="toolbar"]').classList.contains("desktop-toolbar")).toBe(true)
+			expect(host.querySelector(".command-bar")).toBeNull()
+			expect(host.querySelectorAll(".desktop-toolbar-button .toolbar-icon")).toHaveLength(9)
+			expect(host.querySelector('.desktop-toolbar-button[aria-label="Open a folder"] use').getAttribute("href")).toBe("#lucide-folder-plus")
+			expect(host.querySelector('.desktop-toolbar-button[aria-label="Open the command panel"] .toolbar-chevron use').getAttribute("href")).toBe("#lucide-chevron-right")
+			expect(host.textContent).toContain("Open folder")
+			expect(host.textContent).toContain("Explorer")
+
+			host.querySelector('[aria-label="Open a folder"]').dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await settle()
+			expect(folderPicks).toBe(1)
+
+			host.querySelector('[aria-label="Switch view mode"]').dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await settle()
+			expect(session.viewMode.value).toBe("commander")
+			expect(host.querySelector('[aria-label="Switch view mode"]').textContent).toContain("Commander")
+
+			host.querySelector('[aria-label="Toggle the preview pane"]').dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await settle()
+			expect(session.showPreview.value).toBe(false)
+			expect(host.querySelector('[aria-label="Toggle the preview pane"]').textContent).toContain("Show preview")
+
+			session.notice.set({ kind: "tip", text: "Folder refreshed" })
+			await settle()
+			expect(host.querySelector(".command-bar [role=status]")?.textContent).toContain("Folder refreshed")
+			expect(host.querySelector(".command-bar nav")).toBeNull()
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("toolbar controls keep native activation and traversal keys", async () => {
+		let folderPicks = 0
+		const { host, instance, session } = await mountApp({
+			desktopMode: true,
+			onOpenFolder: () => folderPicks++,
+		})
+		try {
+			await settle()
+			const button = host.querySelector('[aria-label="Open a folder"]')
+			const next = host.querySelector('[aria-label="Go back"]')
+			const path = session.panes.left.path.value
+			const active = session.active.value
+			expect(press(host, "F6").defaultPrevented).toBe(true)
+			expect(document.activeElement).toBe(button)
+			for (const key of ["Enter", " ", "Tab", "ArrowDown", "q"]) {
+				expect(press(host, key).defaultPrevented).toBe(false)
+			}
+			expect(press(host, "r", { ctrlKey: true }).defaultPrevented).toBe(true)
+			await settle()
+			expect(session.panes.left.path.value).toBe(path)
+			expect(session.active.value).toBe(active)
+			expect(host.querySelector(".app")).not.toBeNull()
+			// happy-dom does not synthesize keyboard-triggered clicks. The
+			// uncancelled activation above lets the browser do so natively.
+			button.click()
+			await settle()
+			expect(folderPicks).toBe(1)
+			next.focus()
+			await settle()
+			expect(document.activeElement).toBe(next)
+			expect(press(host, "Escape").defaultPrevented).toBe(true)
+			expect(document.activeElement).toBe(host.querySelector(".app"))
+			press(host, "F6")
+			press(host, "F6")
+			expect(document.activeElement).toBe(host.querySelector(".app"))
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("quit delegates to the host when supplied and otherwise unmounts", async () => {
+		let quits = 0
+		const desktop = await mountApp({ desktopMode: true, onQuit: () => quits++ })
+		try {
+			press(desktop.host, "q")
+			expect(quits).toBe(1)
+			expect(desktop.host.querySelector(".app")).not.toBeNull()
+		} finally {
+			desktop.instance.unmount()
+		}
+		const browser = await mountApp()
+		press(browser.host, "q")
+		expect(browser.host.querySelector(".app")).toBeNull()
+	})
+
+	test("desktop modal backdrops cancel while dialog content stays open", async () => {
+		const click = (element) => element.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+		const { host, instance, session } = await mountApp({ desktopMode: true })
+		try {
+			press(host, ":")
+			await settle()
+			click(host.querySelector(".command-dialog"))
+			await settle()
+			expect(session.panelOpen.value).toBe(true)
+			click(host.querySelector(".command-panel"))
+			await settle()
+			expect(session.panelOpen.value).toBe(false)
+
+			press(host, "?")
+			await settle()
+			click(host.querySelector(".help-dialog"))
+			await settle()
+			expect(host.querySelector(".help")).not.toBeNull()
+			click(host.querySelector(".help"))
+			await settle()
+			expect(host.querySelector(".help")).toBeNull()
+
+			press(host, "b")
+			await settle()
+			click(host.querySelector(".bookmark-dialog"))
+			await settle()
+			expect(session.bookmarkOpen.value).toBe(true)
+			click(host.querySelector(".bookmark-list"))
+			await settle()
+			expect(session.bookmarkOpen.value).toBe(false)
+
+			session.overlay.set("history")
+			session.confirm.set({ text: "Confirm?" })
+			session.viewerOpen.set(true)
+			await settle()
+			click(host.querySelector(".overlay-dialog"))
+			await settle()
+			expect(session.overlay.value).toBe("history")
+			click(host.querySelector(".overlay-list"))
+			await settle()
+			expect(session.overlay.value).toBeNull()
+
+			click(host.querySelector(".confirm p"))
+			await settle()
+			expect(session.confirm.value).not.toBeNull()
+			click(host.querySelector(".confirm"))
+			await settle()
+			expect(session.confirm.value).toBeNull()
+
+			click(host.querySelector(".preview"))
+			await settle()
+			expect(session.viewerOpen.value).toBe(true)
+			click(host.querySelector(".viewer"))
+			await settle()
+			expect(session.viewerOpen.value).toBe(false)
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("outside clicks only dismiss dialogs in desktop mode", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			press(host, ":")
+			await settle()
+			host.querySelector(".command-panel").dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await settle()
+			expect(session.panelOpen.value).toBe(true)
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
 	test("the app root carries the view mode class; clicking the mode word toggles", async () => {
 		const { host, instance, session } = await mountApp({ viewMode: "commander" })
 		try {
@@ -109,6 +276,7 @@ describe("web app", () => {
 			expect(host.querySelector(".app-header-status").textContent).toBe(`commander · ${VERSION}`)
 			expect(host.querySelector(".app-header-mode").textContent).toBe("commander")
 			expect(host.querySelector(".app-header-mode").className).toBe("app-header-mode mode-commander")
+			expect(host.querySelector('.header-mode-icon use[href="#lucide-columns-2"]')).not.toBeNull()
 			expect(host.textContent).toContain("notes.txt")
 			expect(host.textContent).toContain("tester/")
 			expect(host.querySelectorAll(".file-row.is-current").length).toBeGreaterThan(0)
@@ -173,6 +341,7 @@ describe("web app", () => {
 			expect(host.querySelector(".command-panel")).not.toBeNull()
 			expect(document.activeElement === host.querySelector(".panel-query")).toBe(true)
 			expect(host.querySelector(".panel-ops").textContent).toContain("copy")
+			expect(host.querySelector('.panel-ops .panel-op-chevron use[href="#lucide-chevron-right"]')).not.toBeNull()
 			// The list is the CLI operations only, with no namespace tag.
 			const names = [...host.querySelectorAll(".panel-ops .panel-name")].map((row) => row.textContent)
 			expect(names).toContain("bookmark")
@@ -274,6 +443,7 @@ describe("web app", () => {
 			await settle()
 			expect(document.activeElement === host.querySelector(".bookmark-query")).toBe(true)
 			expect(host.querySelector(".bookmark-rows").textContent).toContain("tester/")
+			expect(host.querySelector('.bookmark-row use[href="#lucide-folder"]')).not.toBeNull()
 			press(host, "Escape")
 			await settle()
 			expect(press(host, "/").defaultPrevented).toBe(false)
@@ -303,16 +473,21 @@ describe("web app", () => {
 			expect(inspector.querySelector(".file-list").textContent).toContain("notes.txt")
 			expect(inspector.textContent).not.toContain("directory: tester/")
 			press(host, "?")
-			await settle()
+			const view = host.ownerDocument.defaultView
+			await new Promise((resolve) => view.requestAnimationFrame(() => view.requestAnimationFrame(resolve)))
 			const help = host.querySelector(".help").textContent
 			expect(help).toContain("COMMANDS")
 			expect(help).toContain("Shell command")
-			// Two balanced columns of the command bar's own shorthands.
+			// Two balanced columns of button-like action and shortcut entries.
 			expect(host.querySelectorAll(".help-column").length).toBe(2)
 			expect(host.querySelectorAll(".help-section").length).toBeGreaterThan(0)
 			expect(help).toContain("[")
 			expect(help).toContain("⏎")
-			expect(help).toContain("COMMANDS")
+			expect(host.querySelector('.help-entry use[href="#lucide-terminal"]')).not.toBeNull()
+			expect(host.querySelector('.help-entry use[href="#lucide-circle-question-mark"]')).not.toBeNull()
+			expect(host.querySelector(".help-entry .help-key").textContent).toBe("↑")
+			const bookmarkHelp = [...host.querySelectorAll(".help-entry")].find((entry) => entry.querySelector(".help-title")?.textContent === "Bookmark")
+			expect(bookmarkHelp.querySelector(".help-key").textContent).toBe("b")
 			expect(host.querySelector(".command-bar").textContent).toContain("[Help ?]")
 			expect(document.activeElement === host.querySelector(".help")).toBe(true)
 			press(host, "ArrowDown")

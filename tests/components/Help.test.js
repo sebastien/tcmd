@@ -58,6 +58,25 @@ describe("components Help", () => {
 		expect(row.bracketFg()).toBe("dim")
 	})
 
+	test("web help entries carry toolbar icons, labels and key badges", () => {
+		const row = createRowBehaviors({ theme: { ...theme, lucideIcons: true } })
+		const entry = [...helpBlocks().left, ...helpBlocks().right].find((block) => block.key === "entry:pane.enter")
+		expect(entry.icon).toBe("arrow-right")
+		expect(row.hasIcon(null, { item: entry })).toBe(true)
+		expect(row.iconHref(null, { item: entry })).toBe("#lucide-arrow-right")
+		expect(row.actionTitle(null, { item: entry })).toBe("Open")
+		expect(row.shortcut(null, { item: entry })).toBe("⏎")
+	})
+
+	test("toolbar-backed help shortcuts match their command-bar labels", () => {
+		const entries = new Map([...helpBlocks().left, ...helpBlocks().right].map((row) => [row.key, row]))
+		expect(entries.get("entry:bookmark.record").shortcut).toBe("b")
+		expect(entries.get("entry:list.mark").shortcut).toBe("Spc")
+		expect(entries.get("entry:pane.enter").shortcut).toBe("⏎")
+		expect(entries.get("entry:pane.toggle").shortcut).toBe("⇥")
+		expect(entries.get("entry:history.redo").shortcut).toBe("^⇧Z")
+	})
+
 	test("sections are uppercase, bold and bright", () => {
 		const row = createRowBehaviors({ theme })
 		const section = helpBlocks().left.find((block) => block.type === "section")

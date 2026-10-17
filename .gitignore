@@ -2,3 +2,6 @@ deps
 node_modules/
 .memo/memory
 public/main.js
+.build/
+dist/
+desktop/dist/

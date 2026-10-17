@@ -10,7 +10,17 @@
 
 /* Palette mirrors tui/theme.js DARK: night-blue surfaces, gold accents,
    saturated orange marks. */
+@font-face {
+	font-family: "M+1Code Nerd Font Mono";
+	src: url("./fonts/M+1CodeNerdFontMono-Regular.ttf") format("truetype");
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+}
+
 :root {
+	--font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--font-mono: "M+1Code Nerd Font Mono", ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
 	--bg: #0d1526;
 	--bg-panel: #111b31;
 	--bg-raised: #18233d;
@@ -59,7 +69,21 @@ body,
 body {
 	background: var(--bg);
 	color: var(--text);
-	font: 13px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+	font: 13px/1.45 var(--font-ui);
+}
+
+/* File and path content keeps a fixed-width face; the surrounding controls use
+   the native system UI font above. */
+.file-row,
+.breadcrumbs,
+.entry-detail,
+.summary,
+.preview-text,
+.panel-picker-path,
+.panel-row[data-type="entry"] .panel-name,
+.panel-list-box,
+.bookmark-path {
+	font-family: var(--font-mono);
 }
 
 .app {
@@ -97,8 +121,17 @@ body {
 /* The mode word shimmers like the brand: explorer along the Tiny blues,
    commander along the Cmd oranges. Clicking it toggles the view mode. */
 .app-header-mode {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
 	font-weight: 600;
 	cursor: pointer;
+}
+
+.header-mode-icon {
+	width: 0.8rem;
+	height: 0.8rem;
+	color: var(--accent);
 }
 
 .app-header-mode.mode-explorer {
@@ -106,6 +139,10 @@ body {
 	-webkit-background-clip: text;
 	background-clip: text;
 	color: transparent;
+}
+
+.app-header-mode.mode-explorer .header-mode-icon {
+	color: var(--pane-active-explorer);
 }
 
 .app-header-mode.mode-commander {
@@ -136,6 +173,98 @@ body {
 	-webkit-background-clip: text;
 	background-clip: text;
 	color: transparent;
+}
+
+/* Desktop chrome -------------------------------------------------------- */
+
+.desktop-toolbar {
+	display: flex;
+	align-items: center;
+	flex: none;
+	gap: 0.45rem;
+	min-height: 2.55rem;
+	padding: 0.3rem 0.55rem;
+	border-bottom: 1px solid var(--border);
+	background: linear-gradient(180deg, #17243c, var(--bg-panel));
+	white-space: nowrap;
+	overflow-x: auto;
+}
+
+.desktop-toolbar-group {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	flex: none;
+}
+
+.desktop-toolbar-spacer {
+	flex: 1;
+	min-width: 0.5rem;
+}
+
+.desktop-toolbar-separator {
+	flex: none;
+	height: 1.35rem;
+	border-left: 1px solid var(--border);
+}
+
+.desktop-toolbar-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
+	min-height: 1.9rem;
+	padding: 0.2rem 0.55rem;
+	border: 1px solid transparent;
+	border-radius: 5px;
+	background: transparent;
+	color: var(--text-dim);
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.desktop-toolbar-button:hover {
+	border-color: var(--border);
+	background: var(--bg-raised);
+	color: var(--text);
+}
+
+.desktop-toolbar-button.is-primary {
+	border-color: var(--accent-soft);
+	background: #202f50;
+	color: var(--text);
+}
+
+.desktop-toolbar-button.is-primary:hover {
+	border-color: var(--accent);
+	background: #283b62;
+}
+
+.ui-icon {
+	flex: none;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.lucide-defs {
+	display: none;
+}
+
+.toolbar-icon {
+	width: 1rem;
+	height: 1rem;
+	color: var(--accent);
+}
+
+.toolbar-chevron {
+	width: 0.75rem;
+	height: 0.75rem;
+	margin-left: -0.2rem;
+	color: var(--text-dim);
 }
 
 /* Panes ---------------------------------------------------------------- */
@@ -263,9 +392,9 @@ body {
 
 .file-row {
 	display: grid;
-	grid-template-columns: 1.1rem minmax(0, 1fr) auto;
+	grid-template-columns: 1.1rem 1rem minmax(0, 1fr) auto;
 	gap: 0.4rem;
-	align-items: baseline;
+	align-items: center;
 	padding: 0 0.35rem;
 	white-space: nowrap;
 	cursor: pointer;
@@ -294,6 +423,24 @@ body {
 
 .file-row[data-marked="true"] .marker {
 	color: var(--mark);
+}
+
+.file-row-icon {
+	width: 1rem;
+	height: 1rem;
+	color: var(--text-dim);
+}
+
+.file-row[data-kind="dir"] .file-row-icon {
+	color: var(--dir);
+}
+
+.file-row[data-kind="link"] .file-row-icon {
+	color: var(--link);
+}
+
+.file-row[data-kind="dev"] .file-row-icon {
+	color: var(--dev);
 }
 
 .name {
@@ -837,6 +984,12 @@ input:focus-visible {
 	gap: 0.5rem;
 }
 
+.panel-picker-icon {
+	width: 1rem;
+	height: 1rem;
+	color: var(--accent);
+}
+
 .panel-picker-query {
 	flex: 1;
 	min-width: 0;
@@ -856,6 +1009,23 @@ input:focus-visible {
 	cursor: pointer;
 }
 
+.bookmark-icon {
+	width: 0.9rem;
+	height: 0.9rem;
+	align-self: center;
+	color: var(--text-dim);
+}
+
+.panel-row[data-type="arg"] {
+	display: grid;
+	grid-template-columns: 1.25rem 6.25rem minmax(0, 1fr);
+}
+
+.panel-row[data-type="arg"] .panel-name {
+	min-width: 0;
+	overflow: hidden;
+}
+
 .panel-row.is-focused,
 .bookmark-row.is-selected {
 	background: var(--accent-soft);
@@ -873,6 +1043,18 @@ input:focus-visible {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+.panel-op-chevron {
+	width: 0.9rem;
+	height: 0.9rem;
+	flex: none;
+	margin-left: auto;
+	color: var(--text-dim);
+}
+
+.panel-row.is-focused .panel-op-chevron {
+	color: var(--accent);
 }
 
 .panel-row.is-focused .panel-name {
@@ -1011,15 +1193,42 @@ input:focus-visible {
 }
 
 .help-entry {
-	white-space: pre;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	max-width: 100%;
+	min-height: 1.55rem;
+	padding: 0 0.4rem;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	background: var(--bg-raised);
+	white-space: nowrap;
+}
+
+.help-icon {
+	width: 0.9rem;
+	height: 0.9rem;
+	color: var(--accent);
 }
 
 .help-title {
 	color: var(--text);
 }
 
+.help-entry .help-title {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .help-key {
 	color: var(--accent);
+}
+
+.help-entry .help-key {
+	flex: none;
+	padding-left: 0.35rem;
+	border-left: 1px solid var(--border);
+	font: 11px/1.5 var(--font-mono);
 }
 
 .help-bracket {

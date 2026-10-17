@@ -56,5 +56,7 @@ describe("web components", () => {
 		expect(host.textContent).toContain("a.txt")
 		expect(host.textContent).toContain("sub/")
 		expect(host.textContent).toContain("* ")
+		expect(host.querySelector('.file-row-icon use[href="#lucide-file-text"]')).not.toBeNull()
+		expect(host.querySelector('.file-row-icon use[href="#lucide-folder"]')).not.toBeNull()
 	})
 })

@@ -16,6 +16,7 @@ const webTheme = {
 	errorClass: "is-error",
 	execClass: "is-exec",
 	focusedClass: "is-focused",
+	lucideIcons: true,
 	readonlyClass: "is-readonly",
 	rootClass: "is-root",
 	selectedClass: "is-selected",

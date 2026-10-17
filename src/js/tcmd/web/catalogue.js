@@ -87,8 +87,8 @@ function elide(text, width) {
 // Binds every shared component to its `.html` presentation.
 function createComponents() {
 	const commandItem = bind(ui, "CommandItem", commandItemHtml, commandItemBehaviors(webTheme))
-	// Browsers lack the Nerd Font, so panel entries carry the text tag instead
-	// of the glyph.
+	// Keep command namespace markers textual; the bundled Nerd face is reserved
+	// for filesystem names and paths.
 	const commandArgRow = bind(ui, "CommandArgRow", commandArgRowHtml, commandArgRowBehaviors({
 		...webTheme,
 		icons: false,

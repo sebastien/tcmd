@@ -1,0 +1,16 @@
+{
+	"name": "tcmd",
+	"title": "TinyCommand",
+	"id": "io.github.sebastien.tcmd",
+	"version": "0.1.4",
+	"minTinyjsVersion": "0.57.0",
+	"size": "1280x800",
+	"chrome": { "menu": false },
+	"backend": "src/js/tcmd/desktop/backend/main.ts",
+	"openFolders": true,
+	"frontend": {
+		"build": "bun run desktop:bundle",
+		"dir": "desktop/dist",
+		"dist": "desktop/dist"
+	}
+}

@@ -8,7 +8,7 @@
 // extension, then the generic file icon, plus the `TCMD_ICONS` opt-out.
 
 import { describe, expect, test } from "bun:test"
-import { DEVICE_ICON, DIR_ICON, FILE_ICON, SYMLINK_ICON, extensionOf, iconFor, iconsEnabled } from "../../src/js/tcmd/components/icons.js"
+import { DEVICE_ICON, DIR_ICON, FILE_ICON, SYMLINK_ICON, extensionOf, iconFor, iconsEnabled, lucideIconFor } from "../../src/js/tcmd/components/icons.js"
 
 describe("icons", () => {
 	test("kind icons win, symlinks over directories", () => {
@@ -40,6 +40,20 @@ describe("icons", () => {
 		expect(iconFor({ name: "a.unknownext" })).toBe(FILE_ICON)
 		// A dotfile without a known name has no extension.
 		expect(iconFor({ name: ".bashrc" })).toBe(FILE_ICON)
+	})
+
+	test("web file kinds use semantic Lucide SVG icons", () => {
+		expect(lucideIconFor({ name: "folder", isDir: true })).toBe("folder")
+		expect(lucideIconFor({ name: "shortcut", isSymlink: true, isDir: true })).toBe("link-2")
+		expect(lucideIconFor({ name: "null", isDevice: true })).toBe("cpu")
+		expect(lucideIconFor({ name: "index.ts" })).toBe("file-code")
+		expect(lucideIconFor({ name: "README.md" })).toBe("file-text")
+		expect(lucideIconFor({ name: "photo.png" })).toBe("file-image")
+		expect(lucideIconFor({ name: "song.mp3" })).toBe("audio-lines")
+		expect(lucideIconFor({ name: "clip.mp4" })).toBe("video")
+		expect(lucideIconFor({ name: "archive.tar.gz" })).toBe("file-archive")
+		expect(lucideIconFor({ name: "store.sqlite" })).toBe("database")
+		expect(lucideIconFor({ name: "unknown.bin" })).toBe("file")
 	})
 
 	test("extensionOf skips dotfiles and trailing dots", () => {

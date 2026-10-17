@@ -147,17 +147,19 @@ function commandBarLines(data, self) {
 }
 
 // Function: paneListHeight
-// Rows available to a pane's listing: the viewport height minus the identity
-// bar (1), the pane's own border (2), the pane header + rule (2), the entry
-// detail (2) and the wrapped command bar — seven chrome rows plus the bar.
-// Fed to the windowed `filelist` so a large directory mounts only the visible
-// slice. `0` means "unknown — render everything to measure".
+// Rows available to a pane's listing: the viewport height minus the app header
+// (1 row in the web UI, 2 for the desktop toolbar), the pane border (2), pane
+// header + rule (2), entry detail (2), and the command bar when visible. Fed to
+// the windowed `filelist` so a large directory mounts only the visible slice.
+// `0` means "unknown — render everything to measure".
 function paneListHeight(data, self) {
 	const height = Math.floor(sizeOf(data, self)?.height ?? 0)
 	if (height <= 0) return 0
-	// A notice or error swaps the keys for a one-line status.
-	const bar = commandBarStatus(data) ? 1 : commandBarLines(data, self)
-	return Math.max(1, height - 7 - bar)
+	const desktop = Boolean(unwrap(data?.desktopMode))
+	// A notice or error keeps a one-line status in desktop mode; otherwise that
+	// renderer has no bottom command bar at all.
+	const bar = commandBarStatus(data) ? 1 : desktop ? 0 : commandBarLines(data, self)
+	return Math.max(1, height - (desktop ? 8 : 7) - bar)
 }
 
 // Function: mixHex

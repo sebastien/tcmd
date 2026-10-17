@@ -88,7 +88,8 @@ function statusKind(data) {
 function createBehaviors(env) {
 	const behaviors = {
 		listClass: () => env?.listClass,
-		showKeys: (_self, data) => !commandBarStatus(data),
+		showBar: (_self, data) => !unwrap(data?.desktopMode) || Boolean(commandBarStatus(data)),
+		showKeys: (_self, data) => !unwrap(data?.desktopMode) && !commandBarStatus(data),
 		showStatus: (_self, data) => Boolean(commandBarStatus(data)),
 		status: (_self, data) => commandBarStatus(data),
 		statusBg: (_self, data) => {

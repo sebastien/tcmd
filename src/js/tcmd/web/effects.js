@@ -10,6 +10,10 @@
 
 const canvases = new WeakMap()
 
+function isToolbarTarget(target) {
+	return Boolean(target?.closest?.(".desktop-toolbar"))
+}
+
 // Function: columnWidth
 // Available monospace columns, or zero in a DOM without layout (happy-dom).
 function columnWidth(el) {
@@ -85,7 +89,10 @@ function connectEffects(session, root, { size, help, viewer }) {
 			return
 		}
 		retries = 0
-		const focusable = target ?? root
+		// Do not steal focus as Tab moves between native toolbar buttons.
+		const toolbarFocused = !modalOpen() && !session.filtering.value &&
+			root.contains(doc.activeElement) && isToolbarTarget(doc.activeElement)
+		const focusable = toolbarFocused ? doc.activeElement : target ?? root
 		if (focusable !== doc.activeElement) focusable.focus({ preventScroll: true })
 		for (const list of root.querySelectorAll(".file-list, .bookmark-rows, .panel-ops, .panel-args")) {
 			keepVisible(list, list.querySelector(".is-current, .is-selected, .is-focused"))
@@ -99,12 +106,17 @@ function connectEffects(session, root, { size, help, viewer }) {
 		})
 	}
 	const trapKeys = (event) => {
+		// Reload remains disabled even when native controls own the other keys.
+		if (event.ctrlKey && event.key.toLowerCase() === "r") {
+			event.preventDefault()
+			return
+		}
+		if (isToolbarTarget(event.target)) return
 		const input = event.target?.tagName === "INPUT" || event.target?.tagName === "TEXTAREA"
 		// Editing keeps native text/caret keys except the ones the shared
 		// controller explicitly owns (vertical arrows, Enter and Tab).
 		if (input && [" ", "Backspace", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) return
-		if ([" ", "Backspace", "Enter", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Escape"].includes(event.key) ||
-			(event.ctrlKey && event.key.toLowerCase() === "r")) event.preventDefault()
+		if ([" ", "Backspace", "Enter", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Escape"].includes(event.key)) event.preventDefault()
 	}
 	const focusIn = (event) => {
 		if (modalOpen() && event.target !== focusTarget()) schedule()
@@ -132,6 +144,6 @@ function connectEffects(session, root, { size, help, viewer }) {
 	}
 }
 
-export { columnWidth, connectEffects, keepVisible }
+export { columnWidth, connectEffects, isToolbarTarget, keepVisible }
 
 // EOF

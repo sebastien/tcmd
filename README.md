@@ -110,12 +110,12 @@ bright, and the size/rights dropping out when the pane is too narrow. The active
 pane's border and header rule take the view mode's colour — the Tiny blue in
 explorer, the gold accent in commander — and its cursor row uses the strong
 cursor colour, while
-the inactive pane stays dim with a muted cursor. Rows lead with a yazi-style
+the inactive pane stays dim with a muted cursor. TUI rows lead with a yazi-style
 Nerd Font icon (folder/link kind icons plus a per-extension icon, `Makefile`,
-`Dockerfile` and dotfiles included), on unless `TCMD_ICONS=0` — it needs a
-Nerd-Font-patched terminal font, and the web view never shows icons. The
-command panel marks its entries the same way — a glyph in the TUI, a `cli`/`app`
-tag on the web. A
+`Dockerfile` and dotfiles included), on unless `TCMD_ICONS=0`; it needs a
+Nerd-Font-patched terminal font. The web and desktop views use local Lucide SVG
+icons for toolbar actions, file kinds, bookmarks, and Help key badges; command
+panel entries show a chevron to indicate their argument pane. A
 context-aware inspector sits
 on the right when the terminal is at least 100 columns wide, and becomes a
 fullscreen viewer below that; `⇧V` expands it over the whole pane row —
@@ -210,6 +210,57 @@ Open/edit/run are unavailable in the browser
 either way (the null host adapter reports it in the command bar); everything
 else — navigation, marks, scripting, copy/move/erase — works on either
 backend. `public/index.html` is the host page; `public/main.js` is generated.
+
+### Desktop app (tinyjs)
+
+The native desktop target reuses the web presentation and shared session, but
+uses a tinyjs backend for real filesystem access. It runs without Bun/Node in
+the shipped app and does not start an HTTP server or open a port.
+
+Install [tinyjs](https://tinyjs.app/) and the project dependencies, then run:
+
+```sh
+bun install
+bun run desktop:dev       # bundle the webview UI, then open the native window
+bun run desktop:build     # tinyjs build; emits a platform-native app/package
+```
+
+`tinyjs.json` configures the app. `tinyjs build` bundles the desktop frontend
+through `desktop:bundle`; the source page is `desktop/frontend/index.html`.
+For frontend changes during development, rerun `bun run desktop:bundle` before
+reloading the window. The desktop uses the system webview and requires tinyjs
+0.57.0 or newer.
+
+The desktop window keeps the native title bar, hides the native menu, and uses
+an in-app toolbar for folder navigation, refresh, view/preview toggles, commands
+and help. Its toolbar replaces the TinyCmd identity header; the browser UI keeps
+that header. Press F6 to move focus between the workspace and toolbar; toolbar
+buttons use native Tab/Enter/Space keys, and Escape returns to the workspace.
+
+The web UI uses the system sans-serif font for controls and chrome, with the
+M+1Code Nerd Font Mono bundled for filenames, paths, and file content. The
+font is from Nerd Fonts v3.5.1 and is distributed under SIL OFL 1.1; its license
+is included in `public/fonts/OFL.txt`.
+The UI icons are from Lucide and distributed under ISC (with the listed Feather
+icons under MIT); the license is included in `public/licenses/LUCIDE.txt`.
+
+On Linux, the tinyjs launcher also needs the Ayatana AppIndicator runtime. On
+Fedora install it with `sudo dnf install libayatana-appindicator-gtk3`; on
+Debian/Ubuntu use `sudo apt install libayatana-appindicator3-1`. Install the
+WebKitGTK runtime required by tinyjs as well.
+
+Filesystem operations are performed by the backend using txiki.js APIs. Text
+files open in the operating system's default editor; `!` / shell commands run
+in a non-interactive shell and display captured output in a native dialog.
+Trash uses the Freedesktop trash under `$XDG_DATA_HOME` (or
+`~/.local/share/Trash`), including undo/restore. The current desktop adapter
+supports POSIX paths on Linux and macOS. Windows drive/UNC paths are not yet
+supported; the app reports this rather than attempting file operations.
+
+The desktop backend has full access to the current user's files, and the
+command panel intentionally exposes shell execution. Treat commands and
+filesystem prompts accordingly. Browser and TUI builds remain separate and
+continue to use their existing backends.
 
 ## Architecture
 
