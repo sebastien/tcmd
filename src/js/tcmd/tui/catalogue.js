@@ -69,11 +69,12 @@ import {
 	overlayRows,
 	panelArgRows,
 	panelOpRows,
+	panelRunRows,
 	summaryBehaviors,
 } from "../components/index.js"
 import { createBehaviors as helpBehaviors } from "../components/Help.js"
 import { INSPECTOR_INLINE_WIDTH } from "../components/Frame.js"
-import { CodeRenderable, ImageRenderable, pathToFiletype } from "./opentui.js"
+import { CodeRenderable, ImageRenderable, pathToFiletype, createTextAttributes } from "./opentui.js"
 import { syntaxStyle } from "./syntax.js"
 import { tuiTheme } from "./theme.js"
 
@@ -111,6 +112,7 @@ function tuiEnv() {
 		execFg: tuiTheme.execFg,
 		fieldBg: tuiTheme.fieldBg,
 		fileFg: tuiTheme.fileFg,
+		groupAttributes: createTextAttributes({ bold: true }),
 		// Resolves an entry path to a tree-sitter filetype (undefined when no
 		// bundled parser matches, and the preview then draws plain text).
 		filetype: (path) => pathToFiletype(path),
@@ -213,9 +215,36 @@ function overlayScrollTop(self, data) {
 	return keepVisible(self.ref.list, unwrap(data.cursor) ?? 0, unwrap(data.items)?.length ?? 0)
 }
 
+// Keep the selected command visible in the command panel's scrolling list.
+function panelOpScrollTop(self, data) {
+	const items = unwrap(data.items) ?? []
+	const cursor = unwrap(data.opCursor) ?? 0
+	const index = items.findIndex((item) => item.type === "op" && item.entryIndex === cursor)
+	const box = self.ref.ops
+	// OpenTUI's measured scrollbox height includes two clipped edge cells in a
+	// modal, so scroll against the visible content height rather than the frame.
+	const visibleBox = box?.height
+		? { height: Math.max(1, Math.floor(box.height) - 2), scrollTop: box.scrollTop, scrollHeight: box.scrollHeight }
+		: box
+	return keepVisible(visibleBox, Math.max(0, index), items.length)
+}
+
+// Keep enough vertical room for the trailing Run row on compact terminals while
+// retaining the usual shorter panel on a full-sized viewport.
+function panelDialogHeight(self) {
+	const height = Math.floor(self.ctx?.height ?? 0)
+	if (!height) return "72%"
+	return Math.floor(height * (height <= 20 ? 0.85 : 0.72))
+}
+
 // Keep the command panel's argument cursor inside its viewport.
 function panelArgScrollTop(self, data) {
-	return keepVisible(self.ref.args, unwrap(data.argCursor) ?? 0, unwrap(data.rows)?.length ?? 0)
+	const rows = (unwrap(data.rows) ?? []).filter((row) => row.type !== "run")
+	const cursor = unwrap(data.argCursor) ?? 0
+	const box = unwrap(data.picking) ? self.ref.pickerList : self.ref.args
+	if (!rows.length) return box?.scrollTop ?? 0
+	const index = Math.min(cursor, rows.length - 1)
+	return keepVisible(box, index, rows.length)
 }
 
 // Function: commandBarRows
@@ -264,8 +293,11 @@ function createComponents() {
 		})),
 		CommandPanel: bind(ui, "CommandPanel", commandPanelXml, commandPanelBehaviors({
 			...env,
+			panelHeight: panelDialogHeight,
 			opRows: panelOpRows(commandArgRow),
 			argRows: panelArgRows(commandArgRow),
+			runRows: panelRunRows(commandArgRow),
+			opScrollTop: panelOpScrollTop,
 			argScrollTop: panelArgScrollTop,
 		})),
 		Confirm: bind(ui, "Confirm", confirmXml, confirmBehaviors(env)),
@@ -300,12 +332,9 @@ function createComponents() {
 const components = createComponents()
 
 // Function: showScrollBar
-// select.tui hides every scrollbox's scrollbar (its lists keep the cursor on
-// screen themselves); the `?` reference has no cursor and needs a bar, so its
-// own `helpscroll` tag hands the vertical bar back to automatic overflow
-// visibility. The box defaults also leave the scrollbox on a column layout, so
-// restore the row OpenTUI's ScrollBox expects and the bar lands at the right
-// edge instead of over the first column.
+// select.tui hides scrollbars by default because cursor-aware lists keep the
+// cursor on screen themselves. Restore automatic overflow visibility for every
+// scrollbox; the wrapper width fix lets the vertical bar fit beside its content.
 function showScrollBar(node) {
 	// The wrapper's content declares a 100% minimum width, which otherwise
 	// starves the 1-column bar and drops it over the first column. The wrapper
@@ -330,9 +359,8 @@ function registerComponents() {
 	if (registered) return components
 	registered = true
 	extend({
-		// A scrollbox that keeps its scrollbar (see `showScrollBar`). Built on
-		// select.tui's own scrollbox class so the renderable tree stays one
-		// OpenTUI instance.
+		// Preserve OpenTUI's scrollbox while re-enabling its overflow-aware bars.
+		scrollbox: { Class: getTags().scrollbox.Class, configure: showScrollBar },
 		helpscroll: { Class: getTags().scrollbox.Class, configure: showScrollBar },
 		bookmarklist: components.BookmarkList,
 		breadcrumbs: components.Breadcrumbs,
@@ -354,6 +382,6 @@ function registerComponents() {
 	return components
 }
 
-export { components, fileListScrollTop, keepVisible, registerComponents }
+export { components, fileListScrollTop, keepVisible, panelDialogHeight, panelOpScrollTop, registerComponents }
 
 // EOF

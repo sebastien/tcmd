@@ -312,10 +312,15 @@ describe("App", () => {
 		const listing = makeData({ bookmarkOpen: true, bookmarkMode: "list" })
 		behaviors.keys({ pub: () => {} }, listing.data, { name: "down" })
 		behaviors.keys({ pub: () => {} }, listing.data, { name: "up" })
+		behaviors.keys({ pub: () => {} }, listing.data, { name: "backspace" })
 		expect(listing.calls).toEqual([
 			{ id: "bookmark.down", payload: undefined },
 			{ id: "bookmark.up", payload: undefined },
+			{ id: "bookmark.remove", payload: undefined },
 		])
+		// In name mode Backspace remains owned by the text input.
+		behaviors.keys({ pub: () => {} }, naming.data, { name: "backspace" })
+		expect(naming.calls).toEqual([{ id: "bookmark.cancel", payload: undefined }, { id: "bookmark:confirm" }])
 	})
 
 	test("the list overlay owns the keyboard while open", () => {
@@ -433,24 +438,29 @@ describe("App", () => {
 		const { calls, data } = makeData({
 			panelOpen: true,
 			panelItems: [
-				{ type: "group", id: "group:cli", name: "System" },
+				{ type: "group", id: "group:white", name: "White", group: "White" },
 				{ type: "op", id: "op:copy", entryIndex: 0, name: "copy" },
 			],
 			panelRows: [
 				{ key: "arg:0", type: "arg" },
 				{ key: "item:0:/a", type: "item" },
+				{ key: "panel:run", type: "run" },
 			],
 		})
 		// A group header click is inert.
-		events["panel:select"](null, data, { data: "group:cli" })
+		events["panel:select"](null, data, { data: "group:white" })
 		events["panel:select"](null, data, { data: "op:copy" })
 		events["panel:select"](null, data, { data: "item:0:/a" })
+		events["panel:select"](null, data, { data: "panel:run" })
 		events["panel:confirm"](null, data, {})
 		expect(calls).toEqual([
 			{ id: "panel.setOp", payload: { index: 0 } },
 			{ id: "panel.focusArg", payload: undefined },
 			{ id: "panel.setRow", payload: { index: 1 } },
 			{ id: "panel.toggleItem", payload: undefined },
+			{ id: "panel.focusArg", payload: undefined },
+			{ id: "panel.setRow", payload: { index: 2 } },
+			{ id: "panel.run", payload: undefined },
 			{ id: "panel.run", payload: undefined },
 		])
 	})

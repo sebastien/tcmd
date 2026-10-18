@@ -11,17 +11,21 @@
 			</div>
 			<div class="panel-args-column">
 				<p class="panel-command-name" out="commandName"></p>
-				<div class="panel-picker" when="picking">
-					<p class="panel-picker-path" out="pickerPath"></p>
-					<label class="panel-picker-line">
-						<svg class="panel-picker-icon ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-search"></use></svg>
-						<input class="panel-picker-query" type="text" inout="pickerQuery" aria-label="Filter entries" />
-					</label>
+				<div class="panel-picker-pane" when="picking">
+					<div class="panel-picker">
+						<p class="panel-picker-path" out="pickerPath"></p>
+						<label class="panel-picker-line">
+							<svg class="panel-picker-icon ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-search"></use></svg>
+							<input class="panel-picker-query" type="text" inout="pickerQuery" aria-label="Filter entries" />
+						</label>
+					</div>
+					<ul class="panel-args panel-picker-rows" aria-label="Picker entries" out="argRows"></ul>
+					<p class="panel-args-empty" when="pickerEmpty" out="pickerEmptyText"></p>
 				</div>
 				<p class="panel-args-empty" when="argsEmpty" out="argsEmptyText"></p>
-				<ul class="panel-args" aria-label="Arguments" out="argRows"></ul>
-				<p class="panel-args-empty" when="pickerEmpty" out="pickerEmptyText"></p>
-				<div class="panel-runs" out:data-runnable="runnableState"><pre out="preview"></pre></div>
+				<ul class="panel-args" when="!picking" aria-label="Arguments" out="argRows"></ul>
+				<pre class="panel-preview" when="hasPreview" out="preview"></pre>
+				<ul class="panel-run-action" when="!picking" aria-label="Run command" out="runRows"></ul>
 			</div>
 		</div>
 		<footer out="footer"></footer>

@@ -158,18 +158,53 @@ describe("operations", () => {
 		expect((await session.fs.stat("/home/keep"))?.isDir).toBe(true)
 	})
 
-	test("move and rename journal their inverse", async () => {
-		const { fs, session } = await makeSession()
+	test("move, rename and replace journal their inverse", async () => {
+		const { session } = await makeSession()
 		await runLine(session, "move notes.txt /tmp")
 		expect(await session.fs.stat("/home/notes.txt")).toBeNull()
 		await session.dispatch("history.undo")
 		expect(await session.fs.stat("/home/notes.txt")).not.toBeNull()
 		expect(await session.fs.stat("/tmp/notes.txt")).toBeNull()
 
-		await runLine(session, "rename notes renamed notes.txt")
+		await runLine(session, "rename notes.txt renamed.txt /home")
 		expect(await session.fs.stat("/home/notes.txt")).toBeNull()
 		expect(await session.fs.stat("/home/renamed.txt")).not.toBeNull()
 		await session.dispatch("history.undo")
+		expect(await session.fs.stat("/home/notes.txt")).not.toBeNull()
+
+		await runLine(session, "replace notes renamed notes.txt")
+		expect(await session.fs.stat("/home/notes.txt")).toBeNull()
+		expect(await session.fs.stat("/home/renamed.txt")).not.toBeNull()
+		await session.dispatch("history.undo")
+		expect(await session.fs.stat("/home/notes.txt")).not.toBeNull()
+	})
+
+	test("replace permits same target basenames in different directories but rejects same-directory collisions", async () => {
+		const { session } = await makeSession()
+		await runLine(session, "mkdir a b")
+		await runLine(session, "touch a/x b/x")
+		await runLine(session, "replace x y a/x b/x")
+		expect(await session.fs.stat("/home/a/y")).not.toBeNull()
+		expect(await session.fs.stat("/home/b/y")).not.toBeNull()
+
+		await runLine(session, "touch a/xy a/yx")
+		await runLine(session, "replace x y a/xy a/yx")
+		expect(session.notice.value.kind).toBe("error")
+		expect(session.notice.value.text).toContain("duplicate target /home/a/yy")
+		expect(await session.fs.stat("/home/a/xy")).not.toBeNull()
+		expect(await session.fs.stat("/home/a/yx")).not.toBeNull()
+	})
+
+	test("rename refuses an existing target and a non-directory PATH", async () => {
+		const { session } = await makeSession()
+		await runLine(session, "rename notes.txt docs /home")
+		expect(session.notice.value.kind).toBe("error")
+		expect(await session.fs.stat("/home/notes.txt")).not.toBeNull()
+		expect((await session.fs.stat("/home/docs"))?.isDir).toBe(true)
+
+		await runLine(session, "rename notes.txt memo.txt /home/notes.txt")
+		expect(session.notice.value.kind).toBe("error")
+		expect(session.notice.value.text).toContain("PATH is not a directory")
 		expect(await session.fs.stat("/home/notes.txt")).not.toBeNull()
 	})
 
@@ -277,6 +312,7 @@ describe("operations", () => {
 		expect(session.previewTarget.value.details.join("\n")).toContain("directory")
 		expect(session.previewTarget.value.details.join("\n")).toContain("5B")
 		expect(session.previewTarget.value.isDir).toBe(true)
+		expect(session.notice.value.text).toContain("/home/docs · directory · 5B ·")
 		await new Promise((resolve) => setTimeout(resolve, 0))
 		// Directories still render a card: stat details are not preview text.
 		expect(session.preview.value.kind).toBe("directory")

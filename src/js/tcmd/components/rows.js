@@ -161,22 +161,21 @@ function commandItemRows(CommandItem) {
 
 // Function: panelOpRows
 // `{ item, index, row, cursor, focus }` bags for the command panel's command
-// list (`CommandArgRow`). The list is the flat `core/panel.panelEntryRows`: one
-// operation per row. `row` is the normalized shape the component reads —
-// `name` is the operation name and `summary` its argument list; `risk` tints
-// destructive/caution operations.
+// list (`CommandArgRow`). `panelEntryRows` contributes group headings and
+// name-only operation rows. `entryIndex` maps operations to the command cursor;
+// group headings take no cursor. `risk` tints destructive/caution operations.
 function panelOpRows(CommandArgRow) {
 	return (self, data) =>
 		CommandArgRow.map(
 			data.items ?? [],
 			(item, index) => ({
 				item,
-				index: item.entryIndex ?? index,
+				index: item.type === "op" ? item.entryIndex ?? index : -1,
 				row: {
-					type: "op",
+					type: item.type,
 					key: item.id,
 					name: item.name,
-					summary: item.summary ?? "",
+					group: item.group,
 					risk: item.risk ?? null,
 				},
 				cursor: data.opCursor,
@@ -188,14 +187,14 @@ function panelOpRows(CommandArgRow) {
 
 // Function: panelArgRows
 // `{ item, index, row, cursor, focus, value, labelWidth }` bags for the command
-// panel's argument pane (`CommandArgRow`). The rows are the flat
+// panel's scrolling argument pane (`CommandArgRow`). The rows are the flat
 // `core/panel.panelRowList`; this wraps each selection's item run in a top and
 // bottom `frame` row so the list reads as one bordered box. `index` is the
 // row's flat position (the frame rows take none), so the pane cursor still
 // addresses the same rows.
 function panelArgRows(CommandArgRow) {
 	return (self, data) => {
-		const rows = unwrap(data.rows) ?? []
+		const rows = (unwrap(data.rows) ?? []).filter((row) => row.type !== "run")
 		const visual = []
 		for (let i = 0; i < rows.length; i++) {
 			const row = rows[i]
@@ -214,6 +213,28 @@ function panelArgRows(CommandArgRow) {
 			(item, index) => ({
 				item,
 				index: item.type === "frame" ? -1 : item.rowIndex ?? index,
+				row: item,
+				cursor: data.argCursor,
+				focus: data.focus,
+				value: data.value,
+				labelWidth: unwrap(data.labelWidth) ?? 8,
+			}),
+			(item) => item.key,
+		)
+	}
+}
+
+// Function: panelRunRows
+// The explicit Run/Retry action is outside the scrolling argument list, while
+// sharing its cursor/focus state and row component.
+function panelRunRows(CommandArgRow) {
+	return (self, data) => {
+		const rows = (unwrap(data.rows) ?? []).filter((row) => row.type === "run")
+		return CommandArgRow.map(
+			rows,
+			(item, index) => ({
+				item,
+				index: item.rowIndex ?? index,
 				row: item,
 				cursor: data.argCursor,
 				focus: data.focus,
@@ -282,6 +303,7 @@ export {
 	overlayRows,
 	panelArgRows,
 	panelOpRows,
+	panelRunRows,
 }
 
 // EOF

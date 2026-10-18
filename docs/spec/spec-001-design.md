@@ -11,8 +11,8 @@ Core features:
 - Keyboard and mouse navigation
 - Completion, quick find and grep
 - Inline file previews
-- Command panel with editable arguments, inline file picking, and a
-  find-and-replace rename
+- Command panel with editable arguments, inline file picking, exact path rename,
+  and find-and-replace via `replace`
 
 Advanced features:
 

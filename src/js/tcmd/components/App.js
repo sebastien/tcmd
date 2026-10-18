@@ -74,7 +74,6 @@ function createInit(session) {
 		overlay: session.overlay,
 		overlayIndex: session.overlayIndex,
 		overlayItems: session.overlayItems,
-		panelCommand: session.panelCommand,
 		panelDraft: session.panelDraft,
 		panelCursorRow: session.panelCursorRow,
 		panelEntry: session.panelEntry,
@@ -85,10 +84,10 @@ function createInit(session) {
 		panelLabelWidth: session.panelLabelWidth,
 		panelOpen: session.panelOpen,
 		panelPicking: session.panelPicking,
+		panelPreview: session.panelPreview,
 		panelQuery: session.panelQuery,
 		panelRowIndex: session.panelRowIndex,
 		panelRows: session.panelRows,
-		panelRunnable: session.panelRunnable,
 		panelTextual: session.panelTextual,
 		panelValue: session.panelValue,
 		// The explorer's first column: the parent of the current directory.
@@ -292,6 +291,10 @@ function createBehaviors(env) {
 					data.dispatch("bookmark.down")
 					return
 				}
+				if (key?.name === "backspace") {
+					data.dispatch("bookmark.remove")
+					return
+				}
 				if (key?.name === "return" || key?.name === "enter") {
 					self.pub("bookmark:confirm")
 					return
@@ -410,7 +413,7 @@ function createEvents(env = {}) {
 		"panel:select": (_self, data, event) => {
 			// Clicking a command row moves the cursor to it (a group header is
 			// inert); clicking an argument/item row focuses the right pane
-			// (toggling an item); clicking a picker row chooses it.
+			// (toggling an item); clicking a picker row chooses or navigates it.
 			const items = unwrap(data.panelItems) ?? []
 			const item = items.find((row) => row.id === event.data)
 			if (item?.type === "op") {
@@ -422,10 +425,16 @@ function createEvents(env = {}) {
 			const rowIndex = rows.findIndex((row) => row.key === event.data)
 			if (rowIndex < 0) return
 			const row = rows[rowIndex]
-			if (row?.type === "entry") {
+			if (row?.type === "entry" || row?.type === "parent") {
 				data.dispatch("panel.focusArg")
 				data.dispatch("panel.pick.setCursor", { index: rowIndex })
-				data.dispatch("panel.pick.enter")
+				data.dispatch(row.type === "parent" ? "panel.pick.parent" : "panel.pick.enter")
+				return
+			}
+			if (row?.type === "run") {
+				data.dispatch("panel.focusArg")
+				data.dispatch("panel.setRow", { index: rowIndex })
+				data.dispatch("panel.run")
 				return
 			}
 			data.dispatch("panel.focusArg")

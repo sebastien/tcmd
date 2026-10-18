@@ -27,7 +27,7 @@ async function makeSetup(tree, width = 100, height = 20, options = {}) {
 	const size = cell({ width, height })
 	const App = createAppComponent(session, { size })
 	const { testRender } = await import("select.tui")
-	const setup = await testRender(App, { width, height })
+	const setup = await testRender(App, { width, height, kittyKeyboard: options.kittyKeyboard ?? false })
 	await setup.renderOnce()
 	return { setup, session, size }
 }

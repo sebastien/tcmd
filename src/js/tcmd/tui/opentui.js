@@ -26,8 +26,8 @@ const coreUrl = pathToFileURL(requireFromSelectTui.resolve("@opentui/core")).hre
 
 const core = await import(coreUrl)
 
-const { CodeRenderable, ImageRenderable, pathToFiletype, SyntaxStyle } = core
+const { CodeRenderable, ImageRenderable, pathToFiletype, SyntaxStyle, createTextAttributes } = core
 
-export { CodeRenderable, ImageRenderable, pathToFiletype, SyntaxStyle }
+export { CodeRenderable, ImageRenderable, pathToFiletype, SyntaxStyle, createTextAttributes }
 
 // EOF

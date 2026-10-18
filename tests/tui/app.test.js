@@ -178,12 +178,35 @@ describe("tui app", () => {
 
 			await setup.mockInput.typeText("touch")
 			await settle(setup)
-			expect(session.panelItems.value.map((item) => item.id)).toEqual(["op:touch"])
+			expect(session.panelItems.value.map((item) => item.id)).toEqual(["group:white", "op:touch"])
 
 			setup.mockInput.pressKey("\r")
 			await settle(setup)
 			await new Promise((resolve) => setTimeout(resolve, 20))
 			expect(session.panelOpen.value).toBe(false)
+			await new Promise((resolve) => setTimeout(resolve, 2600))
+			await settle(setup)
+			expect(session.notice.value).toBeNull()
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("shifted Kitty keys still open commands and invoke shifted bindings", async () => {
+		const { setup, session } = await makeSetup(100, 20, { viewMode: "commander", kittyKeyboard: true })
+		try {
+			// A physical Shift-; arrives as the base key `;` plus shifted text
+			// `:`. The command panel is bound to the shifted character.
+			setup.renderer.stdin.emit("data", Buffer.from("\x1b[59:58;2u"))
+			await settle(setup)
+			expect(session.panelOpen.value).toBe(true)
+
+			session.dispatch("panel.cancel")
+			// Kitty can report shifted letters in uppercase; they still match the
+			// lowercase keymap entry with its shift modifier.
+			setup.mockInput.pressKey("V", { shift: true })
+			await settle(setup)
+			expect(session.previewFull.value).toBe(true)
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -212,6 +235,9 @@ describe("tui app", () => {
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			expect(session.panelRowIndex.value).toBe(1)
+			setup.mockInput.pressKey("\t")
+			await settle(setup)
+			expect(session.panelRowIndex.value).toBe(2)
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			expect(session.panelFocus.value).toBe("ops")
@@ -292,7 +318,9 @@ describe("tui app", () => {
 			expect(session.panelOpen.value).toBe(true)
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain("Command ·")
-			expect(frame).toContain("copy FROM TO")
+			expect(frame).toContain("White")
+			expect(frame).toContain("[Run]")
+			expect(frame).not.toContain("copy FROM TO")
 		} finally {
 			setup.renderer.destroy()
 		}

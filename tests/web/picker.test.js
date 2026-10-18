@@ -72,12 +72,27 @@ describe("web picker", () => {
 			await browse(session, "copy", "TO")
 			const picker = host.querySelector(".panel-picker")
 			expect(picker).not.toBeNull()
+			expect(host.querySelector(".panel-picker-pane")).not.toBeNull()
 			expect(host.querySelector(".panel-picker-path").textContent).toBe("/home")
 			// A destination picker lists directories only: the file is excluded.
 			const names = [...host.querySelectorAll(".panel-args .panel-name")].map((el) => el.textContent)
-			expect(names).toEqual(["docs/", "tmp/"])
+			expect(names).toEqual(["..", "docs/", "tmp/"])
 			// Its own input owns the keyboard.
 			expect(document.activeElement).toBe(host.querySelector(".panel-picker-query"))
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("clicking the parent row navigates to the parent directory", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			await browse(session, "copy", "TO")
+			host.querySelector('.panel-row[data-type="parent"]').click()
+			await settle()
+			expect(session.pickerPane.path.value).toBe("/")
+			expect(host.querySelector(".panel-picker-path").textContent).toBe("/")
+			expect([...host.querySelectorAll(".panel-args .panel-name")].map((el) => el.textContent)).toEqual(["etc/", "home/"])
 		} finally {
 			instance?.unmount?.()
 		}
@@ -91,7 +106,7 @@ describe("web picker", () => {
 			query.value = "tmp"
 			query.dispatchEvent(new query.ownerDocument.defaultView.Event("input", { bubbles: true }))
 			await settle()
-			expect([...host.querySelectorAll(".panel-args .panel-name")].map((el) => el.textContent)).toEqual(["tmp/"])
+			expect([...host.querySelectorAll(".panel-args .panel-name")].map((el) => el.textContent)).toEqual(["..", "tmp/"])
 			await session.dispatch("panel.pick.enter")
 			await settle()
 			expect(host.querySelector(".panel-picker")).toBeNull()
@@ -102,22 +117,43 @@ describe("web picker", () => {
 		}
 	})
 
-	test("a rename previews its mapping in the runs line", async () => {
+	test("a no-match filter keeps the parent row and shows the empty state", async () => {
 		const { host, instance, session } = await mountApp()
 		try {
-			// Put the cursor on `notes.txt` then open the rename operation.
+			await browse(session, "copy", "TO")
+			const query = host.querySelector(".panel-picker-query")
+			query.value = "no-such-entry"
+			query.dispatchEvent(new query.ownerDocument.defaultView.Event("input", { bubbles: true }))
+			await settle()
+			expect(host.querySelector('.panel-row[data-type="parent"]')).not.toBeNull()
+			expect(host.querySelector(".panel-picker-pane .panel-args-empty").textContent).toContain("empty")
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("replace previews mappings and keeps the Run action outside the scroller", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			// Put the cursor on `notes.txt` then open the replace operation.
 			const index = session.panes.left.entries.value.findIndex((entry) => entry.name === "notes.txt")
 			session.panes.left.cursor.set(index)
 			session.dispatch("panel.open")
-			const opIndex = session.panelFiltered.value.findIndex((entry) => entry.name === "rename")
+			const opIndex = session.panelFiltered.value.findIndex((entry) => entry.name === "replace")
 			session.dispatch("panel.setOp", { index: opIndex })
 			await settle()
-			// FIND is prefilled with the basename; set REPLACE and check the preview.
+			// FIND is prefilled with the basename; set REPLACE and inspect the pane.
 			session.panelDraft.set(
 				session.panelDraft.value.map((b) => (b.name === "REPLACE" ? { ...b, value: "memo.txt" } : b)),
 			)
 			await settle()
-			expect(host.querySelector(".panel-runs pre").textContent).toContain("notes.txt → memo.txt")
+			expect(host.querySelector(".panel-args").textContent).toContain("memo.txt")
+			expect(host.querySelector(".panel-preview").textContent).toContain("notes.txt → memo.txt")
+			expect(host.querySelector(".panel-run-action .panel-run-button").textContent).toBe("[Run]")
+			const args = host.querySelector(".panel-args")
+			expect(args.lastElementChild?.getAttribute("data-type")).not.toBe("run")
+			expect(host.querySelector(".panel-run-action").parentElement).toBe(args.parentElement)
+			expect(host.querySelector(".panel-runs")).toBeNull()
 		} finally {
 			instance?.unmount?.()
 		}

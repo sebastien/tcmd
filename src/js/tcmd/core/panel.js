@@ -5,9 +5,9 @@
 
 // Module: tcmd/core/panel
 // The command panel (Commando): the one entry point for the CLI operations
-// (`copy`, `move`, `rename`, `delete`, `run` — the `core/operations` registry).
-// They are listed flat in one column, ranked by match importance once a query
-// filters them (see `filterPanelEntries`). The internal TinyCmd actions are not
+// (`copy`, `move`, `rename`, `replace`, `delete`, `run` — the `core/operations` registry).
+// They are grouped by risk color (White, Amber, Red) and alphabetized within
+// each group (see `filterPanelEntries`). The internal TinyCmd actions are not
 // listed here — they live on their own keys.
 //
 // For the selected operation, the panel binds its arguments from the live
@@ -19,13 +19,13 @@
 // The selection the user tweaks is *transient*: it lives in the draft bindings
 // (`session.panelDraft`), never in the real pane marks. When the draft runs,
 // each selection argument is encoded as a self-contained `$paths:[…]` token, so
-// the resolved paths survive an async confirm (see `expandArg`). The same draft
-// assembles the command line the panel previews (`panelCommand`), so the user
-// sees how the current selection maps to the operation before running it.
+// the resolved paths survive an async confirm (see `expandArg`). The draft can
+// also be rendered as a shell-quoted command (`panelCommand`), while the panel
+// itself presents the arguments and an explicit Run action.
 // Everything here is pure: the caller owns the cells; the panel commands in
 // `core/commands` assemble and run.
 
-import { hasMatch, score } from "../vendor/fzy.js"
+import { hasMatch } from "../vendor/fzy.js"
 import { currentPaneId, PANE_BUFFERS, PANE_LABELS } from "./pane.js"
 import { basename, parent } from "./path.js"
 import { getOperations, pathToken } from "./operations.js"
@@ -36,6 +36,16 @@ import { getOperations, pathToken } from "./operations.js"
 // right pane, where a textual argument owns the keyboard and Space toggles a
 // selection item).
 const PANEL_FOCUS = { OPS: "ops", ARGS: "args" }
+const PANEL_GROUPS = ["White", "Amber", "Red"]
+
+// Function: groupForRisk
+// The command list's visual group: normal operations are white, caution amber,
+// and destructive red.
+function groupForRisk(risk) {
+	if (risk === "caution") return "Amber"
+	if (risk === "destructive") return "Red"
+	return "White"
+}
 
 // Function: panelEntries
 // The entries the panel lists: the CLI operations. They are the only namespace
@@ -46,8 +56,7 @@ function panelEntries() {
 		.map((op) => ({
 			id: `op:${op.name}`,
 			name: op.name,
-			summary: `${op.signature ?? ""}`.replace(/^\S+\s*/, ""),
-			signature: op.signature ?? "",
+			group: groupForRisk(op.risk),
 			risk: op.risk ?? null,
 			matchNames: [op.name, ...(op.aliases ?? [])],
 			op,
@@ -55,57 +64,51 @@ function panelEntries() {
 }
 
 // Function: compareEntries
-// The panel's default ordering: alphabetically by name.
+// The panel's fixed risk-color order, then alphabetical command order.
 function compareEntries(a, b) {
-	return `${a?.name ?? ""}`.localeCompare(`${b?.name ?? ""}`)
-}
-
-// Function: entryScore
-// The match importance of an entry for a query: the best fzy score across its
-// names, or `-Infinity` when none matches (only the signature does).
-function entryScore(entry, query) {
-	let best = -Infinity
-	for (const name of entry.matchNames ?? []) {
-		const haystack = `${name}`.toLowerCase()
-		if (hasMatch(query, haystack)) best = Math.max(best, score(query, haystack))
-	}
-	return best
+	const groupA = PANEL_GROUPS.indexOf(`${a?.group ?? "White"}`)
+	const groupB = PANEL_GROUPS.indexOf(`${b?.group ?? "White"}`)
+	const rankA = groupA < 0 ? PANEL_GROUPS.length : groupA
+	const rankB = groupB < 0 ? PANEL_GROUPS.length : groupB
+	return rankA - rankB || `${a?.name ?? ""}`.localeCompare(`${b?.name ?? ""}`)
 }
 
 // Function: filterPanelEntries
-// Narrows the entry list by a typed query and orders it: no query lists the
-// operations alphabetically; a query ranks the matches by importance (the fzy
-// score of the best name match, so `open` outranks `copy` for `op`), ties
-// alphabetical. A query that only matches an operation's signature (`buf` ->
-// `sel [+|-][BUF] PATH...`) keeps it listable, at the bottom.
+// Narrows the entry list by command name or alias and keeps the fixed
+// White/Amber/Red group order and alphabetical order within each group.
 function filterPanelEntries(entries, query) {
 	const list = entries ?? []
 	const q = `${query ?? ""}`.trim().toLowerCase()
 	if (!q) return [...list].sort(compareEntries)
-	const ranked = []
-	for (const entry of list) {
-		const rank = entryScore(entry, q)
-		const signatureMatch = `${entry.signature ?? ""}`.toLowerCase().includes(q)
-		if (rank === -Infinity && !signatureMatch) continue
-		ranked.push({ entry, score: rank })
-	}
-	ranked.sort((a, b) => (a.score !== b.score ? b.score - a.score : compareEntries(a.entry, b.entry)))
-	return ranked.map((match) => match.entry)
+	return list
+		.filter((entry) => (entry.matchNames ?? []).some((name) => hasMatch(q, `${name}`.toLowerCase())))
+		.sort(compareEntries)
 }
 
 // Function: panelEntryRows
-// Projects the filtered entries into the flat list the command-list column
-// renders: one `op` row per entry, tagged with its index in the *entries* list
+// Projects filtered entries into the command-list column: a group heading and
+// one name-only `op` row per entry, tagged with its index in the *entries* list
 // (what the cursor `panelOpIndex` addresses).
 function panelEntryRows(entries) {
-	return (entries ?? []).map((entry, index) => ({
-		type: "op",
-		id: entry.id,
-		entryIndex: index,
-		name: entry.name,
-		summary: entry.summary,
-		risk: entry.risk,
-	}))
+	const rows = []
+	let previousGroup = null
+	for (let index = 0; index < (entries ?? []).length; index++) {
+		const entry = entries[index]
+		const group = entry.group ?? "White"
+		if (group !== previousGroup) {
+			rows.push({ type: "group", id: `group:${group.toLowerCase()}`, name: group, group })
+			previousGroup = group
+		}
+		rows.push({
+			type: "op",
+			id: entry.id,
+			entryIndex: index,
+			name: entry.name,
+			group,
+			risk: entry.risk,
+		})
+	}
+	return rows
 }
 
 // Function: explorerColumnId
@@ -374,6 +377,7 @@ function panelRowList(bindings) {
 			optional: binding.optional,
 			variadic: binding.variadic,
 			textual: binding.textual,
+			editable: binding.textual === true,
 			picker: binding.picker === true,
 			mode: binding.mode ?? null,
 			multi,
@@ -413,19 +417,33 @@ function rowAt(rows, index) {
 
 // Function: pickerRowList
 // Flattens the picker's visible listing into the rows the panel's argument
-// column renders while a path is being picked. The shape mirrors a
-// file-listing row (`name`, `path`, `isDir`) so the shared row component can
-// render both; a symlink carries its raw target for the summary.
-function pickerRowList(entries) {
-	return (entries ?? []).map((entry) => ({
-		type: "entry",
-		key: entry.path,
-		name: entry.name,
-		path: entry.path,
-		isDir: entry.isDir === true,
-		isSymlink: entry.isSymlink === true,
-		target: entry.target ?? null,
-	}))
+// column renders while a path is being picked. The parent navigation row stays
+// visible when filtering and is omitted at the filesystem root; entry rows
+// retain their path and symlink target for the shared row component.
+function pickerRowList(entries, path) {
+	const rows = []
+	const parentPath = parent(path)
+	if (parentPath) {
+		rows.push({
+			type: "parent",
+			key: `parent:${path}`,
+			name: "..",
+			path: parentPath,
+			isDir: true,
+		})
+	}
+	for (const entry of entries ?? []) {
+		rows.push({
+			type: "entry",
+			key: entry.path,
+			name: entry.name,
+			path: entry.path,
+			isDir: entry.isDir === true,
+			isSymlink: entry.isSymlink === true,
+			target: entry.target ?? null,
+		})
+	}
+	return rows
 }
 
 // Function: isTextualRow

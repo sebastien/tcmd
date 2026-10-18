@@ -336,15 +336,21 @@ describe("web app", () => {
 		try {
 			press(host, ":")
 			// The panel mounts and focuses its filter a couple of frames in.
-			await new Promise((resolve) => setTimeout(resolve, 80))
+			await new Promise((resolve) => setTimeout(resolve, 160))
 			expect(session.panelOpen.value).toBe(true)
 			expect(host.querySelector(".command-panel")).not.toBeNull()
 			expect(document.activeElement === host.querySelector(".panel-query")).toBe(true)
 			expect(host.querySelector(".panel-ops").textContent).toContain("copy")
 			expect(host.querySelector('.panel-ops .panel-op-chevron use[href="#lucide-chevron-right"]')).not.toBeNull()
-			// The list is the CLI operations only, with no namespace tag.
+			// The list has category headings and name-only CLI rows.
 			const names = [...host.querySelectorAll(".panel-ops .panel-name")].map((row) => row.textContent)
 			expect(names).toContain("bookmark")
+			expect(names).toContain("White")
+			expect(names).toContain("Amber")
+			expect(names).toContain("Red")
+			expect(host.querySelector('.panel-field[data-editable="true"]')).not.toBeNull()
+			expect(host.querySelector('.panel-field[data-editable="false"]')).not.toBeNull()
+			expect(names).not.toContain("FROM TO")
 			expect(names).not.toContain("Open file")
 			expect(names.some((name) => name.includes("cli") || name.includes("app"))).toBe(false)
 			press(host, "Escape")
@@ -356,7 +362,7 @@ describe("web app", () => {
 		}
 	})
 
-	test("panel input, clicks and keyboard edit the draft, not the real marks, and Enter runs once", async () => {
+	test("panel arguments edit transiently and the explicit Run button executes once", async () => {
 		const { host, instance, session } = await mountApp({ viewMode: "commander" })
 		try {
 			session.panes.left.toggleMark()
@@ -367,11 +373,15 @@ describe("web app", () => {
 			type(host.querySelector(".panel-query"), "copy")
 			await settle()
 			expect(session.panelEntry.value.name).toBe("copy")
-			expect(host.querySelector(".panel-runs pre").textContent).toBe("copy /home/tester /home/notes.txt /")
+			expect(host.querySelector(".panel-args").textContent).toContain("SRC · 2 selected")
+			const action = host.querySelector('.panel-run-action [data-type="run"]')
+			expect(action).not.toBeNull()
+			expect(host.querySelector(".panel-args").lastElementChild).not.toBe(action)
+			expect(host.querySelector(".panel-runs")).toBeNull()
 			const items = host.querySelectorAll('.panel-args [data-type="item"]')
 			items[0].dispatchEvent(new MouseEvent("click", { bubbles: true }))
 			await settle()
-			expect(host.querySelector(".panel-runs pre").textContent).toBe("copy /home/notes.txt /")
+			expect(host.querySelector(".panel-args").textContent).toContain("SRC · 1 selected")
 			expect(session.panes.left.marked.value.size).toBe(2)
 			// From an item, Tab returns to operations, then visits FROM and TO.
 			press(host, "Tab")
@@ -381,15 +391,45 @@ describe("web app", () => {
 			expect(document.activeElement === host.querySelector(".panel-value")).toBe(true)
 			type(host.querySelector(".panel-value"), "/etc")
 			await settle()
-			expect(host.querySelector(".panel-runs pre").textContent).toBe("copy /home/notes.txt /etc")
+			expect(host.querySelector(".panel-args .panel-value").value).toBe("/etc")
 			let copies = 0
 			const copy = session.fs.copy
 			session.fs.copy = (...args) => { copies++; return copy(...args) }
-			press(host, "Enter")
+			host.querySelector(".panel-run-button").dispatchEvent(new MouseEvent("click", { bubbles: true }))
 			await settle()
 			expect(copies).toBe(1)
 			expect(session.panelOpen.value).toBe(false)
 			expect(await session.fs.readTextHead("/etc/notes.txt")).toBe("hello\nworld\n")
+			expect(host.querySelector('.command-bar [role="status"]').textContent).toContain("copied")
+			await new Promise((resolve) => setTimeout(resolve, 2600))
+			expect(host.querySelector('.command-bar [role="status"]')).toBeNull()
+		} finally {
+			instance.unmount()
+		}
+	})
+
+	test("a failed panel command shows its error beside a Retry action", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			press(host, ":")
+			await settle()
+			const index = session.panelFiltered.value.findIndex((entry) => entry.name === "mkdir")
+			session.dispatch("panel.setOp", { index })
+			session.panelDraft.set(
+				session.panelDraft.value.map((binding) =>
+				binding.name === "PATH" ? { ...binding, value: "/home/tester" } : binding,
+				),
+			)
+			await settle()
+			await session.dispatch("panel.run")
+			await settle()
+			expect(session.panelOpen.value).toBe(true)
+			expect(host.querySelector(".panel-run-action .panel-run-error").textContent).toContain("already exists")
+			expect(host.querySelector(".panel-run-action .panel-run-button").textContent).toBe("[Retry]")
+			host.querySelector(".panel-run-action .panel-run-button").dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await settle()
+			expect(session.panelOpen.value).toBe(true)
+			expect(session.panelRunError.value).toContain("already exists")
 		} finally {
 			instance.unmount()
 		}
@@ -407,7 +447,7 @@ describe("web app", () => {
 			press(host, "Tab")
 			press(host, " ")
 			await settle()
-			expect(host.querySelector(".panel-runs").getAttribute("data-runnable")).toBe("false")
+			expect(host.querySelector('.panel-run-action [data-type="run"] .panel-run-button')).not.toBeNull()
 			press(host, "Enter")
 			await settle()
 			// Enter does not fail: it focuses the missing PATH argument.
@@ -660,7 +700,7 @@ describe("web app", () => {
 			await settle()
 			type(host.querySelector(".panel-query"), "copy")
 			await settle()
-			expect(host.querySelector(".panel-runs pre").textContent).toBe("copy /home/notes.txt /")
+			expect(host.querySelector(".panel-run-action [data-type=\"run\"]").textContent).toContain("[Run]")
 			press(host, "Enter")
 			await settle()
 			expect(session.panelOpen.value).toBe(false)
@@ -727,14 +767,15 @@ describe("web app", () => {
 		const { host, instance, session } = await mountApp()
 		try {
 			press(host, "!")
-			await settle()
+			await new Promise((resolve) => setTimeout(resolve, 160))
 			expect(session.panelOpen.value).toBe(true)
 			expect(session.panelEntry.value.name).toBe("run")
 			// The raw CMD field owns the keyboard, so the browser focuses it.
 			expect(document.activeElement === host.querySelector(".panel-value")).toBe(true)
 			type(host.querySelector(".panel-value"), "echo hi")
 			await settle()
-			expect(host.querySelector(".panel-runs pre").textContent).toBe("run 'echo hi'")
+			expect(host.querySelector(".panel-run-action [data-type=\"run\"]").textContent).toContain("[Run]")
+			expect(host.querySelector(".panel-runs")).toBeNull()
 		} finally {
 			instance?.unmount?.()
 		}

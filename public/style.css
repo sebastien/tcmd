@@ -36,6 +36,8 @@
 	--pane-active-commander: #ffc233;
 	--text: #e6ecff;
 	--text-dim: #8fa3d9;
+	--scrollbar-track: #252527;
+	--scrollbar-thumb: #9a9ea3;
 	--accent: #ffc233;
 	--accent-soft: #2b3f78;
 	--dir: #5c8cff;
@@ -57,6 +59,32 @@
 
 * {
 	box-sizing: border-box;
+}
+
+/* Every scrollable surface gets a visible, thin bar only while overflowing.
+   The WebKit rules keep Chromium/Electron and Safari consistent with Firefox. */
+:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .bookmark-rows, .overlay-rows, .help-columns) {
+	scrollbar-width: thin;
+	scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .bookmark-rows, .overlay-rows, .help-columns)::-webkit-scrollbar {
+	width: 0.65rem;
+	height: 0.65rem;
+}
+
+:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .bookmark-rows, .overlay-rows, .help-columns)::-webkit-scrollbar-track {
+	background: var(--scrollbar-track);
+}
+
+:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .bookmark-rows, .overlay-rows, .help-columns)::-webkit-scrollbar-thumb {
+	background: var(--scrollbar-thumb);
+	border: 2px solid var(--scrollbar-track);
+	border-radius: 999px;
+}
+
+:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .bookmark-rows, .overlay-rows, .help-columns)::-webkit-scrollbar-thumb:hover {
+	background: var(--accent);
 }
 
 html,
@@ -81,6 +109,7 @@ body {
 .preview-text,
 .panel-picker-path,
 .panel-row[data-type="entry"] .panel-name,
+.panel-row[data-type="parent"] .panel-name,
 .panel-list-box,
 .bookmark-path {
 	font-family: var(--font-mono);
@@ -826,23 +855,6 @@ input:focus-visible {
 	font-weight: 600;
 }
 
-/* The resolved command, dim, at the foot of the argument pane. */
-.panel-runs {
-	margin-top: auto;
-	padding: 0.4rem 0.6rem 0.2rem;
-	color: var(--text-dim);
-	overflow: auto;
-	max-height: 20vh;
-	border-top: 1px solid var(--border);
-}
-
-.panel-runs pre {
-	margin: 0;
-	white-space: pre-wrap;
-	overflow-wrap: anywhere;
-	font: inherit;
-}
-
 /* The argument pane's rows: an aligned label + boxed value field for an
    argument, and a bordered list of selected paths under a selection. */
 .panel-row[data-type="arg"] .panel-name {
@@ -854,6 +866,91 @@ input:focus-visible {
 	color: var(--accent);
 }
 
+.panel-row[data-type="group"] {
+	padding-top: 0.45rem;
+	cursor: default;
+	font-size: 0.82em;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.panel-row[data-type="group"][data-group="White"] {
+	color: var(--text);
+}
+
+.panel-row[data-type="group"][data-group="Amber"] {
+	color: var(--warning);
+}
+
+.panel-row[data-type="group"][data-group="Red"] {
+	color: var(--error);
+}
+
+.panel-row[data-type="op"] {
+	padding-left: 1.5rem;
+}
+
+.panel-row[data-type="run"] {
+	justify-content: flex-end;
+	margin-top: 0;
+	padding-top: 0.25rem;
+	padding-bottom: 0.25rem;
+}
+
+.panel-preview {
+	flex: 0 1 auto;
+	max-height: 20vh;
+	margin: 0;
+	padding: 0.35rem 0.6rem;
+	border-top: 1px solid var(--border);
+	color: var(--text-dim);
+	overflow: auto;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font: inherit;
+}
+
+.panel-run-action {
+	flex: none;
+	list-style: none;
+	margin: 0;
+	padding: 0.25rem 0.6rem 0.4rem;
+	border-top: 1px solid var(--border);
+}
+
+.panel-run-button {
+	padding: 0.15rem 0.7rem;
+	border: 1px solid var(--text);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--text);
+	font: inherit;
+	cursor: pointer;
+}
+
+.panel-row[data-type="run"].is-focused .panel-run-button {
+	background: var(--accent-soft);
+}
+
+.panel-row[data-type="run"][data-risk="caution"] .panel-run-button {
+	border-color: var(--warning);
+	color: var(--warning);
+}
+
+.panel-row[data-type="run"][data-risk="destructive"] .panel-run-button {
+	border-color: var(--error);
+	color: var(--error);
+}
+
+.panel-run-error {
+	flex: 1;
+	min-width: 0;
+	color: var(--error);
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .panel-field {
 	display: inline-flex;
 	align-items: baseline;
@@ -861,7 +958,26 @@ input:focus-visible {
 	min-width: 0;
 	background: var(--bg-field);
 	border-radius: 3px;
+	border: 1px solid var(--border);
 	padding: 0 0.25rem;
+}
+
+.panel-field[data-editable="false"] {
+	background: transparent;
+	border-color: transparent;
+	padding-left: 0;
+}
+
+.panel-field[data-editable="true"] {
+	border-color: var(--accent-soft);
+}
+
+.panel-field[data-editable="false"] .panel-field-bracket {
+	display: none;
+}
+
+.panel-field[data-editable="false"] .panel-field-value {
+	color: var(--text-dim);
 }
 
 .panel-field-bracket {
@@ -943,6 +1059,11 @@ input:focus-visible {
 	min-height: 0;
 }
 
+.panel-ops,
+.panel-args {
+	flex: 1 1 0;
+}
+
 /* The argument column: an empty state (a TinyCmd action binds no arguments)
    above the rows, with the divider on the column rather than the list so both
    stay visible. */
@@ -960,14 +1081,29 @@ input:focus-visible {
 	font-style: italic;
 }
 
-/* File picker sub-mode: the browsed path, its filter, then the entry rows
+/* File picker sub-mode: a nested pane containing its path, filter and entries
    (which reuse `.panel-row` through the shared arg-row map). */
+.panel-picker-pane {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	min-height: 0;
+	margin: 0.35rem 0.5rem 0.5rem;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
 .panel-picker {
 	display: flex;
 	flex-direction: column;
 	gap: 0.15rem;
 	padding: 0.3rem 0.6rem;
 	border-bottom: 1px solid var(--border);
+}
+
+.panel-picker-rows {
+	flex: 1 1 0;
 }
 
 .panel-picker-path {

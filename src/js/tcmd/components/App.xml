@@ -135,7 +135,8 @@
 	              in:open="panelOpen" in:entry="panelEntry" in:items="panelItems"
 	              in:opCursor="panelOpIndex" in:rows="panelRows" in:argCursor="panelRowIndex"
 	              in:labelWidth="panelLabelWidth"
-	              in:focus="panelFocus"	              in:command="panelCommand" in:runnable="panelRunnable"
+	              in:focus="panelFocus"
+	              in:preview="panelPreview"
 	              in:picking="panelPicking" in:pickerQuery="pickerQuery" in:pickerPath="pickerPath"
 	              in:query="panelQuery" in:value="panelValue"></commandpanel>
 	<bookmarklist when="bookmarkOpen" position="absolute" top="0" left="0" width="100%" height="100%" zIndex="25"

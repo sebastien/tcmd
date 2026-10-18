@@ -64,6 +64,7 @@ import {
 	overlayRows,
 	panelArgRows,
 	panelOpRows,
+	panelRunRows,
 	summaryBehaviors,
 } from "../components/index.js"
 import { createBehaviors as headerBehaviors } from "./header.js"
@@ -127,6 +128,7 @@ function createComponents() {
 			...webTheme,
 			opRows: panelOpRows(commandArgRow),
 			argRows: panelArgRows(commandArgRow),
+			runRows: panelRunRows(commandArgRow),
 		})),
 		Confirm: bind(ui, "Confirm", confirmHtml, confirmBehaviors(webTheme)),
 		EntryDetail: bind(ui, "EntryDetail", entryDetailHtml, entryDetailBehaviors({ ...webTheme, width: paneWidth, elide })),

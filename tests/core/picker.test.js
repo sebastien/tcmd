@@ -3,7 +3,7 @@ import { createPane } from "../../src/js/tcmd/core/pane.js"
 import { createSession } from "../../src/js/tcmd/core/session.js"
 import { getCommandBarItems } from "../../src/js/tcmd/core/commands.js"
 import { bindArg } from "../../src/js/tcmd/core/panel.js"
-import { renamePlan } from "../../src/js/tcmd/core/operations.js"
+import { replacePlan } from "../../src/js/tcmd/core/operations.js"
 import { createMockFs } from "../helpers/mock-fs.js"
 
 const TREE = {
@@ -77,14 +77,15 @@ describe("file picker", () => {
 		await openOp(session, "copy")
 		await browseArg(session, "TO")
 		expect(session.panelPicking.value).toBe(true)
-		// The picker seats on the current pane's directory; a dir picker lists
-		// directories only, so the file `notes.txt` is absent.
-		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["docs", "tmp"])
+		// The picker seats on the current pane's directory. Its parent row stays
+		// visible, while a dir picker excludes the file `notes.txt`.
+		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["..", "docs", "tmp"])
 		expect(binding(session, "TO").value).toBe("")
 		// A file/any picker keeps the listing intact (a directory row descends).
 		session.panelPickerMode.set("any")
-		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["docs", "tmp", "notes.txt"])
+		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["..", "docs", "tmp", "notes.txt"])
 		session.panelPickerMode.set("dir")
+		session.dispatch("panel.pick.setCursor", { index: 1 })
 		await session.dispatch("panel.pick.enter")
 		expect(session.panelPicking.value).toBe(false)
 		expect(binding(session, "TO").value).toBe("/home/docs")
@@ -111,12 +112,25 @@ describe("file picker", () => {
 		const { session } = await makeSession()
 		await openOp(session, "copy")
 		await browseArg(session, "TO")
+		session.dispatch("panel.pick.setCursor", { index: 1 })
 		await session.dispatch("panel.pick.descend")
 		expect(session.pickerPane.path.value).toBe("/home/docs")
-		expect(session.pickerRows.value).toEqual([])
+		expect(session.pickerRows.value.map((row) => row.name)).toEqual([".."])
 		await session.dispatch("panel.pick.parent")
 		expect(session.pickerPane.path.value).toBe("/home")
-		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["docs", "tmp"])
+		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["..", "docs", "tmp"])
+		// Parent navigation returns the cursor to the directory we came from.
+		expect(session.pickerRows.value[session.panelRowIndex.value].name).toBe("docs")
+	})
+
+	test("the visible parent row navigates up and is omitted at root", async () => {
+		const { session } = await makeSession()
+		await openOp(session, "copy")
+		await browseArg(session, "TO")
+		expect(session.pickerRows.value[0]).toMatchObject({ type: "parent", name: "..", path: "/" })
+		await session.dispatch("panel.pick.enter")
+		expect(session.pickerPane.path.value).toBe("/")
+		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["home"])
 	})
 
 	test("typing filters the picker listing", async () => {
@@ -125,7 +139,8 @@ describe("file picker", () => {
 		await browseArg(session, "TO")
 		session.pickerQuery.set("tmp")
 		await Promise.resolve()
-		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["tmp"])
+		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["..", "tmp"])
+		expect(session.panelRowIndex.value).toBe(1)
 	})
 
 	test("an empty destination opens the picker on run, and choosing resumes the run", async () => {
@@ -152,16 +167,17 @@ describe("file picker", () => {
 	})
 })
 
-describe("rename", () => {
+describe("replace", () => {
 	test("a single file prefills FIND with its name and previews the mapping", async () => {
 		const { session } = await makeSession()
 		selectEntry(session, "notes.txt")
-		await openOp(session, "rename")
+		await openOp(session, "replace")
 		expect(binding(session, "FIND").value).toBe("notes.txt")
 		session.panelDraft.set(
 			session.panelDraft.value.map((b) => (b.name === "REPLACE" ? { ...b, value: "readme.txt" } : b)),
 		)
 		expect(session.panelCommand.value).toContain("notes.txt → readme.txt")
+		expect(session.panelPreview.value).toContain("notes.txt → readme.txt")
 		expect(session.panelRunnable.value).toBe(true)
 		await session.dispatch("panel.run")
 		const names = (await session.fs.readDir("/home")).map((entry) => entry.name)
@@ -169,10 +185,10 @@ describe("rename", () => {
 		expect(names).not.toContain("notes.txt")
 	})
 
-	test("several files rename with a shared find-and-replace", async () => {
+	test("several files replace with a shared find-and-replace", async () => {
 		const { session } = await makeSession()
 		session.panes.left.marked.set(new Set(["/home/notes.txt", "/home/docs"]))
-		await openOp(session, "rename")
+		await openOp(session, "replace")
 		// More than one path: FIND stays empty for a shared substring.
 		expect(binding(session, "FIND").value).toBe("")
 		session.panelDraft.set(
@@ -185,15 +201,16 @@ describe("rename", () => {
 		const preview = session.panelCommand.value
 		expect(preview).toContain("notes.txt → n0tes.txt")
 		expect(preview).toContain("docs → d0cs")
+		expect(session.panelPreview.value).toContain("docs → d0cs")
 		await session.dispatch("panel.run")
 		const names = (await session.fs.readDir("/home")).map((entry) => entry.name).sort()
 		expect(names).toEqual(["d0cs", "n0tes.txt", "tmp"])
 	})
 
-	test("rename refuses a target that already exists", async () => {
+	test("replace refuses a target that already exists", async () => {
 		const { session } = await makeSession()
 		session.panes.left.marked.set(new Set(["/home/notes.txt"]))
-		await openOp(session, "rename")
+		await openOp(session, "replace")
 		session.panelDraft.set(
 			session.panelDraft.value.map((b) => {
 				if (b.name === "FIND") return { ...b, value: "notes.txt" }
@@ -202,18 +219,49 @@ describe("rename", () => {
 			}),
 		)
 		await session.dispatch("panel.run")
-		expect(session.notice.value?.kind).toBe("error")
-		expect(session.notice.value?.text).toContain("already exists")
+		expect(session.panelRunError.value).toContain("already exists")
+		expect(session.notice.value).toBeNull()
 	})
 
-	test("renamePlan marks unchanged rows, invalid names and duplicates", () => {
-		const plan = renamePlan("txt", "md", ["/a/notes.txt", "/a/b.txt"])
+	test("replacePlan marks unchanged rows, invalid names and duplicates", () => {
+		const plan = replacePlan("txt", "md", ["/a/notes.txt", "/a/b.txt"])
 		expect(plan.map((row) => row.newName)).toEqual(["notes.md", "b.md"])
 		expect(plan.every((row) => row.changed)).toBe(true)
 		// An empty result and a slash are both refused.
-		expect(renamePlan("notes.txt", "", ["/a/notes.txt"])[0].error).toBe("empty name")
-		expect(renamePlan("a", "b/c", ["/a/a"])[0].error).toBe("name has a slash")
+		expect(replacePlan("notes.txt", "", ["/a/notes.txt"])[0].error).toBe("empty name")
+		expect(replacePlan("a", "b/c", ["/a/a"])[0].error).toBe("name has a slash")
 		// A no-op leaves the path unchanged.
-		expect(renamePlan("zzz", "y", ["/a/notes.txt"])[0].changed).toBe(false)
+		expect(replacePlan("zzz", "y", ["/a/notes.txt"])[0].changed).toBe(false)
+	})
+})
+
+describe("exact rename", () => {
+	test("a selected path prefills FROM and its parent PATH", async () => {
+		const { session } = await makeSession()
+		selectEntry(session, "notes.txt")
+		await openOp(session, "rename")
+		expect(binding(session, "FROM").value).toBe("notes.txt")
+		expect(binding(session, "TO").value).toBe("")
+		expect(binding(session, "PATH").value).toBe("/home")
+		expect(binding(session, "PATH").picker).toBe(true)
+	})
+
+	test("renames one child within PATH and preserves history", async () => {
+		const { session } = await makeSession()
+		await session.dispatch("panel.open")
+		const index = session.panelFiltered.value.findIndex((entry) => entry.name === "rename")
+		session.dispatch("panel.setOp", { index })
+		session.panelDraft.set(
+			session.panelDraft.value.map((item) => {
+				if (item.name === "FROM") return { ...item, value: "notes.txt" }
+				if (item.name === "TO") return { ...item, value: "memo.txt" }
+				return item
+			}),
+		)
+		await session.dispatch("panel.run")
+		expect(await session.fs.stat("/home/notes.txt")).toBeNull()
+		expect(await session.fs.stat("/home/memo.txt")).not.toBeNull()
+		await session.dispatch("history.undo")
+		expect(await session.fs.stat("/home/notes.txt")).not.toBeNull()
 	})
 })

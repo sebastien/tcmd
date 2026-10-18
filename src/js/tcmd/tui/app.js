@@ -39,34 +39,28 @@ function paneCrumbs(size, session, paneId, pane) {
 	return derived([pane.segments, crumbWidthFor(size, session, paneId)], ([segments, width]) => elideCrumbs(segments, width))
 }
 
-// Function: attachModifierHint
-// TUI-only: while Shift or Ctrl is held, point the command bar at that
-// modifier's own bindings; releasing it restores the default hints. Requires
-// the kitty keyboard protocol (see `tui/index.js`), which reports modifier key
-// presses and releases; on a terminal that does not, the bar simply never
-// changes. Any ordinary chord also re-sets the state from its own modifiers, so
-// a missed release can never leave the bar stuck. Returns a teardown.
-function attachModifierHint(session, keyInput) {
-	if (!keyInput?.on) return () => {}
-	const modifierOf = (name) => {
-		if (name === "leftshift" || name === "rightshift" || name === "shift") return "shift"
-		if (name === "leftctrl" || name === "rightctrl" || name === "control") return "ctrl"
-		return null
-	}
-	const set = (value) => {
-		if (session.barModifier.value !== value) session.barModifier.set(value)
-	}
-	const onPress = (key) => {
-		set(modifierOf(key?.name) ?? (key?.ctrl ? "ctrl" : key?.shift ? "shift" : null))
-	}
-	const onRelease = (key) => {
-		if (modifierOf(key?.name)) set(null)
-	}
-	keyInput.on("keypress", onPress)
-	keyInput.on("keyrelease", onRelease)
-	return () => {
-		keyInput.off("keypress", onPress)
-		keyInput.off("keyrelease", onRelease)
+// Function: normalizeKey
+// OpenTUI's Kitty keyboard events can report shifted letters in uppercase and
+// punctuation with `shift: true`. The shared keymap uses lowercase letters
+// plus explicit modifiers, while shifted punctuation is already its own key
+// (for example, `:`), so normalize those details before dispatch.
+function normalizeKey(event) {
+	const rawName = `${event?.name ?? ""}`
+	const sequence = `${event?.sequence ?? ""}`
+	const shiftedPunctuation =
+		event?.source === "kitty" &&
+		Boolean(event?.shift) &&
+		rawName.length === 1 &&
+		sequence.length === 1 &&
+		!/[a-z0-9]/i.test(sequence)
+	const nameSource = shiftedPunctuation ? sequence : rawName
+	const name = nameSource.toLowerCase()
+	const punctuation = name.length === 1 && !/[a-z0-9]/.test(name)
+	const shiftedLetter = rawName.length === 1 && rawName !== name && /[a-z]/i.test(rawName)
+	return {
+		...event,
+		name,
+		shift: !punctuation && (Boolean(event?.shift) || shiftedLetter),
 	}
 }
 
@@ -138,9 +132,9 @@ function createAppComponent(session, options = {}) {
 		.does({
 			...frame,
 			keys: (self, data, event) => {
-				const key = event
+				const key = normalizeKey(event)
 				const name = key?.name
-				const isQuestion = name === "?" || (name === "/" && key?.shift)
+				const isQuestion = name === "?" || (name === "/" && event?.shift)
 				const busy =
 					unwrap(data.confirm) ||
 					unwrap(data.filtering) ||
@@ -159,7 +153,7 @@ function createAppComponent(session, options = {}) {
 				}
 				// The viewer overlay and the narrow-`v` shortcut are shared
 				// modal routing, handled by `components/App#createBehaviors`.
-				return baseKeys(self, data, event)
+				return baseKeys(self, data, key)
 			},
 			// TUI-only presentation of the shared App state: each pane's
 			// border and header rule track its own focus, tinted by the view
@@ -195,6 +189,6 @@ function createAppComponent(session, options = {}) {
 		.using(appXml)
 }
 
-export { attachModifierHint, createAppComponent }
+export { createAppComponent }
 
 // EOF

@@ -38,6 +38,6 @@ export { createBehaviors as summaryBehaviors } from "./Summary.js"
 // Helpers
 export { formatCounts, formatDisk, formatMode, formatSize, formatTime } from "./format.js"
 export { iconFor, iconsEnabled, lucideIconFor, sourceMarker } from "./icons.js"
-export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, helpRows, listingWindow, overlayRows, panelArgRows, panelOpRows } from "./rows.js"
+export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, helpRows, listingWindow, overlayRows, panelArgRows, panelOpRows, panelRunRows } from "./rows.js"
 
 // EOF

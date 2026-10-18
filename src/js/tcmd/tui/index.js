@@ -17,7 +17,7 @@ import { cell } from "select/state/cells"
 import { render } from "select.tui"
 import { createBookmarks, createFileBookmarkStore } from "../core/bookmarks.js"
 import { createNodeFs, createNodeOs, createPane, createSession, load } from "../core/index.js"
-import { createAppComponent, attachModifierHint } from "./app.js"
+import { createAppComponent } from "./app.js"
 
 // Function: readSize
 // Normalizes a renderer resize payload. OpenTUI's live renderer emits
@@ -68,17 +68,11 @@ async function main(paths = []) {
 	const size = cell({ width: 0, height: 0 })
 	const help = cell(false)
 	const App = createAppComponent(session, { size, help })
-	// The kitty keyboard protocol reports modifier key presses and releases
-	// (and every key as an escape code), which is what lets the command bar
-	// reveal Shift/Ctrl chords while one is held. Terminals that do not speak
-	// it simply never send the events, and the bar stays on its default hints.
 	instance = await render(App, {
 		useMouse: true,
 		exitOnCtrlC: false,
-		useKittyKeyboard: { events: true, allKeysAsEscapes: true },
 	})
 	const renderer = instance?.ctx ?? instance?.renderer
-	if (renderer?.keyInput) attachModifierHint(session, renderer.keyInput)
 	const current = renderer?.width || renderer?.height
 		? { width: renderer.width ?? 0, height: renderer.height ?? 0 }
 		: { width: 0, height: 0 }

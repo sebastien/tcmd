@@ -15,16 +15,19 @@ describe("CommandArgRow", () => {
 		expect(rowName({ type: "arg", name: "FROM" })).toBe("FROM")
 		expect(rowName({ type: "item", marker: "[x]", name: "notes.txt" })).toBe("[x] notes.txt")
 		expect(rowName({ type: "item", marker: "[ ]", name: "docs" })).toBe("[ ] docs")
-		// A group header carries its label; a picker entry a directory slash.
-		expect(rowName({ type: "group", name: "System" })).toBe("System")
+		// A group header carries its color name; a picker entry a directory slash.
+		expect(rowName({ type: "group", name: "White" })).toBe("White")
+		expect(rowName({ type: "run", name: "Run" })).toBe("[Run]")
 		expect(rowName({ type: "entry", name: "docs", isDir: true })).toBe("docs/")
 	})
 
-	test("group headers take no cursor and read as headings", () => {
+	test("group headers take no cursor and use the matching risk color", () => {
 		expect(wantsFocus({ type: "group" })).toBe("none")
 		expect(isFocused({ type: "group" }, 0, 0, "ops")).toBe(false)
 		const behaviors = createBehaviors(behaviorEnv)
-		expect(behaviors.rowFg(null, { row: { type: "group", name: "System" }, index: 0 })).toBe("title")
+		expect(behaviors.rowFg(null, { row: { type: "group", name: "White", group: "White" }, index: 0 })).toBe("text")
+		expect(behaviors.rowFg(null, { row: { type: "group", name: "Amber", group: "Amber" }, index: 0 })).toBe("warning")
+		expect(behaviors.rowFg(null, { row: { type: "group", name: "Red", group: "Red" }, index: 0 })).toBe("error")
 	})
 
 	test("pads an argument label and frames a selection's list", () => {
@@ -63,9 +66,21 @@ describe("CommandArgRow", () => {
 		expect(wantsFocus({ type: "op" })).toBe("ops")
 		expect(wantsFocus({ type: "arg" })).toBe("args")
 		expect(wantsFocus({ type: "item" })).toBe("args")
+		expect(wantsFocus({ type: "run" })).toBe("args")
 		const behaviors = createBehaviors(behaviorEnv)
 		expect(behaviors.isOp(null, { row: { type: "op" } })).toBe(true)
 		expect(behaviors.isOp(null, { row: { type: "arg" } })).toBe(false)
+		expect(behaviors.isGroup(null, { row: { type: "group" } })).toBe(true)
+		expect(behaviors.isEntry(null, { row: { type: "entry" } })).toBe(true)
+		expect(behaviors.isRun(null, { row: { type: "run" } })).toBe(true)
+		expect(behaviors.runLabel()).toBe("[Run]")
+		expect(behaviors.runLabel(null, { row: { type: "run", error: "failed" } })).toBe("[Retry]")
+		expect(behaviors.runMarginTop(null, { row: { type: "run" } })).toBe(1)
+		expect(behaviors.runMarginTop(null, { row: { type: "arg" } })).toBe(0)
+		expect(behaviors.runError(null, { row: { type: "run", error: "failed" } })).toBe("failed")
+		expect(behaviors.fieldOpen(null, { row: { type: "arg", textual: true } })).toBe("[")
+		expect(behaviors.fieldOpen(null, { row: { type: "arg", textual: false } })).toBe("")
+		expect(behaviors.groupAttributes()).toBe(0)
 	})
 
 	test("focus requires the right column and index", () => {

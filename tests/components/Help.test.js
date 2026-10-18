@@ -34,6 +34,16 @@ describe("components Help", () => {
 		expect(behaviors.rule()).toEqual(["top"])
 	})
 
+	test("shows the scrollbar only when the reference exceeds its viewport", () => {
+		const bar = { visible: false }
+		const self = { ref: { scroll: { verticalScrollBar: bar } } }
+		const behaviors = createBehaviors({ theme, rows: () => [] })
+		behaviors.scrollbar(self, { size: { height: 14 } })
+		expect(bar.visible).toBe(true)
+		behaviors.scrollbar(self, { size: { height: 60 } })
+		expect(bar.visible).toBe(false)
+	})
+
 	test("key glyphs are human readable", () => {
 		expect(keyGlyph({ key: "up" })).toBe("↑")
 		expect(keyGlyph({ key: "w", ctrl: true })).toBe("^W")

@@ -25,7 +25,7 @@ function bookmarkTitle(mode) {
 function bookmarkFooter(mode) {
 	return unwrap(mode) === "name"
 		? "name the bookmark   ↵ save   Esc cancel"
-		: "↑↓ move   ↵ jump   Esc close"
+		: "↑↓ move   ⌫ remove   ↵ jump   Esc close"
 }
 
 // Function: targetLine

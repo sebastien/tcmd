@@ -72,8 +72,6 @@ describe("golden frames", () => {
 			expect(frame).toContain(" /home")
 			// A symlink row prints its target, `ls -l` style.
 			expect(frame).toContain("notes-link -> notes.txt")
-			// No scrollbar chrome: the content is tracked by keepVisible.
-			expect(frame).not.toContain("█")
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -197,32 +195,37 @@ describe("golden frames", () => {
 		}
 	})
 
-	test("command panel lists operations and bound arguments", async () => {
+	test("command panel groups name-only operations and shows bound arguments with Run", async () => {
 		const { setup, session } = await makeSetup(120, 30)
 		try {
 			setup.mockInput.pressKey(":")
 			await settle(setup)
 			const frame = setup.captureCharFrame()
-			// The entry list opens on `bookmark` (the first CLI operation).
+			// The entry list opens on `bookmark`, first in the White group.
 			expect(frame).toContain(" Command · bookmark ")
-			expect(frame).toContain("copy FROM TO")
-			expect(frame).toContain("FROM")
+			expect(frame).toContain("White")
+			expect(frame).toContain("Amber")
+			const groupSpans = setup.captureSpans().lines
+				.flatMap((line) => line.spans)
+				.filter((span) => ["White", "Amber"].includes(span.text))
+			expect(groupSpans.map((span) => span.attributes)).toEqual([1, 1])
+			expect(frame).toContain("copy")
+			expect(frame).not.toContain("copy FROM TO")
 			// bookmark's PATH is a single path: it renders as a pre-filled,
 			// read-only path, not a list.
 			expect(frame).toContain("/home/documents")
-			// Each operation row advertises the arguments it takes.
-			expect(frame).toContain("[NAME] [PATH]")
+			expect(frame).toContain("[Run]")
+			const lines = frame.split("\n")
+			const pathLine = lines.findIndex((line) => line.includes("/home/documents"))
+			const runLine = lines.findIndex((line) => line.includes("[Run]"))
+			expect(runLine).toBeGreaterThanOrEqual(pathLine + 2)
 			// A vertical rule divides the command list from the argument pane:
 			// the rows carry a "│" between the two panes.
 			expect(frame).toMatch(/bookmark[^\n]*│/)
-			// The list is flat: the CLI operations only, no group headers and
-			// no internal TinyCmd actions.
-			expect(frame).not.toContain("System")
-			expect(frame).not.toContain("Commands")
+			// No internal TinyCmd actions appear in the list.
 			expect(frame).not.toContain("Open file")
-			// The right pane heads with the command name and foots with the
-			// resolved command.
-			expect(frame).toContain("bookmark /home/documents")
+			// The right pane does not echo a resolved command summary.
+				expect(frame).not.toContain("bookmark /home/documents")
 			// The filter prompt is the colon in the left pane.
 			expect(frame).toContain(":")
 			// The panel keys are advertised in its own footer.
@@ -234,7 +237,7 @@ describe("golden frames", () => {
 		}
 	})
 
-	test("the panel lists only the CLI operations, ranked by match", async () => {
+	test("the panel filters name-only CLI operations", async () => {
 		const { setup, session } = await makeSetup(120, 30)
 		try {
 			setup.mockInput.pressKey(":")
@@ -242,11 +245,34 @@ describe("golden frames", () => {
 			await setup.mockInput.typeText("open")
 			await settle(setup)
 			// Only the CLI operation matches; the internal actions are gone.
-			expect(session.panelItems.value.map((item) => item.id)).toEqual(["op:open"])
+			expect(session.panelItems.value.map((item) => item.id)).toEqual(["group:white", "op:open"])
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain(" Command · open ")
-			expect(frame).toContain("open PATH...")
+			expect(frame).not.toContain("open PATH...")
 			expect(frame).not.toContain("Open file")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("the command list scrolls to the selected command while Run follows its arguments", async () => {
+		const { setup, session } = await makeSetup(120, 18)
+		try {
+			session.dispatch("panel.open")
+			await settle(setup)
+			const last = session.panelFiltered.value.length - 1
+			session.dispatch("panel.setOp", { index: last })
+			await settle(setup)
+			await new Promise((resolve) => setTimeout(resolve, 30))
+			const lines = setup.captureCharFrame().split("\n")
+			const eraseLine = lines.findIndex((line) => line.includes(">  erase"))
+			expect(eraseLine).toBeGreaterThanOrEqual(0)
+			expect(lines.some((line) => line.includes("[Run]"))).toBe(true)
+			// The final risk group is in view after the list scrolls, while the
+			// arguments and Run action remain available in the right pane.
+			expect(lines.some((line) => line.includes("Red"))).toBe(true)
+			expect(lines.some((line) => line.includes("White"))).toBe(false)
+			expect(session.panelOpIndex.value).toBe(last)
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -265,14 +291,17 @@ describe("golden frames", () => {
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain(" Command · edit ")
 			expect(frame).not.toContain("bookmark [NAME]")
-			// The resolved line sits at the foot of the argument pane.
-			expect(frame).toContain("edit /home/documents")
-			// Tab walks the ring: the PATH header, then back to the filter
-			// (edit has a single selection argument).
+			// No resolved command summary is shown; the arguments are followed by Run.
+			expect(frame).toContain("[Run]")
+			expect(frame).not.toContain("edit /home/documents")
+			// Tab walks the ring: PATH, Run, then back to the filter.
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			expect(session.panelFocus.value).toBe("args")
 			expect(session.panelRowIndex.value).toBe(0)
+			setup.mockInput.pressKey("\t")
+			await settle(setup)
+			expect(session.panelRowIndex.value).toBe(1)
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
 			expect(session.panelFocus.value).toBe("ops")
@@ -314,7 +343,7 @@ describe("golden frames", () => {
 		try {
 			setup.mockInput.pressKey(":")
 			await settle(setup)
-			// The list opens on `bookmark` (the first CLI operation); filter to
+			// The list opens on `bookmark` (the first White operation); filter to
 			// the runnable `copy` draft.
 			await setup.mockInput.typeText("copy")
 			await settle(setup)
@@ -325,6 +354,9 @@ describe("golden frames", () => {
 			await new Promise((resolve) => setTimeout(resolve, 20))
 			expect(session.panelOpen.value).toBe(false)
 			expect(session.notice.value?.text).toContain("copied")
+			await new Promise((resolve) => setTimeout(resolve, 2600))
+			await settle(setup)
+			expect(session.notice.value).toBeNull()
 		} finally {
 			setup.renderer.destroy()
 		}

@@ -15,7 +15,6 @@
 // - `bar`: true when the command appears in the command bar's key hints.
 // - `hidden`: true for internal commands that never show in the panel.
 
-import { DEFAULT_KEYMAP, keyGlyph } from "./keymap.js"
 import { basename, parent as parentOf } from "./path.js"
 import { PANEL_FOCUS, argvFor, bindingAt, missingBinding, rowAt, withArgValue, withToggledItem } from "./panel.js"
 import { hasBinaryByte, previewKind, SNIFF_BYTES } from "./preview.js"
@@ -49,6 +48,7 @@ const BOOKMARK_NAME_KEYS = [
 // Command-bar hints while picking a bookmark.
 const BOOKMARK_LIST_KEYS = [
 	{ id: null, title: "Navigate", keys: "↑/↓" },
+	{ id: null, title: "Remove", keys: "⌫" },
 	{ id: null, title: "Jump", keys: "Enter", primary: true },
 	{ id: null, title: "Close", keys: "Esc" },
 ]
@@ -322,6 +322,21 @@ const commands = [
 		hidden: true,
 		run(session) {
 			moveBookmark(session, 1)
+		},
+	},
+	{
+		id: "bookmark.remove",
+		title: "Remove bookmark",
+		kind: "ui",
+		hidden: true,
+		async run(session) {
+			const items = session.bookmarkItems.value ?? []
+			const index = clampCursor(session.bookmarkIndex.value, items.length)
+			const item = items[index]
+			if (!item) return
+			if (!(await session.bookmarks.remove(item.name))) return
+			session.bookmarkIndex.set(clampCursor(index, session.bookmarkItems.value.length))
+			session.notice.set({ kind: "tip", text: `removed bookmark ${item.name}` })
 		},
 	},
 	{
@@ -716,27 +731,27 @@ const commands = [
 		kind: "ui",
 		hidden: true,
 		run(session, payload) {
-			// Tab cycles the focus ring: the command filter then each argument
-			// header, wrapping at both ends (an item row is reached with the
-			// arrows). Shift-Tab walks it backwards.
+			// Tab cycles the focus ring: the command filter, each argument header,
+			// then the Run action, wrapping at both ends (an item row is reached
+			// with the arrows). Shift-Tab walks it backwards.
 			const delta = payload?.delta === -1 ? -1 : 1
 			const rows = session.panelRows.value
-			const headers = []
-			for (let i = 0; i < rows.length; i++) if (rows[i].type === "arg") headers.push(i)
-			if (!headers.length) return
+			const stops = []
+			for (let i = 0; i < rows.length; i++) if (rows[i].type === "arg" || rows[i].type === "run") stops.push(i)
+			if (!stops.length) return
 			if (session.panelFocus.value === PANEL_FOCUS.OPS) {
-				session.panelRowIndex.set(delta > 0 ? headers[0] : headers[headers.length - 1])
+				session.panelRowIndex.set(delta > 0 ? stops[0] : stops[stops.length - 1])
 				session.panelFocus.set(PANEL_FOCUS.ARGS)
 				return
 			}
-			const at = headers.indexOf(session.panelRowIndex.value)
+			const at = stops.indexOf(session.panelRowIndex.value)
 			if (delta > 0) {
-				if (at === -1 || at >= headers.length - 1) session.panelFocus.set(PANEL_FOCUS.OPS)
-				else session.panelRowIndex.set(headers[at + 1])
+				if (at === -1 || at >= stops.length - 1) session.panelFocus.set(PANEL_FOCUS.OPS)
+				else session.panelRowIndex.set(stops[at + 1])
 			} else if (at <= 0) {
 				session.panelFocus.set(PANEL_FOCUS.OPS)
 			} else {
-				session.panelRowIndex.set(headers[at - 1])
+				session.panelRowIndex.set(stops[at - 1])
 			}
 		},
 	},
@@ -868,6 +883,7 @@ const commands = [
 		run(session) {
 			const entry = pickerEntry(session)
 			if (!entry) return undefined
+			if (entry.type === "parent") return session.dispatch("panel.pick.parent")
 			// A directory descends unless this is a destination picker, where
 			// every row is already a valid choice.
 			if (entry.isDir && session.panelPickerMode.value !== "dir") {
@@ -883,6 +899,7 @@ const commands = [
 		hidden: true,
 		run(session) {
 			const entry = pickerEntry(session)
+			if (entry?.type === "parent") return session.dispatch("panel.pick.parent")
 			if (entry?.isDir) return descendPicker(session, entry.path)
 			return undefined
 		},
@@ -894,8 +911,10 @@ const commands = [
 		hidden: true,
 		async run(session) {
 			session.pickerQuery.set("")
+			const cameFrom = session.pickerPane.path.value
 			await session.pickerPane.up()
-			session.panelRowIndex.set(0)
+			const index = session.pickerRows.value.findIndex((row) => row.path === cameFrom)
+			session.panelRowIndex.set(index >= 0 ? index : 0)
 		},
 	},
 	{
@@ -944,10 +963,15 @@ const commands = [
 				focusBinding(session, missing)
 				return
 			}
+			session.panelRunError?.set(null)
 			const status = await runOperation(session, op, argvFor(draft))
 			// A confirm keeps the panel open until the user answers; a run
 			// closes it. Errors stay open so the draft can be fixed.
-			if (status === "ran") closePanel(session)
+			if (status === "error") keepPanelError(session)
+			else if (status === "ran") {
+				showBriefPanelResult(session)
+				closePanel(session)
+			}
 		},
 	},
 	{
@@ -1007,7 +1031,11 @@ const commands = [
 				// A panel-originated confirm re-runs its draft and, on success,
 				// closes the panel that was waiting on it.
 				return runOperation(session, op, pending.args, { confirmed: true }).then((status) => {
-					if (status === "ran" && session.panelOpen?.value) closePanel(session)
+					if (status === "error" && session.panelOpen?.value) keepPanelError(session)
+					if (status === "ran" && session.panelOpen?.value) {
+						showBriefPanelResult(session)
+						closePanel(session)
+					}
 					return status
 				})
 			}
@@ -1069,47 +1097,16 @@ function getCommand(id) {
 // Function: getCommandBarItems
 // Command-bar rows for the current context: the panel's key hints while it is
 // open, the filter hints while a pane filter is capturing input, the bookmark
-// hints while the picker owns the keyboard, the held modifier's chords (see
-// `getModifierBarItems`), the `bar`-flagged UI commands otherwise (keymap
-// order). Takes the context as named fields — four adjacent flags are too easy
-// to transpose.
-function getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, overlay, modifier }) {
+// hints while the picker owns the keyboard, or the `bar`-flagged UI commands
+// otherwise (keymap order). Takes the context as named fields — four adjacent
+// flags are too easy to transpose.
+function getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, overlay }) {
 	if (panelOpen) return panelPicking ? PANEL_PICK_KEYS : PANEL_HINT_KEYS
 	if (bookmarkOpen) return bookmarkMode === "name" ? BOOKMARK_NAME_KEYS : BOOKMARK_LIST_KEYS
 	if (overlay === "history") return HISTORY_KEYS
 	if (overlay === "trash") return TRASH_KEYS
 	if (filtering) return FILTER_KEYS
-	if (modifier) return getModifierBarItems(modifier)
 	return commands.filter((command) => command.bar).map(barRow)
-}
-
-// Function: getModifierBarItems
-// The hints revealed while a modifier ("shift"/"ctrl") is held: every command
-// bound under it in the keymap, in binding order, rendered like the bar's own
-// entries, with the `?` reference trailing. The help overlay is
-// presentation-only (each renderer intercepts `?` and owns its own cell), so it
-// is appended by hand rather than looked up through the keymap.
-function getModifierBarItems(modifier) {
-	const byId = new Map(commands.map((command) => [command.id, command]))
-	const rows = []
-	const rowsById = new Map()
-	for (const binding of DEFAULT_KEYMAP) {
-		if (!binding[modifier]) continue
-		const command = byId.get(binding.command)
-		if (!command) continue
-		const chord = keyGlyph(binding)
-		const row = rowsById.get(binding.command)
-		if (row) {
-			if (!row.keys.split("/").includes(chord)) row.keys += `/${chord}`
-		} else {
-			const item = { ...barRow(command), keys: chord }
-			rowsById.set(binding.command, item)
-			rows.push(item)
-		}
-	}
-	const help = byId.get("app.help")
-	if (help && !rowsById.has("app.help")) rows.push(barRow(help))
-	return rows
 }
 
 // Function: barRow
@@ -1379,6 +1376,7 @@ function openPanel(session, options = {}) {
 	session.panelPicking.set(false)
 	session.panelPickerArg.set(-1)
 	session.panelPendingRun.set(false)
+	session.panelRunError?.set(null)
 	session.panelOpen.set(true)
 	if (!options.name) return
 	// Select the operation by index rather than by query, so the filter stays
@@ -1465,6 +1463,32 @@ function choosePicker(session, path) {
 
 function closePanel(session) {
 	session.panelOpen.set(false)
+	session.panelRunError?.set(null)
+}
+
+// Keep an operation error in the panel action row rather than duplicating it
+// in the command bar underneath the modal.
+function keepPanelError(session) {
+	const notice = session.notice?.value
+	session.panelRunError?.set(notice?.text ?? "The command failed")
+	session.notice?.set(null)
+	const runIndex = session.panelRows?.value?.findIndex((row) => row.type === "run") ?? -1
+	if (runIndex >= 0) {
+		session.panelFocus.set(PANEL_FOCUS.ARGS)
+		session.panelRowIndex.set(runIndex)
+	}
+}
+
+// Successful panel results briefly replace the command bar's normal hints.
+// A later dispatch can replace the notice first; the identity check prevents
+// this timer from clearing that newer status.
+function showBriefPanelResult(session) {
+	const notice = session.notice?.value
+	if (!notice || notice.kind === "error") return
+	const timer = setTimeout(() => {
+		if (session.notice?.value === notice) session.notice.set(null)
+	}, 2500)
+	timer?.unref?.()
 }
 
 export {
@@ -1474,6 +1498,5 @@ export {
 	getCommand,
 	getCommandBarItems,
 	getCommands,
-	getModifierBarItems,
 	openPanel,
 }

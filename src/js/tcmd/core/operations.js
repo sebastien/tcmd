@@ -10,10 +10,10 @@
 // Operations own their side effects and return a one-line message (shown in
 // the command bar) or undefined.
 //
-// Registry entries carry the presentation metadata the panel renders:
+// Registry entries carry presentation metadata used by the panel and help:
 // `signature`, `description`, `aliases` and an optional `confirmText`. An
-// optional `risk` ("caution" for a move, "destructive" for delete/erase) lets
-// the command panel tint the operation by how dangerous it is.
+// optional `risk` ("caution" for a move, "destructive" for delete/erase) sets
+// the operation's color group and tint.
 //
 // They also carry `args`, the structured signature the command panel renders:
 // one descriptor per positional argument. A descriptor is
@@ -206,8 +206,48 @@ const operations = [
 	},
 	{
 		name: "rename",
-		signature: "rename FIND REPLACE PATH...",
-		description: "Rename paths with a literal find-and-replace",
+		signature: "rename FROM TO PATH",
+		description: "Rename a child path from one name to another",
+		risk: "caution",
+		arity: { min: 3, max: 3 },
+		args: [
+			{ name: "FROM", kind: "literal" },
+			{ name: "TO", kind: "literal" },
+			{ name: "PATH", kind: "path", mode: "dir" },
+		],
+		async run(session, args) {
+			const fromName = `${args[0] ?? ""}`
+			const toName = `${args[1] ?? ""}`
+			if (!fromName) throw new Error("rename needs FROM")
+			if (!toName) throw new Error("rename needs TO")
+			assertRenameName(fromName, "FROM")
+			assertRenameName(toName, "TO")
+			const paths = expandAll(session, [args[2]])
+			if (paths.length !== 1) throw new Error("rename: PATH must be a single directory")
+			const [directory] = paths
+			if (!(await isDir(session, directory))) throw new Error(`rename: PATH is not a directory: ${directory}`)
+			const move = { from: join(directory, fromName), to: join(directory, toName) }
+			if (move.from === move.to) return "rename: nothing changed"
+			if (!(await pathExists(session.fs, move.from))) throw new Error(`rename: not found: ${move.from}`)
+			await assertPathsAbsent(session.fs, [move.to])
+			await session.fs.move(move.from, move.to)
+			await refreshPanes(session)
+			recordHistory(session, {
+				label: `rename ${fromName} → ${toName}`,
+				undo: async () => {
+					await moveHistory(session, [{ from: move.to, to: move.from }])
+				},
+				redo: async () => {
+					await moveHistory(session, [move])
+				},
+			})
+			return `renamed ${fromName} to ${toName}`
+		},
+	},
+	{
+		name: "replace",
+		signature: "replace FIND REPLACE PATH...",
+		description: "Replace a literal substring in path names",
 		risk: "caution",
 		arity: { min: 3 },
 		args: [
@@ -228,7 +268,7 @@ const operations = [
 				return null
 			}
 			if (!paths.length) return null
-			const plan = renamePlan(find, replace, paths)
+			const plan = replacePlan(find, replace, paths)
 			const lines = plan.map((row) => {
 				if (row.error) return `${row.name} → ⚠ ${row.error}`
 				if (!row.changed) return `${row.name}  (unchanged)`
@@ -240,34 +280,34 @@ const operations = [
 		async run(session, args) {
 			const find = `${args[0] ?? ""}`
 			const replace = `${args[1] ?? ""}`
-			if (!find) throw new Error("rename needs FIND")
-			if (!replace) throw new Error("rename needs REPLACE")
+			if (!find) throw new Error("replace needs FIND")
+			if (!replace) throw new Error("replace needs REPLACE")
 			const paths = expandAll(session, args.slice(2))
-			if (!paths.length) throw new Error("rename needs at least one path")
-			assertNoOverlappingPaths(paths, "rename")
-			const plan = renamePlan(find, replace, paths)
+			if (!paths.length) throw new Error("replace needs at least one path")
+			assertNoOverlappingPaths(paths, "replace")
+			const plan = replacePlan(find, replace, paths)
 			const bad = plan.find((row) => row.error)
-			if (bad) throw new Error(`rename ${basename(bad.path)}: ${bad.error}`)
+			if (bad) throw new Error(`replace ${basename(bad.path)}: ${bad.error}`)
 			const duplicates = duplicateTargets(plan)
-			if (duplicates.length) throw new Error(`rename: duplicate target ${duplicates[0]}`)
-			const renameMoves = plan
+			if (duplicates.length) throw new Error(`replace: duplicate target ${duplicates[0]}`)
+			const replaceMoves = plan
 				.filter((row) => row.changed)
 				.map((row) => ({ from: row.path, to: join(parentOf(row.path), row.newName) }))
-			for (const move of renameMoves) {
-				if (!(await pathExists(session.fs, move.from))) throw new Error(`rename: not found: ${move.from}`)
+			for (const move of replaceMoves) {
+				if (!(await pathExists(session.fs, move.from))) throw new Error(`replace: not found: ${move.from}`)
 			}
-			await assertPathsAbsent(session.fs, renameMoves.map((move) => move.to))
+			await assertPathsAbsent(session.fs, replaceMoves.map((move) => move.to))
 			let count = 0
 			const moves = []
-			for (const move of renameMoves) {
+			for (const move of replaceMoves) {
 				await session.fs.move(move.from, move.to)
 				moves.push(move)
 				count += 1
 			}
 			await refreshPanes(session)
-			if (!count) return "rename: nothing changed"
+			if (!count) return "replace: nothing changed"
 			recordHistory(session, {
-				label: `rename ${count} path${count === 1 ? "" : "s"}`,
+				label: `replace ${count} path${count === 1 ? "" : "s"}`,
 				undo: async () => {
 					await moveHistory(session, moves.map(({ from, to }) => ({ from: to, to: from })))
 				},
@@ -275,7 +315,7 @@ const operations = [
 					await moveHistory(session, moves)
 				},
 			})
-			return `renamed ${count} path${count === 1 ? "" : "s"}`
+			return `replaced ${count} path${count === 1 ? "" : "s"}`
 		},
 	},
 	{
@@ -347,18 +387,19 @@ const operations = [
 		async run(session, args) {
 			const paths = expandAll(session, args)
 			const details = []
+			const results = []
 			for (const path of paths) {
 				const stats = await session.fs.stat(path)
 				if (!stats) throw new Error(`not found: ${path}`)
 				const size = stats.isDir ? await session.fs.du(path) : stats.size
+				const summary = `${stats.isDir ? "directory" : "file"} · ${humanSize(size)} · ${new Date(stats.mtimeMs || 0).toISOString()}`
 				details.push(path)
-				details.push(
-					`  ${stats.isDir ? "directory" : "file"} · ${humanSize(size)} · ${new Date(stats.mtimeMs || 0).toISOString()}`,
-				)
+				details.push(`  ${summary}`)
+				results.push(`${path} · ${summary}`)
 			}
 			session.showPreview.set(true)
 			session.previewTarget.set(await previewTarget(session, paths[0], details))
-			return `stat ${paths.join(" ")}`
+			return results.join("; ")
 		},
 	},
 	{
@@ -715,12 +756,12 @@ function findBuffer(session, name) {
 	throw new Error(`unknown selection buffer: ${name}`)
 }
 
-// Function: renamePlan
-// The literal find-and-replace mapping a `rename` runs: one row per path with
+// Function: replacePlan
+// The literal find-and-replace mapping a `replace` runs: one row per path with
 // its source basename, its new basename (every occurrence of FIND replaced by
 // REPLACE), whether it changed, and an error when the result is empty or
 // contains a path separator. Pure, so the panel preview and the run agree.
-function renamePlan(find, replace, paths) {
+function replacePlan(find, replace, paths) {
 	return (paths ?? []).map((path) => {
 		const name = basename(path)
 		const newName = name.split(find).join(replace)
@@ -731,15 +772,23 @@ function renamePlan(find, replace, paths) {
 	})
 }
 
+function assertRenameName(name, argument) {
+	if (name === "." || name === ".." || name.includes("/") || name.includes("\0")) {
+		throw new Error(`rename: ${argument} must be a single name`)
+	}
+}
+
 // Function: duplicateTargets
-// The new names two or more different paths would collide on.
+// The destination paths two or more changed paths would collide on. Basenames
+// may repeat safely when their files live in different directories.
 function duplicateTargets(plan) {
 	const seen = new Set()
 	const duplicates = new Set()
 	for (const row of plan ?? []) {
 		if (!row.changed) continue
-		if (seen.has(row.newName)) duplicates.add(row.newName)
-		seen.add(row.newName)
+		const target = join(parentOf(row.path), row.newName)
+		if (seen.has(target)) duplicates.add(target)
+		seen.add(target)
 	}
 	return [...duplicates]
 }
@@ -770,7 +819,7 @@ export {
 	pathToken,
 	recordHistory,
 	refreshPanes,
-	renamePlan,
+	replacePlan,
 	runOperation,
 }
 

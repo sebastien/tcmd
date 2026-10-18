@@ -1,5 +1,18 @@
 import { describe, expect, test } from "bun:test"
-import { components, fileListScrollTop, keepVisible, registerComponents } from "../../src/js/tcmd/tui/catalogue.js"
+import { components, fileListScrollTop, keepVisible, panelDialogHeight, panelOpScrollTop, registerComponents } from "../../src/js/tcmd/tui/catalogue.js"
+
+function hasScrollBar(setup) {
+	const colors = [
+		[37, 37, 39],
+		[154, 158, 163],
+	]
+	return setup.captureSpans().lines.some((line) =>
+		line.spans.some((span) => {
+			const bg = span.bg?.buffer
+			return bg && colors.some((color) => bg[0] === color[0] && bg[1] === color[1] && bg[2] === color[2])
+		}),
+	)
+}
 
 describe("tui components", () => {
 	test("Summary renders the shared summary logic", async () => {
@@ -50,6 +63,42 @@ describe("tui components", () => {
 			expect(frame).toContain("* ")
 		} finally {
 			setup.renderer.destroy()
+		}
+	})
+
+	test("all TUI scrollboxes show a scrollbar only while content overflows", async () => {
+		registerComponents()
+		const { testRender } = await import("select.tui")
+		const entries = Array.from({ length: 20 }, (_, index) => ({
+			isDir: false,
+			name: `file-${index}.txt`,
+			path: `/file-${index}.txt`,
+			size: index,
+		}))
+		const setup = await testRender(components.FileList, {
+			data: { cursor: 0, entries, marked: new Set(), paneId: "left" },
+			height: 5,
+			width: 40,
+		})
+		try {
+			await setup.renderOnce()
+			await setup.renderOnce()
+			expect(hasScrollBar(setup)).toBe(true)
+		} finally {
+			setup.renderer.destroy()
+		}
+
+		const short = await testRender(components.FileList, {
+			data: { cursor: 0, entries: entries.slice(0, 1), marked: new Set(), paneId: "left" },
+			height: 5,
+			width: 40,
+		})
+		try {
+			await short.renderOnce()
+			await short.renderOnce()
+			expect(hasScrollBar(short)).toBe(false)
+		} finally {
+			short.renderer.destroy()
 		}
 	})
 })
@@ -189,5 +238,33 @@ describe("fileListScrollTop", () => {
 		const self = { ref: { list: { height: 0, scrollTop: 6 } } }
 		const data = { entries, cursor: 40, viewport: 20, marked: new Set() }
 		expect(fileListScrollTop(self, data)).toBe(6)
+	})
+})
+
+describe("panelOpScrollTop", () => {
+	test("tracks the selected command through group heading rows", () => {
+		const items = [
+			{ type: "group", name: "White" },
+			{ type: "op", entryIndex: 0 },
+			{ type: "op", entryIndex: 1 },
+			{ type: "group", name: "Amber" },
+			{ type: "op", entryIndex: 2 },
+			{ type: "op", entryIndex: 3 },
+			{ type: "group", name: "Red" },
+			{ type: "op", entryIndex: 4 },
+		]
+		const self = { ref: { ops: { height: 5, scrollTop: 0 } } }
+		const top = panelOpScrollTop(self, { items, opCursor: 4 })
+		expect(top).toBe(5)
+		expect(top).toBeLessThanOrEqual(7)
+		expect(7).toBeLessThan(top + 3)
+	})
+})
+
+describe("panelDialogHeight", () => {
+	test("reserves room for the pinned action on compact terminals", () => {
+		expect(panelDialogHeight({ ctx: { height: 18 } })).toBe(15)
+		expect(panelDialogHeight({ ctx: { height: 30 } })).toBe(21)
+		expect(panelDialogHeight({ ctx: {} })).toBe("72%")
 	})
 })

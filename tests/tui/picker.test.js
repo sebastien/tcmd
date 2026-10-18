@@ -34,6 +34,9 @@ describe("tui picker", () => {
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain("⌕")
 			expect(frame).toContain("/home")
+			expect(frame).toContain("..")
+			expect(frame).toContain("┌")
+			expect(frame).toContain("└")
 			// A destination picker lists directories only, suffixed with a slash.
 			expect(frame).toContain("docs/")
 			expect(frame).toContain("tmp/")
@@ -48,6 +51,9 @@ describe("tui picker", () => {
 		const { setup, session } = await makeSetup(TREE, 100, 20)
 		try {
 			await openPicker(setup, session)
+			session.dispatch("panel.pick.setCursor", {
+				index: session.pickerRows.value.findIndex((row) => row.name === "docs"),
+			})
 			await session.dispatch("panel.pick.enter")
 			await settle(setup)
 			expect(session.panelPicking.value).toBe(false)
@@ -58,19 +64,23 @@ describe("tui picker", () => {
 		}
 	})
 
-	test("the runs line previews a rename mapping", async () => {
+	test("replace previews its mapping above the pinned Run action", async () => {
 		const { setup, session } = await makeSetup(TREE, 100, 20)
 		try {
 			const index = session.panes.left.entries.value.findIndex((entry) => entry.name === "notes.txt")
 			session.panes.left.cursor.set(index)
 			session.dispatch("panel.open")
-			const opIndex = session.panelFiltered.value.findIndex((entry) => entry.name === "rename")
+			const opIndex = session.panelFiltered.value.findIndex((entry) => entry.name === "replace")
 			session.dispatch("panel.setOp", { index: opIndex })
 			session.panelDraft.set(
 				session.panelDraft.value.map((b) => (b.name === "REPLACE" ? { ...b, value: "memo.txt" } : b)),
 			)
 			await settle(setup)
-			expect(setup.captureCharFrame()).toContain("notes.txt → memo.txt")
+			const frame = setup.captureCharFrame()
+			expect(frame).toContain("REPLACE")
+			expect(frame).toContain("memo.txt")
+			expect(frame).toContain("[Run]")
+			expect(frame).toContain("notes.txt → memo.txt")
 		} finally {
 			setup.renderer.destroy()
 		}

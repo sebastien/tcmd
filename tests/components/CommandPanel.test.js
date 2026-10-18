@@ -36,26 +36,24 @@ describe("CommandPanel", () => {
 		expect(behaviors.argsEmptyText()).toBe("no arguments")
 		// A TinyCmd action binds nothing; a CLI operation always has rows.
 		expect(behaviors.argsEmpty(null, { rows: [] })).toBe(true)
+		expect(behaviors.argsEmpty(null, { rows: [{ type: "run", key: "panel:run" }] })).toBe(true)
 		expect(behaviors.argsEmpty(null, { rows: [{ key: "arg:0" }] })).toBe(false)
 	})
 
-	test("draws a rule between the columns and above the runs preview", () => {
+	test("a parent row does not hide the picker's no-matches state", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		expect(behaviors.pickerEmpty(null, { picking: true, rows: [{ type: "parent" }] })).toBe(true)
+		expect(behaviors.pickerEmpty(null, { picking: true, rows: [{ type: "parent" }, { type: "entry" }] })).toBe(false)
+		expect(behaviors.pickerEmpty(null, { picking: false, rows: [] })).toBe(false)
+	})
+
+	test("draws a rule between the columns and under the filter", () => {
 		const behaviors = createBehaviors(behaviorEnv)
 		// The vertical divider owns its box's left edge; the horizontal one
-		// sits at the top of its rule row, in the secondary border colour.
+		// sits below the command filter, in the secondary border colour.
 		expect(behaviors.sideRule()).toEqual(["left"])
 		expect(behaviors.headRule()).toEqual(["top"])
 		expect(behaviors.ruleFg()).toBe("border")
-	})
-
-	test("previews the resolved command dimly and reports runnable state", () => {
-		const behaviors = createBehaviors(behaviorEnv)
-		expect(behaviors.preview(null, { command: "/home/a /tmp" })).toBe("/home/a /tmp")
-		// The resolved line is dim; the focused missing field and the `«NAME»`
-		// placeholder carry the "not runnable" signal.
-		expect(behaviors.previewFg()).toBe("dim")
-		expect(behaviors.runnableState(null, { runnable: true })).toBe("true")
-		expect(behaviors.runnableState(null, { runnable: false })).toBe("false")
 	})
 
 	test("heads the argument pane with the command name and focuses the filter", () => {
@@ -88,5 +86,18 @@ describe("CommandPanel", () => {
 		})
 		expect(withRows.opRows(null, { items: [1] })).toEqual([1])
 		expect(withRows.argRows(null, { rows: [2] })).toEqual([2])
+	})
+
+	test("uses the renderer's panel height when provided", () => {
+		const behaviors = createBehaviors({ ...behaviorEnv, panelHeight: () => 15 })
+		expect(behaviors.panelHeight()).toBe(15)
+		expect(createBehaviors(behaviorEnv).panelHeight()).toBe("72%")
+	})
+
+	test("renders only operation-specific preflight output", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		expect(behaviors.hasPreview(null, { preview: "a → b" })).toBe(true)
+		expect(behaviors.preview(null, { preview: "a → b" })).toBe("a → b")
+		expect(behaviors.hasPreview(null, { preview: null })).toBe(false)
 	})
 })

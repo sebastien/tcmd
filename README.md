@@ -29,21 +29,27 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
 - Operations over the current panes: copy, move, mkdir, delete/erase,
   stat, touch, selection buffers, edit/view/open and shell commands
 - Command panel (`:`), the one entry point, a two-pane palette: the left pane
-  filters (`:xxx`) over the CLI operations (copy, move, rename, delete… — the
+  filters (`:xxx`) over CLI operations grouped by color: white for ordinary
+  commands, amber for caution, and red for destructive commands. Bold section
+  titles head indented command names, alphabetized within each color (the
   internal TinyCmd actions live on their own keys, not the panel). The right
-  pane lists the selected command's arguments under its name — each row an
-  aligned label and its value in a boxed field (a text field to fill in), or a
-  checkbox (multiple) / radio (single) list of the selected paths wrapped in its
-  own border, with a lone path shown read-only — and the resolved command at its
-  foot. A selection argument draws from the *focused* column, so in the explorer
-  focusing the parent mirror selects the directory under its cursor.
-  `Tab` cycles the filter and the argument rows; `Enter` runs a complete
-  command or jumps to the next missing argument. `!` lands straight on the shell
+  pane lists the selected command's arguments under its name — editable values
+  use filled fields, while read-only values are plain and muted; selections use
+  a checkbox (multiple) / radio (single)
+  list of the selected paths wrapped in its own border, with a lone path shown
+  read-only. `[Run]` follows the arguments after a blank line, aligned right in
+  the command's risk color; a failed run shows its error and `[Retry]`, while a
+  successful result briefly replaces the command bar at the bottom. A selection
+  argument draws from the *focused* column, so in the explorer focusing the parent mirror
+  selects the directory under its cursor. `Tab` cycles the filter, arguments and
+  Run button; `Enter` runs a complete command or jumps to the next missing
+  argument. `!` lands straight on the shell
   command. A destination/path argument browses the filesystem in a file picker
   (`⌃O`): explorer mode has no destination pane, so a move or copy there asks
-  where to. A `rename` operation replaces a literal `FIND` with `REPLACE` across
-  the selection — one file replaces its whole name — previewing each
-  `old → new` before it runs.
+  where to. A `replace` operation replaces a literal `FIND` with `REPLACE`
+  across the selection — one file replaces its whole name — previewing each
+  `old → new` mapping before it runs. Exact `rename FROM TO PATH` renames one named
+  child inside `PATH`.
 - Keyboard and mouse navigation, inline file previews — a previewed directory
   renders as a pane (its breadcrumbs over its own listing), in both views, a
   source file highlights with tree-sitter (JavaScript, TypeScript, Markdown and
@@ -87,8 +93,9 @@ lands on the directory you left), `Esc`/`⇧Esc` history back/forward, `Tab`/`�
 (`⇧Tab` goes back), `t` toggle the commander/explorer view, `Space` mark, `b`
 bookmark the cursor entry (or the pane
 directory) under a basename-defaulted name, `g` jump to a bookmark, `:` open the
-command panel (the one entry point: CLI operations and TinyCmd actions, their
-arguments, the live resolved command, and the inline file picker on `⌃O`), `v` preview (fullscreen viewer when
+command panel (the one entry point for CLI operations, grouped by risk with
+editable arguments, an explicit Run button and the inline file picker on `⌃O`),
+`v` preview (fullscreen viewer when
 the terminal is narrow), `⇧V` maximize the preview over the columns and back
 again, `O`/`E` open/edit the previewed file, `/` fuzzy-filter
 the active pane (`Enter` keeps it, `Esc` clears), `!` open the panel on the
@@ -120,13 +127,10 @@ context-aware inspector sits
 on the right when the terminal is at least 100 columns wide, and becomes a
 fullscreen viewer below that; `⇧V` expands it over the whole pane row —
 parent and current included — and brings the previous layout back on the next
-press. The status bar lists every binding as a bracket
-shorthand (`[Open ⏎]`, `[Help ?]`) wrapping over as many rows as the width
-demands — the
+press. The status bar lists every binding as a bracket shorthand
+(`[Open ⏎]`, `[Help ?]`) wrapping over as many rows as the width demands — the
 marked count trails the list, and a notice or error swaps the keys for a
-one-line status. In the TUI, holding `Shift` or `Ctrl` swaps the bar for that
-modifier's own chords (through the kitty keyboard protocol) and releasing it
-brings the default hints back. Below 64×16
+one-line status. Below 64×16
 the app shows a resize hint instead of the workspace.
 
 ### View modes
@@ -278,7 +282,7 @@ src/js/tcmd/
     directory.js one pane's directory: path, entries, view, cursor, marks
     pane.js      one directory, proxying its cells + currentPane resolution
     bookmarks.js named bookmarks (path + file/dir kind) + the memory/file stores
-    panel.js     command panel: CLI ops + TinyCmd actions, args bound from context
+    panel.js     grouped CLI command panel, with arguments bound from context
     session.js   two panes + parent/preview mirrors, view mode, active pane, preview, panel, dispatch
     keymap.js    key chords -> command ids
     commands.js  command registry; commands are `run(session, payload)`
@@ -382,9 +386,8 @@ tests run the shared logic through select.js on a happy-dom document.
       bar, command panel, text preview
 - [x] File operations (copy/move/delete/erase/stat/touch/sel), with the
       `$A`/`$B` pane filesets and `$FILE` still resolving in any argument
-- [x] Unified command panel (`:`): the CLI operations and the TinyCmd actions in
-      one filtered list, each marked by its namespace, with editable arguments
-      and a resolved-command preview; `!` lands on the shell command
+- [x] Grouped command panel (`:`): white / amber / red risk sections, editable
+      arguments, an explicit Run action and an inline picker; `!` lands on shell
 - [x] Pane fuzzy filtering (`/` to filter, `Enter` to keep, `Esc` to clear)
 - [x] Named bookmarks (`b` records, `g` jumps, persisted to a JSON file)
 - [ ] Quick find, grep

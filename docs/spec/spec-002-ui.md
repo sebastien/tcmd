@@ -131,9 +131,7 @@ events, with the renderer dimensions as a fallback):
   columns until the next press brings the previous layout back.
 - The status bar wraps its shorthands onto as many rows as the width demands
   (up to three at the minimum width); nothing is trimmed — the palette and the
-  `?` reference carry the same bindings. In the TUI, holding `Shift` or `Ctrl`
-  swaps the bar for that modifier's own chords (kitty keyboard protocol), and
-  releasing it restores the default hints.
+  `?` reference carry the same bindings.
 
 ## Pane filter
 
@@ -151,41 +149,46 @@ events, with the renderer dimensions as a fallback):
 - Command panel (`:`/`m`): a Commando-style structured view over the operations.
   A filter input at the top narrows the operation list as you type — the
   matching command takes the cursor (`edit` highlights `edit`) — and the left
-  column lists the operations alphabetically, ranked by match importance while
-  filtering (a prefix match outranks a subsequence, signature-only matches
-  rank last). Each operation shows its argument list, `delete`/`erase` in red
-  and `move` in amber to flag risk. A vertical rule divides the left column
-  from the right one, which shows the selected
+  column groups operations by color: white for ordinary commands, amber for
+  caution, and red for destructive. Bold section titles head indented,
+  alphabetized command names. A vertical rule divides the left column from
+  the right one, which shows the selected
   operation's arguments bound from the live context — a `FROM`/`PATH`
   selection argument lists the SRC or active pane's marked paths (falling back
   to the cursor entry) with a `[x]`/`[ ]` toggle each, the basename in full
   followed by its dimmed parent directory, `TO` resolves to the DST pane's
   directory (editable in place), and textual arguments (`BUF`, `NAME`, `CMD`)
-  are typed in the field under the columns. A horizontal rule separates the
-  columns from the `runs` line
-  below, which previews the full command the draft maps to, as the shell
-  would see it (the
-  operation name plus shell-quoted arguments wrapping over as many lines as
-  needed; a `«NAME»` placeholder marks a required argument still to fill, and
-  the line reads as an error until it is runnable). The selection is transient:
-  toggling edits a draft that never mutates the pane marks, and running
-  executes the operation directly (confirms still route through the confirm
-  overlay). Type to filter, `↑↓` move within a column, `⇥`/`⇧⇥` cycle the
-  focus ring from the command through each argument (wrapping at both ends),
-  `Space` toggles, `↵` runs the highlighted command, `Esc` closes.
+  are typed in a filled field; read-only values appear plain and muted. The
+  command list and arguments scroll with their cursors. The `[Run]`/`[Retry]`
+  action stays visible beneath the argument list, aligned right and tinted with
+  the command's white/amber/red risk color; errors move focus to it and show the
+  error beside `[Retry]`. `replace` additionally previews each `old → new`
+  mapping between the arguments and the action. A successful result briefly
+  replaces the command bar at the bottom. The selection is transient: toggling edits a draft
+  that never mutates the pane marks, and running executes the operation directly
+  (confirms still route through the confirm overlay). Type to filter, `↑↓` move within a
+  column, `⇥`/`⇧⇥` cycle the focus ring from the command through each argument
+  and Run (wrapping at both ends), `Space` toggles, `↵` runs, `Esc` closes.
 
 ```text
 ╭─ Command · bookmark ────────────────────────────────────────────────────╮
-│ ›                                                                       │
-│  bookmark [NAME] [PATH]    │ >  NAME                                    │
-│  copy FROM TO              │    PATH  SRC · 1 selected                  │
-│  delete PATH...            │    [x] documents  /home                    │
-│  edit PATH                 │                                            │
-│  erase PATH...             │                                            │
-│  …                         │                                            │
-│─────────────────────────────────────────────────────────────────────────│
-│ runs                                                                    │
-│ bookmark /home/documents                                                │
+│ :                        │ bookmark                                     │
+│──────────────────────────│──────────────────────────────────────────────│
+│  White                   │ >  NAME [ (empty) ]                           │
+│    bookmark              │    PATH /home/documents                       │
+│    copy                  │                                              │
+│    edit                  │ [Run]                                        │
+│    mkdir                 │                                              │
+│    open                  │                                              │
+│    run                   │                                              │
+│    …                     │                                              │
+│  Amber                   │                                              │
+│    move                  │                                              │
+│    rename                │                                              │
+│    replace               │                                              │
+│  Red                     │                                              │
+│    delete                │                                              │
+│    erase                 │                                              │
 │             type to filter  ⇥ args  Spc toggle  ↵ run  Esc close        │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```

@@ -3,6 +3,7 @@ import { openPanel } from "../../src/js/tcmd/core/commands.js"
 import { createPane } from "../../src/js/tcmd/core/pane.js"
 import { createSession } from "../../src/js/tcmd/core/session.js"
 import {
+	PANEL_FOCUS,
 	argvFor,
 	bindArgs,
 	decodePathToken,
@@ -69,20 +70,20 @@ describe("panel", () => {
 		}
 	})
 
-	test("filterPanelEntries orders CLI first and ranks matches by importance", () => {
+	test("filterPanelEntries groups by risk color and alphabetizes within each color", () => {
 		const entries = panelEntries()
-		// No query: every entry, alphabetically by name.
+		// Groups use the fixed White / Amber / Red order; names are sorted
+		// alphabetically within each risk color.
 		expect(filterPanelEntries(entries, "").map((entry) => entry.name)).toEqual(
-			entries.map((entry) => entry.name).sort((a, b) => a.localeCompare(b)),
+			["bookmark", "copy", "edit", "mkdir", "open", "run", "sel", "stat", "touch", "view", "move", "rename", "replace", "delete", "erase"],
 		)
-		// A query ranks by match importance: `open` (prefix) outranks `copy`
-		// (a subsequence match).
-		expect(filterPanelEntries(entries, "op").map((entry) => entry.name)).toEqual(["open", "copy"])
+		// Matches retain color group order rather than relevance-ranking.
+		expect(filterPanelEntries(entries, "op").map((entry) => entry.name)).toEqual(["copy", "open"])
 		expect(filterPanelEntries(entries, "edit").map((entry) => entry.name)).toEqual(["edit"])
 		// An alias matches (`!` -> run).
 		expect(filterPanelEntries(entries, "!").map((entry) => entry.name)).toEqual(["run"])
-		// A signature fragment matches (SEL's `[+|-][BUF]`), ranked last.
-		expect(filterPanelEntries(entries, "buf").map((entry) => entry.name)).toEqual(["sel"])
+		// The list no longer exposes or searches argument signatures.
+		expect(filterPanelEntries(entries, "buf")).toEqual([])
 		expect(filterPanelEntries(entries, "zzz")).toEqual([])
 	})
 
@@ -256,22 +257,32 @@ describe("panel", () => {
 	test("panelCommand and panelRunnable track the draft through the session", async () => {
 		const { session } = await makeSession()
 		session.dispatch("panel.open")
-		// The first operation (alphabetically) is `bookmark`; its PATH binds
-		// the SRC cursor, and the preview is the full command line. Its NAME —
-		// an optional literal before the filled PATH — leaves a positional
-		// gap, so the draft is not runnable until the name is filled.
+		// White/no-risk operations lead the list; `bookmark` is first and its
+		// optional NAME before PATH leaves a positional gap until filled.
 		expect(session.panelEntry.value.name).toBe("bookmark")
 		expect(session.panelCommand.value).toBe("bookmark /home/docs")
 		expect(session.panelRunnable.value).toBe(false)
-		// The panel's CLI rows advertise their argument lists.
-		expect(session.panelItems.value.find((item) => item.name === "copy").summary).toBe("FROM TO")
+		// Operation rows contain only command names; group rows show risk colors.
+		const copy = session.panelItems.value.find((item) => item.name === "copy")
+		expect(copy.type).toBe("op")
+		expect(copy.summary).toBeUndefined()
+		expect(session.panelItems.value.filter((item) => item.type === "group").map((item) => item.name)).toEqual([
+			"White", "Amber", "Red",
+		])
+		expect(session.panelItems.value.filter((item) => item.type === "op" && item.group === "Amber").map((item) => item.name)).toEqual([
+			"move", "rename", "replace",
+		])
+		expect(session.panelItems.value.filter((item) => item.type === "op" && item.group === "Red").map((item) => item.name)).toEqual([
+			"delete", "erase",
+		])
+		expect(session.panelRows.value.at(-1)).toMatchObject({ type: "run", name: "Run" })
 	})
 
 	test("run via panel dispatch executes and stays transient", async () => {
 		const { fs, session } = await makeSession()
 		session.dispatch("panel.open")
 		expect(session.panelOpen.value).toBe(true)
-		// The list opens alphabetically, on `bookmark`.
+		// The list opens on the first White/no-risk command.
 		expect(session.panelEntry.value.name).toBe("bookmark")
 		// Toggle the destination op to `delete` and run against the cursor.
 		const deleteIndex = session.panelFiltered.value.findIndex((op) => op.name === "delete")
@@ -309,6 +320,25 @@ describe("panel", () => {
 		expect(session.panelOpen.value).toBe(false)
 	})
 
+	test("panel run errors replace the action with Retry and stay local to the panel", async () => {
+		const { session } = await makeSession()
+		session.dispatch("panel.open")
+		const index = session.panelFiltered.value.findIndex((entry) => entry.name === "mkdir")
+		session.dispatch("panel.setOp", { index })
+		session.panelDraft.set(
+			session.panelDraft.value.map((binding) =>
+				binding.name === "PATH" ? { ...binding, value: "/home/docs" } : binding,
+			),
+		)
+		await session.dispatch("panel.run")
+		expect(session.panelOpen.value).toBe(true)
+		expect(session.panelRunError.value).toBe("already exists: /home/docs")
+		expect(session.notice.value).toBeNull()
+		expect(session.panelRows.value.at(-1)).toMatchObject({ type: "run", name: "Retry", error: "already exists: /home/docs" })
+		expect(session.panelFocus.value).toBe(PANEL_FOCUS.ARGS)
+		expect(session.panelCursorRow.value.type).toBe("run")
+	})
+
 	test("`:` opens the panel on the first entry, the entry column focused", async () => {
 		const { session } = await makeSession()
 		session.dispatch("panel.open")
@@ -342,7 +372,7 @@ describe("panel", () => {
 
 	test("an unknown entry name refuses to open rather than silently selecting the first", async () => {
 		const { session } = await makeSession()
-		// A renamed/removed operation is a caller bug; landing on `bookmark`
+		// A renamed/removed operation is a caller bug; landing on `open`
 		// would hide it behind a plausible-looking panel.
 		expect(() => session.dispatch("panel.shell")).not.toThrow()
 		expect(session.panelEntry.value.name).toBe("run")
@@ -377,11 +407,14 @@ describe("panel", () => {
 		// The next header is TO (index 1).
 		expect(session.panelRowIndex.value).toBe(1)
 		session.dispatch("panel.tab", { delta: 1 })
-		// Past the last header: wrap back to the filter.
+		// The Run action follows the last header.
+		expect(session.panelRowIndex.value).toBe(2)
+		session.dispatch("panel.tab", { delta: 1 })
+		// Past Run: wrap back to the filter.
 		expect(session.panelFocus.value).toBe("ops")
-		// Shift-Tab from the filter wraps to the last argument header.
+		// Shift-Tab from the filter wraps to Run.
 		session.dispatch("panel.tab", { delta: -1 })
 		expect(session.panelFocus.value).toBe("args")
-		expect(session.panelRowIndex.value).toBe(1)
+		expect(session.panelRowIndex.value).toBe(2)
 	})
 })

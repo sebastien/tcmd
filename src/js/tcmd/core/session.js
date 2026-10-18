@@ -57,7 +57,7 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// Bookmark model (named paths). The store defaults to in-memory.
 	session.bookmarks = bookmarks ?? createBookmarks()
 	// Undo/redo journal: reversible file operations (`mkdir`, `copy`, `move`,
-	// `rename`, `trash`) record an inverse here; `^Z`/`^⇧Z` and the `u` history
+	// `rename`, `replace`, `trash`) record an inverse here; `^Z`/`^⇧Z` and the `u` history
 	// panel drive it. Session-only.
 	session.journal = createJournal()
 	// The shared list overlay (`u` history, `⇧T` trash): one modal list at a
@@ -108,11 +108,6 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	session.confirm = cell(null)
 	// The pane whose filter input currently owns the keyboard, or null.
 	session.filtering = cell(null)
-	// The modifier ("shift"/"ctrl") whose chords the command bar is currently
-	// advertising, or null. Presentation-only: the TUI sets it while a
-	// modifier is held (kitty keyboard protocol); the web never does.
-	session.barModifier = cell(null)
-
 	// Back/forward restore the focused column alongside the listing: each
 	// source/destination pane captures `active` into its history entries and
 	// restores it on Esc/⇧Esc. A column the current mode does not show falls
@@ -191,6 +186,9 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	session.panelFocus = cell(PANEL_FOCUS.OPS)
 	session.panelDraft = cell([])
 	session.panelEntries = cell(panelEntries())
+	// Errors from a panel run stay beside the action so the user can retry
+	// without losing the command draft.
+	session.panelRunError = cell(null)
 
 	// Picker sub-mode: while a `dest`/`path` argument is being browsed the
 	// panel's argument column shows the picker's listing instead of the
@@ -346,9 +344,9 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// Command bar rows: context-dependent key hints (see core/commands). The
 	// panel button is dropped when a host disables the panel.
 	session.commandBarItems = derived(
-		[session.filtering, session.bookmarkOpen, session.bookmarkMode, session.panelOpen, session.panelPicking, session.overlay, session.barModifier],
-		([filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, overlay, modifier]) =>
-			getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, overlay, modifier }),
+		[session.filtering, session.bookmarkOpen, session.bookmarkMode, session.panelOpen, session.panelPicking, session.overlay],
+		([filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, overlay]) =>
+			getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, overlay }),
 	)
 
 	// The entry list filtered by the typed query; `panelOpIndex` indexes into
@@ -369,31 +367,51 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 		[session.pickerPane.entries, session.panelPickerMode],
 		([entries, mode]) => (mode === "dir" ? (entries ?? []).filter((entry) => entry.isDir) : entries ?? []),
 	)
-	session.pickerRows = derived([session.pickerVisible], ([entries]) => pickerRowList(entries))
-	// The argument column: the picker's entry rows while picking, the draft's
-	// argument rows otherwise. Focus is read from `panelRowIndex` by the row
-	// builder, so it works for both row shapes.
+	session.pickerRows = derived(
+		[session.pickerVisible, session.pickerPane.path],
+		([entries, path]) => pickerRowList(entries, path),
+	)
+	// The argument column: the picker's entry rows while picking; otherwise the
+	// selected operation's arguments followed by its explicit Run action.
 	session.panelRows = derived(
-		[session.panelDraft, session.panelPicking, session.pickerRows],
-		([draft, picking, picker]) => (picking ? picker : panelRowList(draft)),
+		[session.panelDraft, session.panelEntry, session.panelPicking, session.pickerRows, session.panelRunError],
+		([draft, entry, picking, picker, runError]) => {
+			if (picking) return picker
+			if (!entry) return []
+			const rows = panelRowList(draft)
+			rows.push({
+				type: "run",
+				key: "panel:run",
+				rowIndex: rows.length,
+				name: runError ? "Retry" : "Run",
+				risk: entry.risk ?? null,
+				group: entry.group ?? "White",
+				error: runError,
+			})
+			return rows
+		},
 	)
 	// The right pane's argument blocks (label + value/field, and a bordered
 	// item list per selection), and the label column width that aligns them.
 	session.panelLabelWidth = derived([session.panelDraft], ([draft]) =>
 		Math.max(4, ...(draft ?? []).map((binding) => `${binding.name ?? ""}`.length)),
 	)
-	// The assembled command line the draft maps to, and whether it is runnable.
-	// The preview answers "what will this run" as the shell would see it,
-	// prefixed with the entry name; a `«NAME»` marks a required argument still
-	// to fill.
-	session.panelCommand = derived(
+	// Operation-specific preflight output (currently `replace`'s old → new
+	// mapping) is distinct from the assembled shell command.
+	session.panelPreview = derived(
 		[session.panelDraft, session.panelEntry],
 		([draft, entry]) => {
-			// An operation may preview its own mapping instead of the command
-			// line (`rename` shows `old → new` per path). Anything else falls
-			// back to the assembled command line.
-			const custom = entry?.op?.preview?.(session, argvFor(draft), draft)
-			if (typeof custom === "string") return custom
+			const preview = entry?.op?.preview?.(session, argvFor(draft), draft)
+			return typeof preview === "string" ? preview : null
+		},
+	)
+	// Preserve the existing `panelCommand` projection for consumers: operations
+	// with a custom preview return it; all others return the assembled command.
+	// The panel renders custom preflight output separately from its Run action.
+	session.panelCommand = derived(
+		[session.panelDraft, session.panelEntry, session.panelPreview],
+		([draft, entry, preview]) => {
+			if (typeof preview === "string") return preview
 			const args = panelCommand(draft)
 			const name = entry?.name ?? ""
 			return args ? `${name} ${args}` : name
@@ -431,12 +449,17 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	effect([session.panelOpen, session.panelEntry], ([open, entry]) => {
 		if (!open) return
 		const draft = bindArgs(session, entry)
-		prefillPanelDraft(entry, draft)
+		prefillPanelDraft(session, entry, draft)
 		session.panelDraft.set(draft)
 	})
 	// Selecting another entry resets the argument cursor.
 	effect([session.panelEntry], () => {
 		session.panelRowIndex.set(0)
+		session.panelRunError.set(null)
+	})
+	// Editing the draft after an error gives the next attempt a clean action row.
+	effect([session.panelDraft], () => {
+		if (session.panelRunError.value) session.panelRunError.set(null)
 	})
 	// Typing a query re-anchors the entry cursor on the first match.
 	effect([session.panelQuery], () => {
@@ -448,7 +471,11 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// can never reset the argument cursor outside the picker.
 	effect([session.pickerQuery], ([query]) => {
 		session.pickerPane.setFilter(`${query ?? ""}`)
-		if (session.panelPicking.value) session.panelRowIndex.set(0)
+		if (session.panelPicking.value) {
+			const rows = session.pickerRows.value
+			const firstMatch = `${query ?? ""}` ? rows.findIndex((row) => row.type === "entry") : 0
+			session.panelRowIndex.set(firstMatch >= 0 ? firstMatch : 0)
+		}
 	})
 	// Closing the panel leaves the picker (it lives inside the panel).
 	effect([session.panelOpen], ([open]) => {
@@ -490,15 +517,39 @@ async function load(session) {
 }
 
 // Function: prefillPanelDraft
-// Seeds a freshly bound draft: a single-path `rename` prefills FIND with the
-// whole name, so typing REPLACE renames it in one step; a multi-path rename
-// keeps FIND empty for a shared substring.
-function prefillPanelDraft(entry, draft) {
-	if (entry?.op?.name !== "rename") return
-	const find = (draft ?? []).find((binding) => binding.name === "FIND")
-	const selection = (draft ?? []).find((binding) => binding.kind === "selection")
-	const selected = (selection?.items ?? []).filter((item) => item.selected)
-	if (find && selected.length === 1) find.value = basename(selected[0].path)
+// Seeds a freshly bound draft: `replace` prefills FIND with a single selected
+// basename; exact `rename` prefills FROM and the containing directory from the
+// active entry (or uses the pane's current directory when there is none).
+function prefillPanelDraft(session, entry, draft) {
+	const name = entry?.op?.name
+	if (name === "replace") {
+		const find = (draft ?? []).find((binding) => binding.name === "FIND")
+		const selection = (draft ?? []).find((binding) => binding.kind === "selection")
+		const selected = (selection?.items ?? []).filter((item) => item.selected)
+		if (find && selected.length === 1) find.value = basename(selected[0].path)
+		return
+	}
+	if (name !== "rename") return
+	const active = session.active?.value
+	const auxiliaryPane =
+		(active === "parent" && session.panes.parent) ||
+		(active === "preview" &&
+			session.showPreview?.value &&
+			session.previewEntry?.value?.isDir &&
+			!session.preview?.value &&
+			session.panes.preview)
+	const pane = auxiliaryPane || session.panes[session.currentId?.value ?? active] || session.panes.left
+	const from = (draft ?? []).find((binding) => binding.name === "FROM")
+	const path = (draft ?? []).find((binding) => binding.name === "PATH")
+	const marked = [...(pane.marked?.value ?? [])]
+	const selectedPath =
+		marked.length === 1 ? marked[0] : marked.length === 0 ? pane.currentEntry?.()?.path : null
+	if (selectedPath) {
+		if (from) from.value = basename(selectedPath)
+		if (path) path.value = parentPath(selectedPath) ?? pane.path.value ?? ""
+	} else if (path) {
+		path.value = pane.path.value ?? ""
+	}
 }
 
 function entrySummary(entry) {

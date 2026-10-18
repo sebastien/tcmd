@@ -8,6 +8,8 @@
 // default-key trapping and keeping the keyboard cursor visible. select.js
 // renders without any of this, so the web binding owns it explicitly.
 
+import { effect } from "select/state/cells"
+
 const canvases = new WeakMap()
 
 function isToolbarTarget(target) {
@@ -115,7 +117,8 @@ function connectEffects(session, root, { size, help, viewer }) {
 		const input = event.target?.tagName === "INPUT" || event.target?.tagName === "TEXTAREA"
 		// Editing keeps native text/caret keys except the ones the shared
 		// controller explicitly owns (vertical arrows, Enter and Tab).
-		if (input && [" ", "Backspace", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) return
+		if (input && [" ", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) return
+		if (input && event.key === "Backspace" && !(session.bookmarkOpen.value && session.bookmarkMode.value === "list")) return
 		if ([" ", "Backspace", "Enter", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Escape"].includes(event.key)) event.preventDefault()
 	}
 	const focusIn = (event) => {
@@ -129,11 +132,32 @@ function connectEffects(session, root, { size, help, viewer }) {
 	observer?.observe(root)
 	// Pane proportions also change when the inspector is toggled.
 	for (const pane of root.querySelectorAll(".pane")) observer?.observe(pane)
+	// Modal state can change before the initial focus frame runs (for example,
+	// the user opens the panel immediately after mount). Watch the focus-driving
+	// cells directly so that initial layout work cannot swallow that handoff.
+	const stopFocusWatch = effect(
+		[
+			session.panelOpen,
+			session.panelFocus,
+			session.panelOpIndex,
+			session.panelRowIndex,
+			session.panelTextual,
+			session.panelPicking,
+			session.bookmarkOpen,
+			session.filtering,
+			session.confirm,
+			session.overlay,
+			help,
+			viewer,
+		],
+		schedule,
+	)
 	schedule()
 	return {
 		schedule,
 		dispose() {
 			disposed = true
+			stopFocusWatch?.()
 			if (frame !== null) view.cancelAnimationFrame(frame)
 			observer?.disconnect()
 			root.removeEventListener("keydown", trapKeys)

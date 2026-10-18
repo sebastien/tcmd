@@ -75,37 +75,38 @@ describe("session", () => {
 		expect(picker).toContain("Choose")
 	})
 
-	test("the panel lists only the CLI operations", () => {
+	test("the panel lists name-only CLI operations in color-grouped alphabetical rows", () => {
 		const session = makeSession()
 		const items = session.panelItems.value
-		const ids = items.map((item) => item.id)
-		expect(ids).toContain("op:copy")
-		// No group headers, no internal TinyCmd actions.
-		expect(ids.some((id) => `${id}`.startsWith("group:"))).toBe(false)
-		expect(ids.some((id) => `${id}`.startsWith("cmd:"))).toBe(false)
-		// Alphabetical by name.
-		const names = items.map((item) => item.name)
-		expect(names).toEqual([...names].toSorted())
+		const operations = items.filter((item) => item.type === "op")
+		expect(operations.map((item) => item.name)).toEqual([
+			"bookmark", "copy", "edit", "mkdir", "open", "run", "sel", "stat", "touch", "view",
+			"move", "rename", "replace", "delete", "erase",
+		])
+		expect(items.filter((item) => item.type === "group").map((item) => item.name)).toEqual([
+			"White", "Amber", "Red",
+		])
+		expect(operations.every((item) => item.summary === undefined)).toBe(true)
+		// No internal TinyCmd actions appear in the panel.
+		expect(items.some((item) => `${item.id}`.startsWith("cmd:"))).toBe(false)
 	})
 
 	test("the panel filters the operations by query and resets its cursor", () => {
 		const session = makeSession()
 		session.panelQuery.set("copy")
 		const ids = session.panelItems.value.map((item) => item.id)
-		expect(ids).toEqual(["op:copy"])
+		expect(ids).toEqual(["group:white", "op:copy"])
 
 		session.panelOpIndex.set(3)
 		session.panelQuery.set("touch")
 		expect(session.panelOpIndex.value).toBe(0)
 	})
 
-	test("a query ranks the operations by match importance", () => {
+	test("filtering keeps fixed risk-color groups instead of relevance-ranking", () => {
 		const session = makeSession()
 		session.panelQuery.set("op")
-		const ids = session.panelItems.value.map((item) => item.id)
-		// `open` (prefix) outranks `copy` (a subsequence match).
-		expect(ids[0]).toBe("op:open")
-		expect(ids).toContain("op:copy")
+		const items = session.panelItems.value
+		expect(items.map((item) => item.id)).toEqual(["group:white", "op:copy", "op:open"])
 	})
 
 	test("`!` lands on the shell operation with its CMD field focused", () => {

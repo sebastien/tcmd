@@ -43,6 +43,40 @@ describe("web effects", () => {
 		expect(event.defaultPrevented).toBe(false)
 	})
 
+	test("Backspace in the bookmark picker removes instead of editing the query", async () => {
+		const { Window } = await import("happy-dom")
+		const window = new Window()
+		const root = window.document.createElement("div")
+		const input = window.document.createElement("input")
+		root.appendChild(input)
+		window.document.body.appendChild(root)
+		const session = {
+			confirm: cell(null),
+			panelOpen: cell(false),
+			bookmarkOpen: cell(true),
+			bookmarkMode: cell("list"),
+			filtering: cell(null),
+		}
+		const effects = connectEffects(session, root, {
+			size: cell({ width: 0, height: 0 }),
+			help: cell(false),
+			viewer: cell(false),
+		})
+		try {
+			const remove = new window.KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
+			input.dispatchEvent(remove)
+			expect(remove.defaultPrevented).toBe(true)
+
+			session.bookmarkMode.set("name")
+			const edit = new window.KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
+			input.dispatchEvent(edit)
+			expect(edit.defaultPrevented).toBe(false)
+		} finally {
+			effects.dispose()
+			window.close()
+		}
+	})
+
 	test("effects can start on a clone from an inert template document", async () => {
 		const { Window } = await import("happy-dom")
 		const window = new Window()

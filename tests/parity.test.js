@@ -73,7 +73,7 @@ describe("cross-engine parity", () => {
 		}
 	})
 
-	test("both renderers show the same resolved command and transient selection", async () => {
+	test("both renderers show the same grouped command arguments and Run action", async () => {
 		const fs = createMockFs(TREE)
 		const session = createSession({
 			fs,
@@ -96,7 +96,7 @@ describe("cross-engine parity", () => {
 			session.panelQuery.set("copy")
 			await new Promise((resolve) => setTimeout(resolve, 30))
 			await setup.renderOnce()
-			for (const text of ["Command · copy", "notes.txt", "copy /home/tester /home/notes.txt /etc"]) {
+			for (const text of ["Command · copy", "notes.txt", "SRC · 2 selected", "[Run]"]) {
 				expect(host.textContent).toContain(text)
 				expect(setup.captureCharFrame()).toContain(text)
 			}
@@ -106,8 +106,8 @@ describe("cross-engine parity", () => {
 			session.dispatch("panel.toggleItem")
 			await new Promise((resolve) => setTimeout(resolve, 30))
 			await setup.renderOnce()
-			expect(host.querySelector(".panel-runs pre").textContent).toContain("«FROM»")
-			expect(setup.captureCharFrame()).toContain("«FROM»")
+			expect(host.querySelector(".panel-args").textContent).toContain("SRC · 0 selected")
+			expect(setup.captureCharFrame()).toContain("SRC · 0 selected")
 			expect(session.panes.left.marked.value.has("/home/notes.txt")).toBe(true)
 		} finally {
 			instance.unmount()

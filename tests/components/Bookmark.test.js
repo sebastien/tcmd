@@ -20,6 +20,7 @@ describe("BookmarkList", () => {
 		expect(behaviors.listVisible(null, listing)).toBe(true)
 		expect(behaviors.emptyList(null, listing)).toBe(true)
 		expect(behaviors.footer(null, listing)).toContain("jump")
+		expect(behaviors.footer(null, listing)).toContain("remove")
 	})
 })
 

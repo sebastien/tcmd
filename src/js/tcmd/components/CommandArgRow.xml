@@ -1,4 +1,4 @@
-<box flexDirection="row" height="1" out:backgroundColor="rowBg" on:click="row.key!panel:select">
+<box flexDirection="row" height="1" out:marginTop="runMarginTop" out:backgroundColor="rowBg" on:click="row.key!panel:select">
 	<!-- A selection's item list: indented under the value column and framed
 	     by the top/bottom border rows. -->
 	<text when="isList" out="listSpacer" wrapMode="none"></text>
@@ -23,8 +23,21 @@
 			<text out="fieldClose" out:fg="fieldFg"></text>
 		</box>
 	</box>
-	<!-- Operation, group and picker-entry rows: marker + name + summary. -->
-	<box when="isPlain" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" columnGap="1">
+	<box when="isRun" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" columnGap="1" justifyContent="flex-end">
+		<text when="hasRunError" out="runError" flexGrow="1" flexShrink="1" minWidth="0" out:fg="runErrorFg" wrapMode="none" truncate="true"></text>
+		<text out="runLabel" out:fg="runFg" wrapMode="none"></text>
+	</box>
+	<!-- Bold color-group title; operations below it are indented. -->
+	<box when="isGroup" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" paddingLeft="1">
+		<text out="name" out:fg="rowFg" out:attributes="groupAttributes" wrapMode="none"></text>
+	</box>
+	<!-- Name-only operation row, indented beneath its group title. -->
+	<box when="isOp" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" columnGap="1" paddingLeft="2">
+		<text out="marker" width="2" out:fg="markerFg"></text>
+		<text out="name" flexShrink="0" out:fg="rowFg" wrapMode="none"></text>
+	</box>
+	<!-- Picker entries retain their cursor marker and trailing kind summary. -->
+	<box when="isEntry" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" columnGap="1">
 		<text out="marker" width="2" out:fg="markerFg"></text>
 		<text out="name" flexShrink="0" out:fg="rowFg" wrapMode="none"></text>
 		<text out="summary" flexGrow="1" flexShrink="1" minWidth="0" out:fg="summaryFg" wrapMode="none" truncate="true"></text>
