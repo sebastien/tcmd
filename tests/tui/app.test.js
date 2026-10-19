@@ -178,7 +178,7 @@ describe("tui app", () => {
 
 			await setup.mockInput.typeText("touch")
 			await settle(setup)
-			expect(session.panelItems.value.map((item) => item.id)).toEqual(["group:white", "op:touch"])
+			expect(session.panelItems.value.map((item) => item.id)).toEqual(["group:edit", "op:touch"])
 
 			setup.mockInput.pressKey("\r")
 			await settle(setup)
@@ -318,7 +318,7 @@ describe("tui app", () => {
 			expect(session.panelOpen.value).toBe(true)
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain("Command ·")
-			expect(frame).toContain("White")
+			expect(frame).toContain("Command")
 			expect(frame).toContain("[Run]")
 			expect(frame).not.toContain("copy FROM TO")
 		} finally {

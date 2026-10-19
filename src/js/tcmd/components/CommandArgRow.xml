@@ -1,4 +1,4 @@
-<box flexDirection="row" height="1" out:marginTop="runMarginTop" out:backgroundColor="rowBg" on:click="row.key!panel:select">
+<box flexDirection="row" out:height="rowHeight" out:marginTop="runMarginTop" out:backgroundColor="rowBg" on:click="row.key!panel:select">
 	<!-- A selection's item list: indented under the value column and framed
 	     by the top/bottom border rows. -->
 	<text when="isList" out="listSpacer" wrapMode="none"></text>
@@ -8,19 +8,23 @@
 		<text when="isItem" out="listName" flexShrink="0" out:fg="rowFg" wrapMode="none"></text>
 		<text when="isItem" out="listSummary" flexGrow="1" flexShrink="1" minWidth="0" out:fg="summaryFg" wrapMode="none" truncate="true"></text>
 	</box>
-	<!-- An argument header: an aligned label and a bracketed value field. -->
-	<box when="isArg" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" columnGap="1">
-		<text out="marker" width="2" out:fg="markerFg"></text>
-		<text out="name" flexShrink="0" out:fg="rowFg" wrapMode="none"></text>
-		<box when="editing" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" out:backgroundColor="fieldBg" overflow="hidden">
-			<text out="fieldOpen" out:fg="fieldFg"></text>
-			<input inout="value" flexGrow="1" minWidth="6" height="1" out:focused="editing"></input>
-			<text out="fieldClose" out:fg="fieldFg"></text>
+	<!-- An argument header: its label on one line, the value field under it. -->
+	<box when="isArg" flexDirection="column" flexGrow="1" flexShrink="1" minWidth="0">
+		<box flexDirection="row" height="1" columnGap="1" minWidth="0">
+			<text out="marker" width="2" out:fg="markerFg"></text>
+			<text out="name" flexShrink="0" out:fg="rowFg" wrapMode="none"></text>
 		</box>
-		<box when="!editing" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" out:backgroundColor="fieldBg" overflow="hidden">
-			<text out="fieldOpen" out:fg="fieldFg"></text>
-			<text out="summary" flexGrow="1" flexShrink="1" minWidth="0" out:fg="summaryFg" wrapMode="none" truncate="true"></text>
-			<text out="fieldClose" out:fg="fieldFg"></text>
+		<box flexDirection="row" height="1" paddingLeft="3" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
+			<box when="editing" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" out:backgroundColor="fieldBg" overflow="hidden">
+				<text out="fieldOpen" out:fg="fieldFg"></text>
+				<input inout="value" flexGrow="1" minWidth="6" height="1" out:focused="editing"></input>
+				<text out="fieldClose" out:fg="fieldFg"></text>
+			</box>
+			<box when="!editing" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" out:backgroundColor="fieldBg" overflow="hidden">
+				<text out="fieldOpen" out:fg="fieldFg"></text>
+				<text out="summary" flexGrow="1" flexShrink="1" minWidth="0" out:fg="summaryFg" wrapMode="none" truncate="true"></text>
+				<text out="fieldClose" out:fg="fieldFg"></text>
+			</box>
 		</box>
 	</box>
 	<box when="isRun" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" columnGap="1" justifyContent="flex-end">

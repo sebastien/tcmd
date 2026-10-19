@@ -15,29 +15,32 @@ describe("CommandArgRow", () => {
 		expect(rowName({ type: "arg", name: "FROM" })).toBe("FROM")
 		expect(rowName({ type: "item", marker: "[x]", name: "notes.txt" })).toBe("[x] notes.txt")
 		expect(rowName({ type: "item", marker: "[ ]", name: "docs" })).toBe("[ ] docs")
-		// A group header carries its color name; a picker entry a directory slash.
-		expect(rowName({ type: "group", name: "White" })).toBe("White")
+		// A group header carries its category name; a picker entry a directory slash.
+		expect(rowName({ type: "group", name: "Command" })).toBe("Command")
 		expect(rowName({ type: "run", name: "Run" })).toBe("[Run]")
 		expect(rowName({ type: "entry", name: "docs", isDir: true })).toBe("docs/")
 	})
 
-	test("group headers take no cursor and use the matching risk color", () => {
+	test("group headers take no cursor and use the category color", () => {
 		expect(wantsFocus({ type: "group" })).toBe("none")
 		expect(isFocused({ type: "group" }, 0, 0, "ops")).toBe(false)
 		const behaviors = createBehaviors(behaviorEnv)
-		expect(behaviors.rowFg(null, { row: { type: "group", name: "White", group: "White" }, index: 0 })).toBe("text")
-		expect(behaviors.rowFg(null, { row: { type: "group", name: "Amber", group: "Amber" }, index: 0 })).toBe("warning")
-		expect(behaviors.rowFg(null, { row: { type: "group", name: "Red", group: "Red" }, index: 0 })).toBe("error")
+		expect(behaviors.rowFg(null, { row: { type: "group", name: "Command", group: "Command" }, index: 0 })).toBe("text")
+		expect(behaviors.rowFg(null, { row: { type: "group", name: "Edit", group: "Edit" }, index: 0 })).toBe("warning")
+		expect(behaviors.rowFg(null, { row: { type: "group", name: "Delete", group: "Delete" }, index: 0 })).toBe("error")
 	})
 
-	test("pads an argument label and frames a selection's list", () => {
+	test("stacks an argument label over its value and frames a selection's list", () => {
 		const behaviors = createBehaviors(behaviorEnv)
-		// The argument label is padded to the value column.
-		expect(behaviors.name(null, { row: { type: "arg", name: "FIND" }, labelWidth: 7 })).toBe("FIND   ")
+		// The label owns its own line; the value lines up under it.
+		expect(behaviors.name(null, { row: { type: "arg", name: "FIND" } })).toBe("FIND")
+		expect(behaviors.rowHeight(null, { row: { type: "arg" } })).toBe(2)
+		expect(behaviors.rowHeight(null, { row: { type: "item" } })).toBe(1)
+		expect(behaviors.rowHeight(null, { row: { type: "op" } })).toBe(1)
 		// A frame row takes no cursor and draws the list's top/bottom.
 		expect(wantsFocus({ type: "frame" })).toBe("none")
 		expect(isFocused({ type: "frame" }, 0, 0, "args")).toBe(false)
-		expect(behaviors.listBorder(null, { row: { type: "frame", variant: "top" }, labelWidth: 7 })).toEqual([
+		expect(behaviors.listBorder(null, { row: { type: "frame", variant: "top" } })).toEqual([
 			"top",
 			"left",
 			"right",
@@ -47,12 +50,12 @@ describe("CommandArgRow", () => {
 			"left",
 			"right",
 		])
-		// An item row draws the sides; the list indents under the value column
-		// (marker + gap + label + gap).
+		// An item row draws the sides; the list indents under the value
+		// (marker + gap).
 		expect(behaviors.listBorder(null, { row: { type: "item" } })).toEqual(["left", "right"])
-		expect(behaviors.rowIndent(null, { row: { type: "item" }, labelWidth: 7 })).toBe(11)
-		expect(behaviors.listSpacer(null, { labelWidth: 7 })).toBe("\u00a0".repeat(11))
-		expect(behaviors.rowIndent(null, { row: { type: "arg" }, labelWidth: 7 })).toBe(0)
+		expect(behaviors.rowIndent(null, { row: { type: "item" } })).toBe(3)
+		expect(behaviors.listSpacer(null, {})).toBe("\u00a0".repeat(3))
+		expect(behaviors.rowIndent(null, { row: { type: "arg" } })).toBe(0)
 	})
 
 	test("summarises headers and shows an item's parent", () => {

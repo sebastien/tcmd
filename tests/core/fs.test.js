@@ -42,6 +42,8 @@ describe("node fs adapter", () => {
 			expect(await fs.readTextHead(join(root, "link.txt"), 64)).toBe("hello")
 			expect((await fs.stat(join(root, "link-dir"))).isDir).toBe(true)
 			expect(await fs.isDir(join(root, "link-dir"))).toBe(true)
+			expect(await fs.realpath(join(root, "link.txt"))).toBe(join(root, "notes.txt"))
+			expect(await fs.realpath(join(root, "link-dir", "inside.txt"))).toBe(join(root, "real-dir", "inside.txt"))
 		} finally {
 			await rm(root, { recursive: true, force: true })
 		}
@@ -102,6 +104,20 @@ describe("node fs adapter", () => {
 		const fs = createNodeFs()
 		const head = await fs.readTextHead(new URL(import.meta.url).pathname, 64)
 		expect(head.startsWith("import { describe")).toBe(true)
+	})
+
+	test("readBytes returns the raw head, including binary bytes", async () => {
+		const fs = createNodeFs()
+		const root = await mkdtemp(join(tmpdir(), "tcmd-fs-bytes-"))
+		try {
+			const file = join(root, "raw.bin")
+			await writeFile(file, Buffer.from([0x1f, 0x8b, 0x00, 0xff, 0x61]))
+			const bytes = await fs.readBytes(file, 3)
+			expect(bytes).toBeInstanceOf(Uint8Array)
+			expect([...bytes]).toEqual([0x1f, 0x8b, 0x00])
+		} finally {
+			await rm(root, { recursive: true, force: true })
+		}
 	})
 
 	test("copy and move preserve an occupied destination", async () => {

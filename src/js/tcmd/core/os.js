@@ -14,6 +14,9 @@
 // - `edit(path)`: Promise<void> - $EDITOR (or vi)
 // - `run(command, options)`: Promise<void> - `$SHELL -c command` in
 //   `options.cwd`
+// - `copy(text)`: boolean - best-effort clipboard write. The TUI sends OSC 52
+//   through the renderer; the browser and desktop webview use the Clipboard
+//   API. False when the host has no clipboard.
 // - `canEdit`: boolean - whether `edit` can launch an editor at all. A host
 //   without one (the web's null adapter) sets it false, so Enter on a file
 //   falls back to the fullscreen inspector instead of erroring (see
@@ -33,10 +36,14 @@ function loadChildProcess() {
 
 // Function: createNodeOs
 // Node/Bun-backed host adapter. `suspend`/`resume` are optional hooks the TUI
-// uses to release and restore the terminal around interactive commands.
-function createNodeOs({ suspend, resume } = {}) {
+// uses to release and restore the terminal around interactive commands;
+// `copy` is the TUI's OSC 52 hook (`renderer.copyToClipboardOSC52`).
+function createNodeOs({ suspend, resume, copy } = {}) {
 	return {
 		canEdit: true,
+		copy(text) {
+			return Boolean(copy?.(`${text ?? ""}`))
+		},
 		async open(path) {
 			await openWith(path, openerCandidates())
 		},
@@ -53,15 +60,28 @@ function createNodeOs({ suspend, resume } = {}) {
 	}
 }
 
+// Function: copyToBrowserClipboard
+// Best-effort clipboard write for a browser or desktop webview. The write is
+// asynchronous but fire-and-forget; a refused write (no permission, no user
+// gesture) leaves the clipboard untouched.
+function copyToBrowserClipboard(text) {
+	const clipboard = globalThis.navigator?.clipboard
+	if (!clipboard?.writeText) return false
+	void clipboard.writeText(`${text ?? ""}`).catch(() => {})
+	return true
+}
+
 // Function: createNullOs
 // Host adapter for environments without a shell (web): every operation fails
 // with a clear message, which the dispatch path reports in the command bar.
+// Clipboard access is the exception: the browser has one.
 function createNullOs() {
 	const unsupported = (name) => async () => {
 		throw new Error(`${name} is not available in this environment`)
 	}
 	return {
 		canEdit: false,
+		copy: (text) => copyToBrowserClipboard(text),
 		open: unsupported("open"),
 		edit: unsupported("edit"),
 		run: unsupported("run"),
@@ -129,6 +149,6 @@ async function runDetached(command, args) {
 	})
 }
 
-export { createNodeOs, createNullOs }
+export { copyToBrowserClipboard, createNodeOs, createNullOs }
 
 // EOF

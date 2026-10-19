@@ -237,14 +237,48 @@ function panelDialogHeight(self) {
 	return Math.floor(height * (height <= 20 ? 0.85 : 0.72))
 }
 
-// Keep the command panel's argument cursor inside its viewport.
+// Keep the command panel's argument cursor inside its viewport. Argument
+// headers are two lines tall and a selection's item run gains a border row at
+// each end, so the offset is measured in rendered lines rather than row
+// indices.
 function panelArgScrollTop(self, data) {
 	const rows = (unwrap(data.rows) ?? []).filter((row) => row.type !== "run")
-	const cursor = unwrap(data.argCursor) ?? 0
 	const box = unwrap(data.picking) ? self.ref.pickerList : self.ref.args
 	if (!rows.length) return box?.scrollTop ?? 0
-	const index = Math.min(cursor, rows.length - 1)
-	return keepVisible(box, index, rows.length)
+	const cursor = Math.min(unwrap(data.argCursor) ?? 0, rows.length - 1)
+	let offset = 0
+	let cursorTop = 0
+	let cursorHeight = 1
+	for (let i = 0; i < rows.length; i++) {
+		const row = rows[i]
+		const firstItem = row.type === "item" && (i === 0 || rows[i - 1].type !== "item")
+		const lastItem = row.type === "item" && (i === rows.length - 1 || rows[i + 1].type !== "item")
+		if (firstItem) offset += 1
+		const height = row.type === "arg" ? 2 : 1
+		if (i === cursor) {
+			cursorTop = offset
+			cursorHeight = height
+		}
+		offset += height
+		if (lastItem) offset += 1
+	}
+	return keepRangeVisible(box, cursorTop, cursorHeight, offset)
+}
+
+// Function: keepRangeVisible
+// The line-based counterpart of `keepVisible`: keeps the `[top, top + height)`
+// run inside the scrollbox, then nudges one line at the same edge margins.
+function keepRangeVisible(box, top, height, total) {
+	if (!box || !box.height) return box?.scrollTop ?? 0
+	const view = Math.max(1, Math.floor(box.height))
+	const maxTop = Math.max(0, total - view)
+	let scroll = Math.max(0, Math.min(box.scrollTop ?? 0, maxTop))
+	if (top < scroll) scroll = top
+	else if (top + height > scroll + view) scroll = top + height - view
+	const position = top - scroll
+	if (position > SCROLL_HIGH * view && scroll < maxTop) scroll += 1
+	else if (position < SCROLL_LOW * view && scroll > 0) scroll -= 1
+	return scroll
 }
 
 // Function: commandBarRows
@@ -350,6 +384,12 @@ function showScrollBar(node) {
 	if (bar) {
 		bar.width = 1
 		bar.flexShrink = 0
+		// The slider's default track/thumb are greys; the theme keeps the
+		// scrollbar part of the night-blue surfaces (mono leaves the defaults).
+		if (bar.slider && tuiTheme.scrollbarThumbBg) {
+			bar.slider.backgroundColor = tuiTheme.scrollbarTrackBg
+			bar.slider.foregroundColor = tuiTheme.scrollbarThumbBg
+		}
 	}
 }
 

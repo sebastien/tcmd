@@ -5,8 +5,8 @@
 
 // Module: tcmd/components/CommandPanel
 // CommandPanel: the one entry point (`:`), a two-pane palette. The left pane
-// holds a `:` filter above the CLI operations grouped by risk color. The right
-// pane lists the selected operation's arguments followed by its [Run]/[Retry]
+// holds a `:` filter above categorized commands. The right pane lists the
+// selected operation's arguments followed by its [Run]/[Retry]
 // row.
 // The row logic lives in `CommandArgRow.js`; this parent maps the operation
 // list, scrolling argument rows, custom preview and pinned action row.

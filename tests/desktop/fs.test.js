@@ -30,7 +30,9 @@ describe("tinyjs filesystem adapter", () => {
 		expect(entries["link-dir"]).toMatchObject({ isSymlink: true, target: "real-dir", isDir: true, size: 0 })
 		expect(entries.broken).toMatchObject({ isSymlink: true, target: "missing", isDir: false, size: 0 })
 		expect(await adapter.readTextHead(join(root, "link.txt"), 3)).toBe("hel")
+		expect(new TextDecoder().decode(await adapter.readBytes(join(root, "link.txt"), 3))).toBe("hel")
 		expect((await adapter.stat(join(root, "link-dir"))).isDir).toBe(true)
+		expect(await adapter.realpath(join(root, "link.txt"))).toBe(join(root, "notes.txt"))
 	})
 
 	test("copies links as links, refuses occupied targets, and blocks recursive copy", async () => {

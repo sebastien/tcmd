@@ -11,8 +11,11 @@
 // - `readDir(path)`: Promise<FileEntry-like[]> - directory listing with stat info
 // - `stat(path)`: Promise<{ isDir, isSymlink, size, mtimeMs, ctimeMs, mode, uid,
 //   gid } | null>
+// - `realpath(path)`: Promise<string> - absolute path with symlinks resolved
 // - `isDir(path)`: Promise<boolean>
 // - `readTextHead(path, maxBytes)`: Promise<string> - leading bytes as text
+// - `readBytes(path, maxBytes)`: Promise<Uint8Array> - leading raw bytes (the
+//   compressed previews decompress these)
 // - `du(path)`: Promise<number> - recursive size in bytes
 // - `disk(path)`: Promise<{ free, total } | null> - filesystem capacity
 // - `copy(from, to)`, `move(from, to)`: Promise<void> - files or directories;
@@ -184,6 +187,7 @@ function createNodeFs() {
 		async stat(path) {
 			return statSafe(path)
 		},
+		realpath: (path) => fs.realpath(path),
 		async isDir(path) {
 			const stats = await statSafe(path)
 			return Boolean(stats?.isDir)
@@ -194,6 +198,16 @@ function createNodeFs() {
 				const buffer = Buffer.alloc(maxBytes)
 				const bytes = nodeFs.readSync(file, buffer, 0, maxBytes, 0)
 				return buffer.toString("utf8", 0, bytes)
+			} finally {
+				nodeFs.closeSync(file)
+			}
+		},
+		async readBytes(path, maxBytes = PREVIEW_BYTES) {
+			const file = nodeFs.openSync(path, "r")
+			try {
+				const buffer = Buffer.alloc(maxBytes)
+				const bytes = nodeFs.readSync(file, buffer, 0, maxBytes, 0)
+				return new Uint8Array(buffer.subarray(0, bytes))
 			} finally {
 				nodeFs.closeSync(file)
 			}

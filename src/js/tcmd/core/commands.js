@@ -17,7 +17,7 @@
 
 import { basename, parent as parentOf } from "./path.js"
 import { PANEL_FOCUS, argvFor, bindingAt, missingBinding, rowAt, withArgValue, withToggledItem } from "./panel.js"
-import { hasBinaryByte, previewKind, SNIFF_BYTES } from "./preview.js"
+import { hasBinaryByte, previewKind, previewSource, SNIFF_BYTES } from "./preview.js"
 import { clampCursor, moveCursor } from "./selection.js"
 import { currentPane } from "./pane.js"
 import { runLine } from "./script.js"
@@ -830,6 +830,26 @@ const commands = [
 			session.panelDraft.set(draft.map((b) => (b.index === row.argIndex ? { ...b, items } : b)))
 		},
 	},
+	{
+		id: "panel.copy",
+		title: "Copy argument value",
+		kind: "ui",
+		hidden: true,
+		run(session, payload) {
+			// A click on a read-only argument value copies it through the host
+			// (OSC 52 in the TUI, the Clipboard API in a browser); the command
+			// bar confirms so the gesture is visible even though the clipboard
+			// itself is out of band.
+			const text = `${payload?.text ?? ""}`
+			if (!text) return
+			if (!session.os?.copy?.(text)) {
+				session.notice?.set({ kind: "warning", text: "clipboard is not available" })
+				return
+			}
+			session.notice?.set({ kind: "tip", text: `copied ${text}` })
+			showBriefPanelResult(session)
+		},
+	},
 	// File picker: a sub-mode of the panel that browses the filesystem for a
 	// path/destination argument. Lifecycle then navigation then choose.
 	{
@@ -947,6 +967,10 @@ const commands = [
 		async run(session) {
 			const entry = session.panelEntry.value
 			if (!entry) return
+			if (entry.commandId) {
+				closePanel(session)
+				return session.dispatch(entry.commandId)
+			}
 			const op = entry.op
 			const draft = session.panelDraft.value
 			// An incomplete command does not fail: a blank destination/path
@@ -1239,12 +1263,16 @@ async function openFile(session, current, entry) {
 // Function: isEditable
 // Whether Enter edits `entry` rather than previewing it: the host must have an
 // editor, the entry must preview as text (not an image/media card) and its head
-// must not be binary. The read follows symlinks, like the inspector's own, and
-// needs only the sniff window `hasBinaryByte` looks at.
+// must not be binary. Compressed entries are never editable: the inspector
+// decompresses them, but `$EDITOR` would only see the compressed bytes. The
+// read follows symlinks, like the inspector's own, and needs only the sniff
+// window `hasBinaryByte` looks at.
 async function isEditable(session, entry) {
 	if (entry?.isDir) return false
 	if (session.os?.canEdit === false) return false
-	if (previewKind(entry?.ext) !== "text") return false
+	const source = previewSource(entry)
+	if (source.compression) return false
+	if (previewKind(source.innerExt) !== "text") return false
 	const head = await session.fs.readTextHead(entry.path, SNIFF_BYTES).catch(() => null)
 	return head !== null && !hasBinaryByte(head)
 }

@@ -126,10 +126,10 @@ describe("rows", () => {
 		expect(fileWindow(data, 0)).toEqual({ start: 0, len: 2, local: 1, total: 2 })
 	})
 
-	test("panelOpRows preserves color headings and maps name-only operation rows", () => {
+	test("panelOpRows preserves category headings and maps name-only rows", () => {
 		const Row = fakeRow()
 		const items = [
-			{ type: "group", id: "group:amber", name: "Amber", group: "Amber" },
+			{ type: "group", id: "group:edit", name: "Edit", group: "Edit" },
 			{ type: "op", id: "op:copy", entryIndex: 0, name: "copy", risk: null },
 			{ type: "op", id: "op:erase", entryIndex: 1, name: "erase", risk: "destructive" },
 		]
@@ -137,7 +137,7 @@ describe("rows", () => {
 		const [call] = Row.calls
 		expect(call.data).toEqual(items)
 		expect(call.processor(items[0], 0).index).toBe(-1)
-		expect(call.processor(items[0], 0).row).toMatchObject({ type: "group", name: "Amber", group: "Amber" })
+		expect(call.processor(items[0], 0).row).toMatchObject({ type: "group", name: "Edit", group: "Edit" })
 		expect(call.processor(items[1], 1)).toMatchObject({
 			index: 0,
 			cursor: 1,
@@ -155,7 +155,7 @@ describe("rows", () => {
 			{ type: "item", key: "item:0:/a", rowIndex: 1, argIndex: 0, name: "a" },
 			{ type: "arg", key: "arg:1", rowIndex: 2, argIndex: 1, name: "TO" },
 		]
-		expect(panelArgRows(Row)(null, { rows, argCursor: 1, focus: "args", labelWidth: 7 })).toBe("MAPPED")
+		expect(panelArgRows(Row)(null, { rows, argCursor: 1, focus: "args" })).toBe("MAPPED")
 		const [call] = Row.calls
 		// A top frame, the item, a bottom frame are injected around the run.
 		expect(call.data.map((row) => row.type)).toEqual(["arg", "frame", "item", "frame", "arg"])
@@ -165,7 +165,6 @@ describe("rows", () => {
 		// the frame rows take none.
 		expect(call.processor(call.data[2], 2).index).toBe(1)
 		expect(call.processor(call.data[1], 1).index).toBe(-1)
-		expect(call.processor(call.data[0], 0).labelWidth).toBe(7)
 		expect(call.key(call.data[1])).toBe("frame:top:0")
 	})
 

@@ -186,7 +186,7 @@ function panelOpRows(CommandArgRow) {
 }
 
 // Function: panelArgRows
-// `{ item, index, row, cursor, focus, value, labelWidth }` bags for the command
+// `{ item, index, row, cursor, focus, value }` bags for the command
 // panel's scrolling argument pane (`CommandArgRow`). The rows are the flat
 // `core/panel.panelRowList`; this wraps each selection's item run in a top and
 // bottom `frame` row so the list reads as one bordered box. `index` is the
@@ -217,7 +217,6 @@ function panelArgRows(CommandArgRow) {
 				cursor: data.argCursor,
 				focus: data.focus,
 				value: data.value,
-				labelWidth: unwrap(data.labelWidth) ?? 8,
 			}),
 			(item) => item.key,
 		)
@@ -239,7 +238,6 @@ function panelRunRows(CommandArgRow) {
 				cursor: data.argCursor,
 				focus: data.focus,
 				value: data.value,
-				labelWidth: unwrap(data.labelWidth) ?? 8,
 			}),
 			(item) => item.key,
 		)

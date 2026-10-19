@@ -54,6 +54,8 @@ async function main(paths = []) {
 	const os = createNodeOs({
 		suspend: () => instance?._ownedRenderer?.suspend?.(),
 		resume: () => instance?._ownedRenderer?.resume?.(),
+		// OSC 52: the renderer knows whether the terminal supports it.
+		copy: (text) => instance?._ownedRenderer?.copyToClipboardOSC52?.(text) ?? false,
 	})
 	const bookmarks = createBookmarks({
 		store: createFileBookmarkStore({

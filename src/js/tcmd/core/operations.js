@@ -36,6 +36,27 @@ import { currentPane, currentPaneId, PANE_BUFFERS } from "./pane.js"
 // an async confirm re-runs it.
 const PATHS_PREFIX = "$paths:"
 
+// Function: absolutePath
+// Resolves dot segments in an already absolute path using POSIX path rules.
+function absolutePath(path) {
+	const parts = []
+	for (const part of `${path ?? ""}`.split("/")) {
+		if (!part || part === ".") continue
+		if (part === "..") parts.pop()
+		else parts.push(part)
+	}
+	return `/${parts.join("/")}`
+}
+
+// Function: shellQuote
+// Quotes a token only when needed, so displayed path results and panel previews
+// can be pasted as shell arguments (including spaces or apostrophes).
+function shellQuote(token) {
+	const text = `${token ?? ""}`
+	if (text === "") return "''"
+	return /^[A-Za-z0-9_@%+=:,.\/-]+$/.test(text) ? text : `'${text.replace(/'/g, `'\\''`)}'`
+}
+
 // Function: pathToken
 // Encodes a resolved path list as one `$paths:` token.
 function pathToken(paths) {
@@ -400,6 +421,29 @@ const operations = [
 			session.showPreview.set(true)
 			session.previewTarget.set(await previewTarget(session, paths[0], details))
 			return results.join("; ")
+		},
+	},
+	{
+		name: "abspath",
+		signature: "abspath PATH...",
+		description: "Show absolute paths",
+		arity: { min: 1 },
+		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
+		async run(session, args) {
+			return expandAll(session, args).map((path) => shellQuote(absolutePath(path))).join(" ")
+		},
+	},
+	{
+		name: "realpath",
+		signature: "realpath PATH...",
+		description: "Show resolved paths, following symlinks",
+		arity: { min: 1 },
+		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
+		async run(session, args) {
+			const paths = expandAll(session, args)
+			const resolved = []
+			for (const path of paths) resolved.push(await session.fs.realpath(absolutePath(path)))
+			return resolved.map(shellQuote).join(" ")
 		},
 	},
 	{
@@ -810,6 +854,7 @@ function humanSize(bytes) {
 }
 
 export {
+	absolutePath,
 	expandAll,
 	expandArg,
 	decodePathToken,
@@ -821,6 +866,7 @@ export {
 	refreshPanes,
 	replacePlan,
 	runOperation,
+	shellQuote,
 }
 
 // EOF

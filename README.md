@@ -27,18 +27,19 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   (`⇧T`), which lists trashed entries by their original path. A double click on
   a row opens it like `Enter`.
 - Operations over the current panes: copy, move, mkdir, delete/erase,
-  stat, touch, selection buffers, edit/view/open and shell commands
+  stat, touch, selection buffers, edit/view/open and shell commands; `abspath`
+  and `realpath` show copy-pasteable absolute paths, with the latter following symlinks
 - Command panel (`:`), the one entry point, a two-pane palette: the left pane
-  filters (`:xxx`) over CLI operations grouped by color: white for ordinary
-  commands, amber for caution, and red for destructive commands. Bold section
-  titles head indented command names, alphabetized within each color (the
-  internal TinyCmd actions live on their own keys, not the panel). The right
+  filters (`:xxx`) over CLI operations grouped by purpose: **Command** and
+  **File**, **Edit** (amber), and **Delete** (red). The Command group also has
+  the workspace-view toggle; File's `view` previews the selected path. Bold section
+  titles head indented command names, alphabetized within each category. The right
   pane lists the selected command's arguments under its name — editable values
   use filled fields, while read-only values are plain and muted; selections use
   a checkbox (multiple) / radio (single)
   list of the selected paths wrapped in its own border, with a lone path shown
   read-only. `[Run]` follows the arguments after a blank line, aligned right in
-  the command's risk color; a failed run shows its error and `[Retry]`, while a
+  the command category's color; a failed run shows its error and `[Retry]`, while a
   successful result briefly replaces the command bar at the bottom. A selection
   argument draws from the *focused* column, so in the explorer focusing the parent mirror
   selects the directory under its cursor. `Tab` cycles the filter, arguments and
@@ -55,7 +56,10 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   source file highlights with tree-sitter (JavaScript, TypeScript, Markdown and
   Zig today) through the same `code` renderable, and an image draws in place
   through the terminal's graphics protocol (Kitty/sixel, half-block fallback),
-  the metadata card staying for formats with no decoder
+  the metadata card staying for formats with no decoder. `.gz` and `.bz2`
+  entries preview their decompressed contents: the inner name drives the kind
+  and highlighter (`notes.txt.gz` heads as `<GZ · TXT>`), and a body that
+  decompresses to binary stays a card
 - Symlinks are shown *and* followed: a link row prints `name -> target`
   (`notes.md -> notes.txt`, `docs/ -> ../shared`), a link to a directory is a
   directory (it sorts, opens and previews as one), and the preview reads

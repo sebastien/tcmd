@@ -58,11 +58,13 @@ function hasText(preview) {
 
 // Function: previewTitle
 // "Filename <EXT>" style title; falls back to the kind label when the file has
-// no extension.
+// no extension. A decompressed preview adds the inner label, so
+// `notes.txt.gz` reads `notes.txt.gz  <GZ · TXT>`.
 function previewTitle(preview) {
 	if (!preview) return "preview"
 	const badge = (preview.ext || KIND_LABELS[preview.kind] || "file").toUpperCase()
-	return `${preview.title}  <${badge}>`
+	const inner = preview.compression && preview.innerExt ? ` · ${preview.innerExt.toUpperCase()}` : ""
+	return `${preview.title}  <${badge}${inner}>`
 }
 
 // Function: entryCard
@@ -97,9 +99,13 @@ function headerTitle(preview, entry) {
 	if (entry) {
 		const source = previewSource(entry)
 		const badge = entry.isDir ? "DIR" : (source.ext || "file").toUpperCase()
+		const inner =
+			!entry.isDir && source.compression && source.innerExt
+				? ` · ${source.innerExt.toUpperCase()}`
+				: ""
 		const name = entry.isDir ? `${entry.name}/` : entry.name
 		const target = entry.isSymlink && entry.target ? ` -> ${entry.target}` : ""
-		return `${name}${target}  <${badge}>`
+		return `${name}${target}  <${badge}${inner}>`
 	}
 	return "inspector"
 }
@@ -131,9 +137,13 @@ function createBehaviors(env) {
 		cardText: (_self, data) => cardText(unwrap(data.preview)),
 		// Tree-sitter filetype for the previewed text, resolved by the
 		// renderer (the web has no highlighter and supplies no `filetype`).
+		// A compressed preview highlights the name inside, so `.txt.gz`
+		// still lands on the text parser.
 		codeFiletype: (_self, data) => {
 			const entry = unwrap(data.entry)
-			return entry?.path ? env.filetype?.(entry.path) : undefined
+			if (!entry?.path) return undefined
+			const source = previewSource(entry)
+			return env.filetype?.(source.compression ? source.innerName : entry.path)
 		},
 		// The directory column: breadcrumbs over the inspector pane's listing,
 		// shaped like a pane header (a rule separates it from the body).

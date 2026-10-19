@@ -438,19 +438,22 @@ describe("App", () => {
 		const { calls, data } = makeData({
 			panelOpen: true,
 			panelItems: [
-				{ type: "group", id: "group:white", name: "White", group: "White" },
+				{ type: "group", id: "group:file", name: "File", group: "File" },
 				{ type: "op", id: "op:copy", entryIndex: 0, name: "copy" },
 			],
 			panelRows: [
 				{ key: "arg:0", type: "arg" },
 				{ key: "item:0:/a", type: "item" },
+				{ key: "arg:readonly", type: "arg", readonly: true, summary: "/home/notes.txt" },
 				{ key: "panel:run", type: "run" },
 			],
 		})
 		// A group header click is inert.
-		events["panel:select"](null, data, { data: "group:white" })
+		events["panel:select"](null, data, { data: "group:file" })
 		events["panel:select"](null, data, { data: "op:copy" })
 		events["panel:select"](null, data, { data: "item:0:/a" })
+		// A read-only value copies before the row takes focus.
+		events["panel:select"](null, data, { data: "arg:readonly" })
 		events["panel:select"](null, data, { data: "panel:run" })
 		events["panel:confirm"](null, data, {})
 		expect(calls).toEqual([
@@ -460,6 +463,9 @@ describe("App", () => {
 			{ id: "panel.toggleItem", payload: undefined },
 			{ id: "panel.focusArg", payload: undefined },
 			{ id: "panel.setRow", payload: { index: 2 } },
+			{ id: "panel.copy", payload: { text: "/home/notes.txt" } },
+			{ id: "panel.focusArg", payload: undefined },
+			{ id: "panel.setRow", payload: { index: 3 } },
 			{ id: "panel.run", payload: undefined },
 			{ id: "panel.run", payload: undefined },
 		])

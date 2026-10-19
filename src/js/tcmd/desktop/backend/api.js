@@ -4,6 +4,7 @@
 // Named tinyjs RPC methods. The browser receives only the filesystem adapter
 // methods it needs; filesystem and process primitives stay in this backend.
 
+import { encodeBase64 } from "../../core/base64.js"
 import { createDesktopFs, normalizePath } from "./fs.js"
 
 const OUTPUT_LIMIT = 32 * 1024
@@ -61,7 +62,11 @@ function createDesktopBackend({ runtime } = {}) {
 		fsInfo,
 		fsReadDir: ({ path }) => fs().readDir(path),
 		fsStat: ({ path }) => fs().stat(path),
+		fsRealpath: ({ path }) => fs().realpath(path),
 		fsReadTextHead: ({ path, maxBytes }) => fs().readTextHead(path, maxBytes),
+		fsReadBytes: async ({ path, maxBytes }) => ({
+			base64: encodeBase64(await fs().readBytes(path, maxBytes)),
+		}),
 		fsDu: ({ path }) => fs().du(path),
 		fsDisk: ({ path }) => fs().disk(path),
 		fsCopy: ({ from, to }) => fs().copy(from, to),

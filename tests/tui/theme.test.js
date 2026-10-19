@@ -25,4 +25,11 @@ describe("tui theme", () => {
 		for (const value of Object.values(MONO)) expect(value).toBeUndefined()
 	})
 
+	test("the dark scrollbar is a transparent track under a night-blue thumb", () => {
+		expect(DARK.scrollbarThumbBg).toBe("#22345e")
+		expect(DARK.scrollbarTrackBg).toBe("transparent")
+		expect(LIGHT.scrollbarThumbBg).toBe("#34548f")
+		expect(LIGHT.scrollbarTrackBg).toBe("transparent")
+	})
+
 })

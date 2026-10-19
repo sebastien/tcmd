@@ -17,6 +17,7 @@
 
 import nodeFs from "node:fs/promises"
 import { dirname, isAbsolute, relative, resolve as resolvePath, sep } from "node:path"
+import { encodeBase64 } from "../core/base64.js"
 import { createNodeFs } from "../core/fs.js"
 
 // Constant: TOKEN_PLACEHOLDER
@@ -110,10 +111,16 @@ function createWebServer({
 		}),
 		"GET /api/readDir": async (_request, url) => fs.readDir(await confine(url.searchParams.get("path"))),
 		"GET /api/stat": async (_request, url) => fs.stat(await confine(url.searchParams.get("path"))),
+		"GET /api/realpath": async (_request, url) => fs.realpath(await confine(url.searchParams.get("path"))),
 		"GET /api/readTextHead": async (_request, url) => {
 			const path = await confine(url.searchParams.get("path"))
 			const maxBytes = clampBytes(url.searchParams.get("maxBytes"))
 			return fs.readTextHead(path, maxBytes)
+		},
+		"GET /api/readBytes": async (_request, url) => {
+			const path = await confine(url.searchParams.get("path"))
+			const maxBytes = clampBytes(url.searchParams.get("maxBytes"))
+			return { base64: encodeBase64(await fs.readBytes(path, maxBytes)) }
 		},
 		"GET /api/du": async (_request, url) => fs.du(await confine(url.searchParams.get("path"))),
 		"GET /api/disk": async (_request, url) => fs.disk(await confine(url.searchParams.get("path"))),

@@ -14,6 +14,8 @@
 // into `index.html`; when the page is not served by `bun run web:serve`, the
 // API is unreachable and the factory fails with a hint.
 
+import { decodeBase64 } from "../core/base64.js"
+
 // Function: apiToken
 // Token injected into the host page, or null when absent/placeholder.
 function apiToken(doc = globalThis.document) {
@@ -59,8 +61,11 @@ async function createHttpFs({ base = "/api", token, fetch: doFetch = globalThis.
 	return {
 		readDir: (path) => request("GET", "readDir", { params: { path } }),
 		stat: (path) => request("GET", "stat", { params: { path } }),
+		realpath: (path) => request("GET", "realpath", { params: { path } }),
 		isDir: async (path) => Boolean((await request("GET", "stat", { params: { path } }))?.isDir),
 		readTextHead: (path, maxBytes) => request("GET", "readTextHead", { params: { path, maxBytes } }),
+		readBytes: async (path, maxBytes) =>
+			decodeBase64((await request("GET", "readBytes", { params: { path, maxBytes } })).base64),
 		du: (path) => request("GET", "du", { params: { path } }),
 		disk: (path) => request("GET", "disk", { params: { path } }),
 		copy: (from, to) => request("POST", "copy", { body: { from, to } }),

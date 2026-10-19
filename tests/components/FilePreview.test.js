@@ -40,6 +40,45 @@ describe("FilePreview", () => {
 		expect(previewTitle(null)).toBe("preview")
 	})
 
+	test("a decompressed preview badges the archive and the inner kind", () => {
+		const gzip = {
+			kind: "text",
+			title: "notes.txt.gz",
+			size: 10,
+			text: "hi",
+			ext: "gz",
+			innerExt: "txt",
+			compression: "gzip",
+		}
+		expect(previewTitle(gzip)).toBe("notes.txt.gz  <GZ · TXT>")
+		// With no inner extension only the archive badge remains.
+		expect(previewTitle({ ...gzip, title: "backup.gz", innerExt: null })).toBe("backup.gz  <GZ>")
+		const behaviors = createBehaviors(behaviorEnv)
+		const entry = { name: "notes.txt.gz", path: "/notes.txt.gz", isDir: false, size: 10, ext: "gz" }
+		expect(behaviors.headerTitle(null, { preview: null, entry })).toBe("notes.txt.gz  <GZ · TXT>")
+	})
+
+	test("a compressed preview highlights the name inside it", () => {
+		const seen = []
+		const behaviors = createBehaviors({
+			...behaviorEnv,
+			filetype: (path) => {
+				seen.push(path)
+				return "markdown"
+			},
+		})
+		const preview = { kind: "text", title: "README.md.gz", text: "# hi", ext: "gz", innerExt: "md", compression: "gzip" }
+		const entry = { name: "README.md.gz", path: "/README.md.gz", isDir: false, size: 10, ext: "gz" }
+		expect(behaviors.codeFiletype(null, { preview, entry })).toBe("markdown")
+		expect(seen).toEqual(["README.md"])
+		// Uncompressed files keep the full path.
+		behaviors.codeFiletype(null, {
+			preview: { kind: "text", title: "README.md", text: "# hi", ext: "md" },
+			entry: { name: "README.md", path: "/docs/README.md", isDir: false, ext: "md" },
+		})
+		expect(seen.at(-1)).toBe("/docs/README.md")
+	})
+
 	test("inspector shows a directory column, a card, an empty state and a header", () => {
 		const behaviors = createBehaviors(behaviorEnv)
 		const dir = { name: "docs", path: "/docs", isDir: true, size: 0 }

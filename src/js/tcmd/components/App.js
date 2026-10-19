@@ -81,7 +81,6 @@ function createInit(session) {
 		panelFocus: session.panelFocus,
 		panelOpIndex: session.panelOpIndex,
 		panelItems: session.panelItems,
-		panelLabelWidth: session.panelLabelWidth,
 		panelOpen: session.panelOpen,
 		panelPicking: session.panelPicking,
 		panelPreview: session.panelPreview,
@@ -437,9 +436,16 @@ function createEvents(env = {}) {
 				data.dispatch("panel.run")
 				return
 			}
+			// A read-only value (a single-path selection, resolved from the
+			// pane) is a path worth copying: clicking it sends the value to the
+			// host clipboard. Copy runs last so its confirmation is not cleared
+			// by the focus dispatches (each dispatch resets the notice).
 			data.dispatch("panel.focusArg")
 			data.dispatch("panel.setRow", { index: rowIndex })
 			if (row?.type === "item") data.dispatch("panel.toggleItem")
+			if (row?.type === "arg" && row.readonly === true && row.summary) {
+				data.dispatch("panel.copy", { text: row.summary })
+			}
 		},
 		"panel:confirm": (_self, data) => {
 			// Published by a focused panel input's `on:enter`; the key handler

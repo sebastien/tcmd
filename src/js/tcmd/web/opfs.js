@@ -157,6 +157,16 @@ function createOpfsFs({ root, home = "/home/tester" } = {}) {
 		return file.slice(0, maxBytes).text()
 	}
 
+	// Function: readBytes
+	// Leading `maxBytes` of a file as raw bytes, for the compressed previews
+	// `core/session` decompresses.
+	async function readBytes(path, maxBytes = PREVIEW_BYTES) {
+		const handle = await resolveFile(normalize(path))
+		if (!handle) throw notFound(path)
+		const file = await handle.getFile()
+		return new Uint8Array(await file.slice(0, maxBytes).arrayBuffer())
+	}
+
 	// Function: du
 	// Recursive size in bytes; unreadable entries contribute 0.
 	async function du(path) {
@@ -456,8 +466,14 @@ function createOpfsFs({ root, home = "/home/tester" } = {}) {
 	return {
 		readDir,
 		stat,
+		async realpath(path) {
+			const normalized = normalize(path)
+			if (!(await stat(normalized))) throw notFound(path)
+			return normalized
+		},
 		isDir: async (path) => Boolean((await stat(path))?.isDir),
 		readTextHead,
+		readBytes,
 		du,
 		disk,
 		copy,

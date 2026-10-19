@@ -19,6 +19,10 @@ describe("tinyjs desktop bridge", () => {
 				size: 5,
 				mtimeMs: expect.any(Number),
 			})
+			expect(await desktop.api.fsRealpath({ path: join(root, "note.txt") })).toBe(join(root, "note.txt"))
+			expect(await desktop.api.fsReadBytes({ path: join(root, "note.txt"), maxBytes: 2 })).toEqual({
+				base64: "aGU=",
+			})
 
 			const events = []
 			desktop.onOpenFiles([join(root, "note.txt")], { push: (...args) => events.push(args) })
@@ -77,18 +81,32 @@ describe("tinyjs desktop bridge", () => {
 		const call = async (method, params) => {
 			requests.push([method, params])
 			if (method === "fsInfo") return { home: "/home/test", cwd: "/work", root: "/", host: "test" }
-			return method === "fsStat" ? { isDir: true } : true
+			if (method === "fsStat") return { isDir: true }
+			if (method === "fsRealpath") return "/work/a"
+			return true
 		}
 		const fs = await createDesktopFs({ call })
 		expect(fs.home()).toBe("/home/test")
 		expect(fs.cwd()).toBe("/work")
 		expect(await fs.isDir("/work")).toBe(true)
+		expect(await fs.realpath("/work/a")).toBe("/work/a")
 		await fs.move("/work/a", "/work/b")
 		expect(requests).toEqual([
 			["fsInfo", undefined],
 			["fsStat", { path: "/work" }],
+			["fsRealpath", { path: "/work/a" }],
 			["fsMove", { from: "/work/a", to: "/work/b" }],
 		])
+	})
+
+	test("frontend adapter decodes base64 byte reads", async () => {
+		const fs = await createDesktopFs({
+			call: async (method) =>
+				method === "fsInfo" ? { home: "/home/test", cwd: "/work", root: "/", host: "test" } : { base64: "AQID" },
+		})
+		const bytes = await fs.readBytes("/work/a", 3)
+		expect(bytes).toBeInstanceOf(Uint8Array)
+		expect([...bytes]).toEqual([1, 2, 3])
 	})
 
 	test("tinyjs bookmark store reports persistence failures", async () => {

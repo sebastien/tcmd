@@ -14,9 +14,11 @@ import { PREVIEW_BYTES } from "../../src/js/tcmd/core/preview.js"
 
 // Function: createMockFs
 // Builds a mutable adapter over a `{ path -> entries }` map where each entry
-// is `{ name, isDir, size?, mtimeMs?, text?, isSymlink?, target? }`. A
-// `target` marks the entry as a symlink: listings, stats, `isDir` and
-// `readTextHead` all resolve through it, like the Node adapter does.
+// is `{ name, isDir, size?, mtimeMs?, text?, bytes?, isSymlink?, target? }`.
+// `text` is UTF-8 content and `bytes` raw content (for compressed fixtures);
+// a `target` marks the entry as a symlink: listings, stats, `isDir`,
+// `readTextHead` and `readBytes` all resolve through it, like the Node adapter
+// does.
 function createMockFs(tree) {
 	const dirs = new Map()
 	for (const [path, entries] of Object.entries(tree)) {
@@ -57,21 +59,22 @@ function createMockFs(tree) {
 	// to `broken` (the Node adapter's `stat` returns null for one). Hops are
 	// capped so a loop cannot hang the mock.
 	function resolveLink(entry, dirPath, depth = 0) {
-		if (entry?.isDir) return { isDir: true, size: 0, text: null, broken: false }
+		if (entry?.isDir) return { isDir: true, size: 0, text: null, bytes: null, broken: false }
 		if (!entry?.isSymlink || !entry.target || depth >= 8) {
 			return {
 				isDir: false,
-				size: entry?.size ?? entry?.text?.length ?? 0,
+				size: entry?.size ?? entry?.text?.length ?? entry?.bytes?.length ?? 0,
 				text: entry?.text ?? null,
+				bytes: entry?.bytes ?? null,
 				broken: false,
 			}
 		}
 		const target = resolveAgainst(dirPath, entry.target)
-		if (dirs.has(target)) return { isDir: true, size: 0, text: null, broken: false }
+		if (dirs.has(target)) return { isDir: true, size: 0, text: null, bytes: null, broken: false }
 		const next = (dirs.get(parent(target) ?? "/") ?? []).find(
 			(candidate) => candidate.name === basename(target),
 		)
-		if (!next) return { isDir: false, size: 0, text: null, broken: true }
+		if (!next) return { isDir: false, size: 0, text: null, bytes: null, broken: true }
 		return resolveLink(next, parent(target) ?? "/", depth + 1)
 	}
 
@@ -157,6 +160,25 @@ function createMockFs(tree) {
 			gid: entry.gid ?? null,
 			owner: entry.owner ?? "",
 		}
+	}
+
+	async function realpath(path, depth = 0) {
+		if (depth >= 8) throw Object.assign(new Error(`ELOOP: ${path}`), { code: "ELOOP" })
+		let current = "/"
+		for (const part of split(resolveAgainst("/", path))) {
+			const candidate = join(current, part)
+			const entry = findEntry(candidate)
+			if (entry?.isSymlink) {
+				if (!entry.target) throw Object.assign(new Error(`ENOENT: ${path}`), { code: "ENOENT" })
+				current = await realpath(resolveAgainst(parent(candidate) ?? "/", entry.target), depth + 1)
+			} else {
+				if (!dirs.has(candidate) && !entry) {
+					throw Object.assign(new Error(`ENOENT: ${path}`), { code: "ENOENT" })
+				}
+				current = candidate
+			}
+		}
+		return current
 	}
 
 	async function eraseOne(path) {
@@ -245,6 +267,7 @@ function createMockFs(tree) {
 			})
 		},
 		stat,
+		realpath,
 		isDir: async (path) => (await stat(path))?.isDir === true,
 		readTextHead: async (path, maxBytes = PREVIEW_BYTES) => {
 			const normalized = normalize(path)
@@ -255,6 +278,16 @@ function createMockFs(tree) {
 			if (resolved.isDir) throw new Error(`EISDIR: ${path}`)
 			if (resolved.broken) throw new Error(`ENOENT: ${path}`)
 			return (resolved.text ?? "").slice(0, maxBytes)
+		},
+		readBytes: async (path, maxBytes = PREVIEW_BYTES) => {
+			const normalized = normalize(path)
+			const entry = findEntry(normalized)
+			if (!entry) throw new Error(`ENOENT: ${path}`)
+			const resolved = resolveLink(entry, parent(normalized) ?? "/")
+			if (resolved.isDir) throw new Error(`EISDIR: ${path}`)
+			if (resolved.broken) throw new Error(`ENOENT: ${path}`)
+			const bytes = resolved.bytes ?? new TextEncoder().encode(resolved.text ?? "")
+			return bytes.slice(0, maxBytes)
 		},
 		du,
 		disk: async () => ({ free: 1_000_000, total: 4_000_000 }),

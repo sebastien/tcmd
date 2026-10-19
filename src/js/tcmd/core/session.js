@@ -24,6 +24,7 @@ import { createNullOs } from "./os.js"
 import { PANEL_FOCUS, argvFor, bindArgs, filterPanelEntries, isTextualRow, panelCommand, panelEntries, panelEntryRows, panelRowList, panelRunnable, pickerRowList, rowAt, withArgValue } from "./panel.js"
 import { basename, parent as parentPath } from "./path.js"
 import { hasBinaryByte, PREVIEW_BYTES, previewKind, previewSource } from "./preview.js"
+import { compressedBytes, decompressHead } from "./decompress.js"
 import { indexOfPath } from "./selection.js"
 import { createPane, PANE_BUFFERS } from "./pane.js"
 import { hasMatch, score } from "../vendor/fzy.js"
@@ -261,15 +262,19 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 		}
 		// The preview follows symlinks: its title names the traversal and its
 		// kind comes from what the link points at, not from the link's own
-		// name (a `notes -> README.md` previews as markdown).
+		// name (a `notes -> README.md` previews as markdown). A compressed
+		// entry is classified by the name inside it and read through its
+		// decompressor (`notes.txt.gz` previews as text).
 		const source = previewSource(entry)
-		const kind = entry.isDir ? "directory" : previewKind(source.ext)
+		const kind = entry.isDir ? "directory" : previewKind(source.innerExt)
 		if (entry.details) {
 			session.preview.set({
 				kind,
 				title: source.title,
 				size: entry.size,
 				ext: source.ext,
+				innerExt: source.innerExt,
+				compression: source.compression,
 				details: entry.details,
 				text: null,
 			})
@@ -280,14 +285,27 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 			return
 		}
 		const token = ++session._previewToken
-		const head =
-			kind === "text" ? await fs.readTextHead(entry.path, PREVIEW_BYTES).catch(() => null) : null
+		let head = null
+		if (kind === "text") {
+			if (source.compression) {
+				const bytes = await fs
+					.readBytes(entry.path, compressedBytes(source.compression))
+					.catch(() => null)
+				head = bytes
+					? await decompressHead(bytes, source.compression, PREVIEW_BYTES).catch(() => null)
+					: null
+			} else {
+				head = await fs.readTextHead(entry.path, PREVIEW_BYTES).catch(() => null)
+			}
+		}
 		if (token !== session._previewToken) return
 		session.preview.set({
 			kind,
 			title: source.title,
 			size: entry.size,
 			ext: source.ext,
+			innerExt: source.innerExt,
+			compression: source.compression,
 			text: head === null || hasBinaryByte(head) ? null : head,
 		})
 	})
@@ -385,17 +403,14 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 				rowIndex: rows.length,
 				name: runError ? "Retry" : "Run",
 				risk: entry.risk ?? null,
-				group: entry.group ?? "White",
+				group: entry.group ?? "File",
 				error: runError,
 			})
 			return rows
 		},
 	)
-	// The right pane's argument blocks (label + value/field, and a bordered
-	// item list per selection), and the label column width that aligns them.
-	session.panelLabelWidth = derived([session.panelDraft], ([draft]) =>
-		Math.max(4, ...(draft ?? []).map((binding) => `${binding.name ?? ""}`.length)),
-	)
+	// The right pane's argument blocks (a label line over its value/field, and
+	// a bordered item list per selection).
 	// Operation-specific preflight output (currently `replace`'s old → new
 	// mapping) is distinct from the assembled shell command.
 	session.panelPreview = derived(

@@ -31,6 +31,8 @@
 //              for filled badges (the command bar status, the confirm dialog).
 // - Content:   the file-listing colors (file/link/device/directory plus the
 //              executable and read-only file states).
+// - Scrollbar: the track and thumb of every scrollable surface (the TUI's
+//              slider, mirrored by the web's CSS variables).
 // - Brand:     the identity-bar gradient endpoints — "Tiny" stays blue, "Cmd"
 //              runs gold to saturated orange.
 
@@ -80,6 +82,9 @@ const DARK = {
 	// (`ls --color` / Midnight Commander habits).
 	execFg: "#5fd67a",
 	readonlyFg: "#7d8ab8",
+	// Scrollbar
+	scrollbarTrackBg: "transparent",
+	scrollbarThumbBg: "#22345e",
 	// Brand
 	brandTinyFrom: "#4088ff",
 	brandTinyTo: "#7cd0ff",
@@ -130,6 +135,9 @@ const LIGHT = {
 	dirFg: "#1d4ed8",
 	execFg: "#0f7a3d",
 	readonlyFg: "#6b7280",
+	// Scrollbar
+	scrollbarTrackBg: "transparent",
+	scrollbarThumbBg: "#34548f",
 	// Brand
 	brandTinyFrom: "#1d4ed8",
 	brandTinyTo: "#3b82f6",
@@ -172,6 +180,8 @@ const MONO = {
 	dirFg: undefined,
 	execFg: undefined,
 	readonlyFg: undefined,
+	scrollbarTrackBg: undefined,
+	scrollbarThumbBg: undefined,
 	brandTinyFrom: undefined,
 	brandTinyTo: undefined,
 	brandCmdFrom: undefined,

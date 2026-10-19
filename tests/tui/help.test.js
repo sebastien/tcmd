@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test"
 import { cell } from "select/state/cells"
 import { createPane, createSession, load } from "../../src/js/tcmd/core/index.js"
 import { createAppComponent } from "../../src/js/tcmd/tui/app.js"
+import { tuiTheme } from "../../src/js/tcmd/tui/theme.js"
 import { createMockFs } from "../helpers/mock-fs.js"
 import { settle } from "../helpers/tui-setup.js"
 
@@ -36,17 +37,21 @@ async function makeSetup(width = 120, height = 30) {
 	return { setup, session, help, size }
 }
 
-// The scrollbar renders as background-coloured cells, so it is detected from
-// the captured spans (track #252527 / thumb #9a9ea3) rather than the text frame.
+// The scrollbar renders as a thumb over a transparent track, so it is detected
+// from the captured spans (the theme's night-blue thumb) rather than the text
+// frame.
+function rgb(hex) {
+	return [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16))
+}
+const SCROLLBAR_COLORS = [tuiTheme.scrollbarThumbBg].filter(Boolean).map(rgb)
+
 function hasScrollBar(setup) {
-	const colors = [
-		[37, 37, 39],
-		[154, 158, 163],
-	]
 	for (const line of setup.captureSpans().lines) {
 		for (const span of line.spans) {
-			const bg = span.bg?.buffer
-			if (bg && colors.some((color) => bg[0] === color[0] && bg[1] === color[1] && bg[2] === color[2])) return true
+			for (const channel of [span.fg?.buffer, span.bg?.buffer]) {
+				if (!channel) continue
+				if (SCROLLBAR_COLORS.some((color) => color.every((value, at) => channel[at] === value))) return true
+			}
 		}
 	}
 	return false

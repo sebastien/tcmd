@@ -3,11 +3,15 @@
 // Module: tcmd/desktop/os
 // Host adapter for tinyjs. Opening/editing is delegated to the OS's default
 // application. Explicit shell commands run in a non-interactive shell; bounded
-// output is returned to the caller and shown in a native alert.
+// output is returned to the caller and shown in a native alert. Clipboard
+// writes go through the webview's Clipboard API.
+
+import { copyToBrowserClipboard } from "../core/os.js"
 
 function createDesktopOs({ call, tiny = globalThis.tiny }) {
 	return {
 		canEdit: true,
+		copy: (text) => copyToBrowserClipboard(text),
 		open: (path) => call("hostOpen", { path }),
 		edit: (path) => call("hostEdit", { path }),
 		async run(command, options = {}) {

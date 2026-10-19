@@ -146,6 +146,33 @@ describe("commands", () => {
 		expect(session.previewTarget.value?.path).toBe("/home/notes.txt")
 	})
 
+	test("panel.copy writes a read-only value through the host clipboard", async () => {
+		const copied = []
+		const fs = createMockFs(TREE)
+		const session = createSession({
+			fs,
+			os: {
+				canEdit: true,
+				copy: (text) => {
+					copied.push(text)
+					return true
+				},
+			},
+			left: createPane({ fs, path: "/home" }),
+			right: createPane({ fs, path: "/" }),
+			viewMode: "commander",
+		})
+		await load(session)
+		session.dispatch("panel.copy", { text: "/home/notes.txt" })
+		expect(copied).toEqual(["/home/notes.txt"])
+		expect(session.notice.value).toMatchObject({ kind: "tip", text: "copied /home/notes.txt" })
+		// A host without a clipboard reports it instead of claiming success.
+		session.notice.set(null)
+		session.os.copy = () => false
+		session.dispatch("panel.copy", { text: "/home/notes.txt" })
+		expect(session.notice.value).toMatchObject({ kind: "warning" })
+	})
+
 	test("view.toggleViewer opens and closes the fullscreen inspector", async () => {
 		const session = makeSession()
 		expect(session.viewerOpen.value).toBe(false)

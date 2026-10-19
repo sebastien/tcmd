@@ -61,16 +61,32 @@ describe("http fs adapter", () => {
 	test("stat, readTextHead, du and disk unwrap their payloads", async () => {
 		const payloads = {
 			stat: { isDir: false, size: 12 },
+			realpath: "/root/a",
 			readTextHead: "hello",
 			du: 34,
 			disk: { free: 1, total: 2 },
 		}
 		const { fs } = await makeFs((call) => jsonResponse(payloads[new URL(call.url).pathname.split("/").pop()]))
 		expect(await fs.stat("/a")).toEqual({ isDir: false, size: 12 })
+		expect(await fs.realpath("/a")).toBe("/root/a")
 		expect(await fs.isDir("/a")).toBe(false)
 		expect(await fs.readTextHead("/a", 64)).toBe("hello")
 		expect(await fs.du("/a")).toBe(34)
 		expect(await fs.disk("/a")).toEqual({ free: 1, total: 2 })
+	})
+
+	test("readBytes decodes the base64 payload", async () => {
+		const { fs, impl } = await makeFs((call) => {
+			if (call.url.includes("/readBytes")) return jsonResponse({ base64: "AQID" })
+			throw new Error(`unexpected ${call.url}`)
+		})
+		const bytes = await fs.readBytes("/a", 3)
+		expect(bytes).toBeInstanceOf(Uint8Array)
+		expect([...bytes]).toEqual([1, 2, 3])
+		const url = new URL(impl.calls[1].url)
+		expect(url.pathname).toBe("/api/readBytes")
+		expect(url.searchParams.get("path")).toBe("/a")
+		expect(url.searchParams.get("maxBytes")).toBe("3")
 	})
 
 	test("mutations post JSON bodies to their routes", async () => {

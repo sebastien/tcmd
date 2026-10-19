@@ -1,7 +1,17 @@
 import { describe, expect, test } from "bun:test"
+import { gzipSync } from "node:zlib"
 import { PANE_BUFFERS, PANE_LABELS, createPane } from "../../src/js/tcmd/core/pane.js"
 import { createSession, load } from "../../src/js/tcmd/core/session.js"
 import { createMockFs } from "../helpers/mock-fs.js"
+
+// "hello from bzip2\ncafé second line\n", compressed with `bzip2 -c`.
+const BZIP2_FIXTURE = Uint8Array.from(
+	Buffer.from(
+		"QlpoOTFBWSZTWeweYXcAAAjZlAAQQAAQAD9n2BAAIAgAIAAijIMhoNqCgaaGRkxCtnSjmFVOQfdGr0TQ2g5DJiw8fxdyRThQkOweYXc=",
+		"base64",
+	),
+)
+const BZIP2_TEXT = "hello from bzip2\ncafé second line\n"
 
 const TREE = {
 	"/": [{ name: "home", isDir: true }],
@@ -60,6 +70,53 @@ describe("session", () => {
 		expect(preview.text).toContain("hello")
 	})
 
+	test("previews gzip and bzip2 entries by decompressing their head", async () => {
+		const fixtures = {
+			"notes.txt.gz": { bytes: gzipSync("hello from gzip\n"), compression: "gzip" },
+			"notes.txt.bz2": { bytes: BZIP2_FIXTURE, compression: "bzip2" },
+		}
+		for (const [name, fixture] of Object.entries(fixtures)) {
+			const fs = createMockFs({
+				"/": [{ name: "home", isDir: true }],
+				"/home": [{ name, bytes: fixture.bytes, size: fixture.bytes.length }],
+			})
+			const session = createSession({
+				fs,
+				left: createPane({ fs, path: "/home" }),
+				right: createPane({ fs, path: "/" }),
+				viewMode: "commander",
+			})
+			await load(session)
+			await new Promise((resolve) => setTimeout(resolve, 0))
+			const preview = session.preview.value
+			expect(preview.kind).toBe("text")
+			expect(preview.text).toBe(name.endsWith(".gz") ? "hello from gzip\n" : BZIP2_TEXT)
+			expect(preview.ext).toBe(name.split(".").at(-1))
+			expect(preview.innerExt).toBe("txt")
+			expect(preview.compression).toBe(fixture.compression)
+			expect(preview.title).toBe(name)
+		}
+	})
+
+	test("a compressed body that decompresses to binary stays a card", async () => {
+		const tar = Buffer.from([0x61, 0x2e, 0x74, 0x78, 0x74, 0x00, 0x00, 0x00])
+		const fs = createMockFs({
+			"/": [{ name: "home", isDir: true }],
+			"/home": [{ name: "archive.tar.gz", bytes: gzipSync(tar), size: 40 }],
+		})
+		const session = createSession({
+			fs,
+			left: createPane({ fs, path: "/home" }),
+			right: createPane({ fs, path: "/" }),
+			viewMode: "commander",
+		})
+		await load(session)
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(session.preview.value.kind).toBe("text")
+		expect(session.preview.value.text).toBeNull()
+		expect(session.preview.value.innerExt).toBe("tar")
+	})
+
 	test("command bar shows bar commands, then panel hints while open", () => {
 		const session = makeSession()
 		const ids = session.commandBarItems.value.map((item) => item.id)
@@ -75,38 +132,37 @@ describe("session", () => {
 		expect(picker).toContain("Choose")
 	})
 
-	test("the panel lists name-only CLI operations in color-grouped alphabetical rows", () => {
+	test("the panel lists categorized name-only operations and the view command", () => {
 		const session = makeSession()
 		const items = session.panelItems.value
-		const operations = items.filter((item) => item.type === "op")
-		expect(operations.map((item) => item.name)).toEqual([
-			"bookmark", "copy", "edit", "mkdir", "open", "run", "sel", "stat", "touch", "view",
-			"move", "rename", "replace", "delete", "erase",
+		const entries = items.filter((item) => item.type === "op")
+		expect(entries.map((item) => item.name)).toEqual([
+			"bookmark", "view", "abspath", "copy", "mkdir", "open", "realpath", "run", "stat", "view",
+			"edit", "move", "rename", "replace", "touch", "delete", "erase",
 		])
 		expect(items.filter((item) => item.type === "group").map((item) => item.name)).toEqual([
-			"White", "Amber", "Red",
+			"Command", "File", "Edit", "Delete",
 		])
-		expect(operations.every((item) => item.summary === undefined)).toBe(true)
-		// No internal TinyCmd actions appear in the panel.
-		expect(items.some((item) => `${item.id}`.startsWith("cmd:"))).toBe(false)
+		expect(entries.every((item) => item.summary === undefined)).toBe(true)
+		expect(entries.some((item) => item.id === "command:view")).toBe(true)
 	})
 
 	test("the panel filters the operations by query and resets its cursor", () => {
 		const session = makeSession()
 		session.panelQuery.set("copy")
 		const ids = session.panelItems.value.map((item) => item.id)
-		expect(ids).toEqual(["group:white", "op:copy"])
+		expect(ids).toEqual(["group:file", "op:copy"])
 
 		session.panelOpIndex.set(3)
 		session.panelQuery.set("touch")
 		expect(session.panelOpIndex.value).toBe(0)
 	})
 
-	test("filtering keeps fixed risk-color groups instead of relevance-ranking", () => {
+	test("filtering keeps fixed categories instead of relevance-ranking", () => {
 		const session = makeSession()
 		session.panelQuery.set("op")
 		const items = session.panelItems.value
-		expect(items.map((item) => item.id)).toEqual(["group:white", "op:copy", "op:open"])
+		expect(items.map((item) => item.id)).toEqual(["group:file", "op:copy", "op:open"])
 	})
 
 	test("`!` lands on the shell operation with its CMD field focused", () => {

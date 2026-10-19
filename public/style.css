@@ -36,8 +36,8 @@
 	--pane-active-commander: #ffc233;
 	--text: #e6ecff;
 	--text-dim: #8fa3d9;
-	--scrollbar-track: #252527;
-	--scrollbar-thumb: #9a9ea3;
+	--scrollbar-track: transparent;
+	--scrollbar-thumb: #22345e;
 	--accent: #ffc233;
 	--accent-soft: #2b3f78;
 	--dir: #5c8cff;
@@ -1152,14 +1152,28 @@ input:focus-visible {
 	color: var(--text-dim);
 }
 
+/* An argument stacks its label over its value: the marker and label on the
+   first line, the value field aligned under the label on the second. */
 .panel-row[data-type="arg"] {
 	display: grid;
-	grid-template-columns: 1.25rem 6.25rem minmax(0, 1fr);
+	grid-template-columns: 1.25rem minmax(0, 1fr);
+	grid-template-rows: auto auto;
+	row-gap: 0.1rem;
+	align-items: baseline;
 }
 
-.panel-row[data-type="arg"] .panel-name {
+.panel-row[data-type="arg"] > .panel-marker {
+	grid-area: 1 / 1;
+}
+
+.panel-row[data-type="arg"] > .panel-name {
+	grid-area: 1 / 2;
 	min-width: 0;
 	overflow: hidden;
+}
+
+.panel-row[data-type="arg"] > .panel-field {
+	grid-area: 2 / 2;
 }
 
 .panel-row.is-focused,

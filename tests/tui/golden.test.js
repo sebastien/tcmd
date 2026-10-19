@@ -201,14 +201,15 @@ describe("golden frames", () => {
 			setup.mockInput.pressKey(":")
 			await settle(setup)
 			const frame = setup.captureCharFrame()
-			// The entry list opens on `bookmark`, first in the White group.
+			// The entry list opens on `bookmark`, first in the Command group.
 			expect(frame).toContain(" Command · bookmark ")
-			expect(frame).toContain("White")
-			expect(frame).toContain("Amber")
+			expect(frame).toContain("Command")
+			expect(frame).toContain("File")
+			expect(frame).toContain("Edit")
 			const groupSpans = setup.captureSpans().lines
 				.flatMap((line) => line.spans)
-				.filter((span) => ["White", "Amber"].includes(span.text))
-			expect(groupSpans.map((span) => span.attributes)).toEqual([1, 1])
+				.filter((span) => ["Command", "File", "Edit"].includes(span.text))
+			expect(groupSpans.map((span) => span.attributes)).toEqual([1, 1, 1])
 			expect(frame).toContain("copy")
 			expect(frame).not.toContain("copy FROM TO")
 			// bookmark's PATH is a single path: it renders as a pre-filled,
@@ -244,8 +245,8 @@ describe("golden frames", () => {
 			await settle(setup)
 			await setup.mockInput.typeText("open")
 			await settle(setup)
-			// Only the CLI operation matches; the internal actions are gone.
-			expect(session.panelItems.value.map((item) => item.id)).toEqual(["group:white", "op:open"])
+			// Only the File operation matches the query.
+			expect(session.panelItems.value.map((item) => item.id)).toEqual(["group:file", "op:open"])
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain(" Command · open ")
 			expect(frame).not.toContain("open PATH...")
@@ -268,10 +269,10 @@ describe("golden frames", () => {
 			const eraseLine = lines.findIndex((line) => line.includes(">  erase"))
 			expect(eraseLine).toBeGreaterThanOrEqual(0)
 			expect(lines.some((line) => line.includes("[Run]"))).toBe(true)
-			// The final risk group is in view after the list scrolls, while the
+			// The final category is in view after the list scrolls, while the
 			// arguments and Run action remain available in the right pane.
-			expect(lines.some((line) => line.includes("Red"))).toBe(true)
-			expect(lines.some((line) => line.includes("White"))).toBe(false)
+			expect(lines.some((line) => line.includes("Delete"))).toBe(true)
+			expect(lines.some((line) => /\bCommand\s+│/.test(line))).toBe(false)
 			expect(session.panelOpIndex.value).toBe(last)
 		} finally {
 			setup.renderer.destroy()
@@ -343,7 +344,7 @@ describe("golden frames", () => {
 		try {
 			setup.mockInput.pressKey(":")
 			await settle(setup)
-			// The list opens on `bookmark` (the first White operation); filter to
+			// The list opens on `bookmark` (the first Command entry); filter to
 			// the runnable `copy` draft.
 			await setup.mockInput.typeText("copy")
 			await settle(setup)

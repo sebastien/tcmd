@@ -5,15 +5,15 @@
 
 // Module: tcmd/components/CommandArgRow
 // CommandArgRow: one row shared by the command panel's two panes. The left pane
-// passes `{ type: "op" }` name-only rows (`risk` tints destructive/caution
-// operations) and `{ type: "group" }` headers (White / Amber / Red). The
+// passes `{ type: "op" }` name-only rows (`risk` tints caution/destructive
+// categories) and `{ type: "group" }` headers (Command / File / Edit / Delete). The
 // right pane passes `{ type: "arg" | "item" | "frame" | "entry" | "parent" | "run" }`
-// rows: an argument header shows an aligned label and its value — a bracketed
-// field with a distinct background for textual arguments, a summary otherwise;
-// an item shows a `[x]`/`[ ]` (or radio) marker with its basename and parent; a
+// rows: an argument header stacks its label over its value — a bracketed field
+// with a distinct background for textual arguments, a summary otherwise; an
+// item shows a `[x]`/`[ ]` (or radio) marker with its basename and parent; a
 // `frame` draws a selection list's border; and `parent` is the picker's `..`
-// navigation row. Reads the row bag `{ item, index, row, cursor, focus, value,
-// labelWidth }` built by `rows.js`.
+// navigation row. Reads the row bag `{ item, index, row, cursor, focus, value }`
+// built by `rows.js`.
 //
 // Environment: `accentFg` (focused row), `textFg`, `textSecondaryFg` (summary),
 // `textHeadingFg` (general headings), `accentSecondaryFg` (a selected item),
@@ -25,8 +25,8 @@
 import { unwrap } from "select/state/cells"
 
 // Function: riskFg
-// The colour a row's risk maps to: red for destructive operations, amber for
-// caution (a move), null when the row is not risky.
+// The colour a row's category maps to: red for Delete, amber for Edit, null
+// when the row is neither.
 function riskFg(row, env) {
 	if ((row?.type === "op" || row?.type === "run") && row.risk === "destructive") return env.errorFg
 	if ((row?.type === "op" || row?.type === "run") && row.risk === "caution") return env.warningFg
@@ -34,11 +34,10 @@ function riskFg(row, env) {
 }
 
 // Function: groupFg
-// Color a risk-group heading like its operations: neutral white, amber caution,
-// or red destructive.
+// Color the purpose-group headings: Edit is amber and Delete is red.
 function groupFg(group, env) {
-	if (group === "Amber") return env.warningFg
-	if (group === "Red") return env.errorFg
+	if (group === "Edit") return env.warningFg
+	if (group === "Delete") return env.errorFg
 	return env.textFg
 }
 
@@ -106,12 +105,8 @@ function createBehaviors(env) {
 		// --- shared row content ---
 		marker: (_self, data) => (focused(data) ? ">" : " "),
 		markerFg: () => env.accentFg,
-		// An argument label is padded to the column width so values line up
-		// across arguments (both renderers honor the spaces).
-		name: (_self, data) => {
-			const text = rowName(data.row)
-			return type(data) === "arg" ? text.padEnd(data.labelWidth ?? 8) : text
-		},
+		// An argument's label sits on its own line, above the value.
+		name: (_self, data) => rowName(data.row),
 		rowBg: (_self, data) => (focused(data) ? env.selectionBg : undefined),
 		rowClass: (_self, data) =>
 			[focused(data) ? env.focusedClass : null, listClass(data)].filter(Boolean).join(" ") || null,
@@ -143,7 +138,9 @@ function createBehaviors(env) {
 		isList: (_self, data) => isList(data),
 		showPlain: (_self, data) => type(data) === "op" || type(data) === "entry" || type(data) === "parent",
 		isPlain: (_self, data) => type(data) === "entry" || type(data) === "parent",
-		labelWidth: (_self, data) => data.labelWidth ?? 8,
+		// An argument stacks its label over its value; every other row is one
+		// line tall.
+		rowHeight: (_self, data) => (type(data) === "arg" ? 2 : 1),
 		runMarginTop: (_self, data) => (type(data) === "run" ? 1 : 0),
 		runLabel: (_self, data) => (data?.row?.error ? "[Retry]" : "[Run]"),
 		runAriaLabel: (_self, data) => (data?.row?.error ? "Retry command" : "Run command"),
@@ -159,12 +156,12 @@ function createBehaviors(env) {
 			data.row?.textual ? (env.fieldFg ?? env.textFg) : (env.readonlyFg ?? env.textSecondaryFg),
 		fieldOpen: (_self, data) => (data.row?.textual ? "[" : ""),
 		fieldClose: (_self, data) => (data.row?.textual ? "]" : ""),
-		// The list indents under the value column: the marker (2) plus the gap
-		// (1) plus the label column plus the gap (1). The spacer is NBSP so the
-		// renderers do not collapse the leading run.
-		rowIndent: (_self, data) => (isList(data) ? 4 + (data.labelWidth ?? 8) : 0),
-		listIndent: (_self, data) => 4 + (data.labelWidth ?? 8),
-		listSpacer: (_self, data) => "\u00a0".repeat(4 + (data.labelWidth ?? 8)),
+		// The list indents under the value line: the marker column (2) plus the
+		// gap (1). The spacer is NBSP so the renderers do not collapse the
+		// leading run.
+		rowIndent: (_self, data) => (isList(data) ? 3 : 0),
+		listIndent: (_self, data) => 3,
+		listSpacer: (_self, data) => "\u00a0".repeat(3),
 		listBorder: (_self, data) => {
 			if (type(data) !== "frame") return ["left", "right"]
 			return data.row?.variant === "top" ? ["top", "left", "right"] : ["bottom", "left", "right"]

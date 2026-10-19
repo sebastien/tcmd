@@ -144,7 +144,6 @@ function webViewBehaviors() {
 			opCursor: data.panelOpIndex,
 			rows: data.panelRows,
 			argCursor: data.panelRowIndex,
-			labelWidth: data.panelLabelWidth,
 			focus: data.panelFocus,
 			preview: data.panelPreview,
 			picking: data.panelPicking,

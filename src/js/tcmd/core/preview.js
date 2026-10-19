@@ -9,8 +9,9 @@
 // opens a text file in `$EDITOR` and everything else in the fullscreen
 // inspector (see `core/commands`). Pure and renderer-free: `previewKind` maps
 // a resolved extension to a preview kind, `previewSource` resolves what a
-// symlink previews *through*, and `hasBinaryByte` is the content sniff that
-// turns a text head into a metadata card.
+// symlink previews *through* (and what a compressed file decompresses *to*),
+// and `hasBinaryByte` is the content sniff that turns a text head into a
+// metadata card.
 
 import { basename, extname } from "./path.js"
 
@@ -26,6 +27,23 @@ const SNIFF_BYTES = 2048
 // card, never as an editable text body.
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"]
 const MEDIA_EXTS = ["mp3", "wav", "ogg", "flac", "mp4", "webm", "mkv", "mov", "pdf"]
+
+// Constant: COMPRESSION_EXTS
+// Single-file compression formats the inspector decompresses before sniffing
+// the body. The compressed entry keeps its own extension in the header; the
+// name inside (`notes.txt` in `notes.txt.gz`) supplies the kind, the syntax
+// filetype and the badge's inner label.
+const COMPRESSION_EXTS = new Map([
+	["gz", "gzip"],
+	["bz2", "bzip2"],
+])
+
+// Function: compressionOf
+// Decompressor for a resolved extension ("gzip"/"bzip2"), or null when the
+// entry is not compressed.
+function compressionOf(ext) {
+	return ext ? COMPRESSION_EXTS.get(ext) ?? null : null
+}
 
 // Function: previewKind
 // Preview classification for a resolved file extension; directories are not
@@ -49,17 +67,36 @@ function hasBinaryByte(text) {
 }
 
 // Function: previewSource
-// What the preview renders *through* a symlink: `title` names the traversal
-// (`notes -> ../real/notes`) so it is visible in the header, and `ext` is the
-// target's extension, so a link previews with the kind of what it points at
-// rather than the kind of its own name. Plain entries pass through unchanged.
+// What the preview renders *through* a symlink, and what a compressed file
+// decompresses to: `title` names the traversal (`notes -> ../real/notes`) so
+// it is visible in the header; `ext` is the entry's (target's) own extension;
+// `innerName`/`innerExt` strip a `.gz`/`.bz2` suffix so `notes.txt.gz`
+// previews with the kind, filetype and badge of `notes.txt`; `compression` is
+// the decompressor the session applies, or null. Plain entries pass through
+// with `innerName === name` and `innerExt === ext`.
 function previewSource(entry) {
 	const target = entry?.isSymlink && entry.target ? `${entry.target}` : null
-	if (!target || !entry?.path) return { title: basename(entry?.path ?? ""), ext: entry?.ext ?? null }
-	const ext = extname(target) ?? entry.ext ?? null
-	return { title: `${basename(entry.path)} -> ${target}`, ext }
+	const name = target ? basename(target) : basename(entry?.path ?? "")
+	const ext = extname(name) ?? entry?.ext ?? null
+	const compression = compressionOf(ext)
+	const innerName = compression ? name.slice(0, name.lastIndexOf(".")) : name
+	const innerExt = compression ? extname(innerName) : ext
+	return {
+		title: target ? `${basename(entry.path)} -> ${target}` : name,
+		ext,
+		innerName,
+		innerExt,
+		compression,
+	}
 }
 
-export { hasBinaryByte, PREVIEW_BYTES, previewKind, previewSource, SNIFF_BYTES }
+export {
+	compressionOf,
+	hasBinaryByte,
+	PREVIEW_BYTES,
+	previewKind,
+	previewSource,
+	SNIFF_BYTES,
+}
 
 // EOF

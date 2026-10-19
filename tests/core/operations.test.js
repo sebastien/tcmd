@@ -73,6 +73,24 @@ describe("operations", () => {
 		expect(expandArg(session, "~/x")).toEqual(["/home/tester/x"])
 	})
 
+	test("abspath normalizes names and realpath follows symlinks with pasteable output", async () => {
+		const fs = createMockFs({
+			"/": [{ name: "target file.txt", text: "hello" }],
+			"/home": [{ name: "alias", isSymlink: true, target: "/target file.txt" }],
+		})
+		const session = createSession({
+			fs,
+			left: createPane({ fs, path: "/home" }),
+			right: createPane({ fs, path: "/" }),
+		})
+		await Promise.all(Object.values(session.panes).map((pane) => pane.refresh()))
+
+		await runLine(session, "abspath ../home/./alias")
+		expect(session.notice.value.text).toBe("/home/alias")
+		await runLine(session, "realpath alias")
+		expect(session.notice.value.text).toBe("'/target file.txt'")
+	})
+
 	test("copy copies files and directories recursively", async () => {
 		const { fs, session } = await makeSession()
 		await runLine(session, "copy notes.txt /tmp")

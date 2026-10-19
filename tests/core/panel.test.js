@@ -20,7 +20,7 @@ import {
 	withArgValue,
 	withToggledItem,
 } from "../../src/js/tcmd/core/panel.js"
-import { expandArg } from "../../src/js/tcmd/core/operations.js"
+import { expandArg, getOperation } from "../../src/js/tcmd/core/operations.js"
 import { createMockFs } from "../helpers/mock-fs.js"
 
 const TREE = {
@@ -36,10 +36,10 @@ const TREE = {
 	"/tmp": [],
 }
 
-// The panel entry for a CLI operation name; these tests exercise the CLI half
-// of the union, so no TinyCmd actions are needed.
+// The panel entry for a CLI operation name. `sel` is script-only (not in the
+// menu), so fall back to the operations registry for it.
 function entryFor(name) {
-	return panelEntries().find((entry) => entry.name === name)
+	return panelEntries().find((entry) => entry.name === name) ?? { name, op: getOperation(name) }
 }
 
 async function makeSession(viewMode = "commander") {
@@ -57,27 +57,34 @@ async function makeSession(viewMode = "commander") {
 }
 
 describe("panel", () => {
-	test("lists the CLI operations, each with its operation and args", () => {
+	test("lists categorized CLI operations and the workspace-view command", () => {
 		const entries = panelEntries()
 		const names = entries.map((entry) => entry.name)
 		expect(names).toContain("copy")
-		expect(names).toContain("sel")
+		// `sel` stays available to scripts, but is not offered in the menu.
+		expect(names).not.toContain("sel")
 		expect(names).toContain("run")
-		// Every entry carries an operation and an args signature.
-		for (const entry of entries) {
+		expect(entries.some((entry) => entry.id === "command:view" && entry.commandId === "view.toggleMode")).toBe(true)
+		// CLI entries carry an operation and an args signature.
+		for (const entry of entries.filter((entry) => entry.op)) {
 			expect(entry.op.args.length).toBeGreaterThan(0)
 			expect(entry.id).toBe(`op:${entry.name}`)
 		}
 	})
 
-	test("filterPanelEntries groups by risk color and alphabetizes within each color", () => {
+	test("filterPanelEntries groups by purpose and alphabetizes within each category", () => {
 		const entries = panelEntries()
-		// Groups use the fixed White / Amber / Red order; names are sorted
-		// alphabetically within each risk color.
+		// Groups use the fixed Command / File / Edit / Delete order; names are
+		// sorted alphabetically within each category.
 		expect(filterPanelEntries(entries, "").map((entry) => entry.name)).toEqual(
-			["bookmark", "copy", "edit", "mkdir", "open", "run", "sel", "stat", "touch", "view", "move", "rename", "replace", "delete", "erase"],
+			["bookmark", "view", "abspath", "copy", "mkdir", "open", "realpath", "run", "stat", "view", "edit", "move", "rename", "replace", "touch", "delete", "erase"],
 		)
-		// Matches retain color group order rather than relevance-ranking.
+		// The duplicate `view` names stay in their Command and File categories.
+		expect(filterPanelEntries(entries, "view").map((entry) => [entry.group, entry.id])).toEqual([
+			["Command", "command:view"],
+			["File", "op:view"],
+		])
+		// Matches retain category order rather than relevance-ranking.
 		expect(filterPanelEntries(entries, "op").map((entry) => entry.name)).toEqual(["copy", "open"])
 		expect(filterPanelEntries(entries, "edit").map((entry) => entry.name)).toEqual(["edit"])
 		// An alias matches (`!` -> run).
@@ -257,32 +264,43 @@ describe("panel", () => {
 	test("panelCommand and panelRunnable track the draft through the session", async () => {
 		const { session } = await makeSession()
 		session.dispatch("panel.open")
-		// White/no-risk operations lead the list; `bookmark` is first and its
+		// Command entries lead the list; `bookmark` is first and its
 		// optional NAME before PATH leaves a positional gap until filled.
 		expect(session.panelEntry.value.name).toBe("bookmark")
 		expect(session.panelCommand.value).toBe("bookmark /home/docs")
 		expect(session.panelRunnable.value).toBe(false)
-		// Operation rows contain only command names; group rows show risk colors.
+		// Rows contain only command names; group rows show purpose categories.
 		const copy = session.panelItems.value.find((item) => item.name === "copy")
 		expect(copy.type).toBe("op")
 		expect(copy.summary).toBeUndefined()
 		expect(session.panelItems.value.filter((item) => item.type === "group").map((item) => item.name)).toEqual([
-			"White", "Amber", "Red",
+			"Command", "File", "Edit", "Delete",
 		])
-		expect(session.panelItems.value.filter((item) => item.type === "op" && item.group === "Amber").map((item) => item.name)).toEqual([
-			"move", "rename", "replace",
+		expect(session.panelItems.value.filter((item) => item.type === "op" && item.group === "Edit").map((item) => item.name)).toEqual([
+			"edit", "move", "rename", "replace", "touch",
 		])
-		expect(session.panelItems.value.filter((item) => item.type === "op" && item.group === "Red").map((item) => item.name)).toEqual([
+		expect(session.panelItems.value.filter((item) => item.type === "op" && item.group === "Delete").map((item) => item.name)).toEqual([
 			"delete", "erase",
 		])
 		expect(session.panelRows.value.at(-1)).toMatchObject({ type: "run", name: "Run" })
+	})
+
+	test("running Command/view toggles Explorer and Commander", async () => {
+		const { session } = await makeSession()
+		session.dispatch("panel.open")
+		session.dispatch("panel.setOp", {
+			index: session.panelFiltered.value.findIndex((entry) => entry.id === "command:view"),
+		})
+		await session.dispatch("panel.run")
+		expect(session.panelOpen.value).toBe(false)
+		expect(session.viewMode.value).toBe("explorer")
 	})
 
 	test("run via panel dispatch executes and stays transient", async () => {
 		const { fs, session } = await makeSession()
 		session.dispatch("panel.open")
 		expect(session.panelOpen.value).toBe(true)
-		// The list opens on the first White/no-risk command.
+		// The list opens on the first Command entry.
 		expect(session.panelEntry.value.name).toBe("bookmark")
 		// Toggle the destination op to `delete` and run against the cursor.
 		const deleteIndex = session.panelFiltered.value.findIndex((op) => op.name === "delete")

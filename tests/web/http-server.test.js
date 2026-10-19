@@ -76,6 +76,10 @@ describe("web server", () => {
 		expect(await (await api("stat", { params: { path: join(root, "gone") } })).json()).toBeNull()
 		const text = await (await api("readTextHead", { params: { path: join(root, "README.md"), maxBytes: 8 } })).json()
 		expect(text).toBe("# root r")
+		const bytes = await (
+			await api("readBytes", { params: { path: join(root, "README.md"), maxBytes: 4 } })
+		).json()
+		expect(Buffer.from(bytes.base64, "base64").toString("utf8")).toBe("# ro")
 		const size = await (await api("du", { params: { path: root } })).json()
 		expect(size).toBe("# root readme\n".length + "hello\nworld\n".length)
 	})
@@ -135,6 +139,9 @@ describe("web server", () => {
 		expect((await api("erase", { method: "POST", body: { paths: [link] } })).status).toBe(403)
 		const entries = await (await api("readDir", { params: { path: internalLink } })).json()
 		expect(entries.map((entry) => entry.name)).toContain("notes.txt")
+		expect(await (await api("realpath", { params: { path: join(internalLink, "notes.txt") } })).json()).toBe(
+			join(root, "home", "tester", "notes.txt"),
+		)
 		expect(await readFile(outside, "utf8")).toBe("outside root")
 	})
 

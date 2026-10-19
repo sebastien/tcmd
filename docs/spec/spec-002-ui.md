@@ -79,7 +79,10 @@ Each pane is a single-line box containing:
 The inspector is context-aware: text files show their leading content, other
 kinds show a metadata card, and a directory shows *its own listing* — the same
 column shape as a pane (breadcrumbs over a cursorable, clickable listing), in
-both view modes, so a previewed directory is never a dead card. It sits beside
+both view modes, so a previewed directory is never a dead card. A `.gz` or
+`.bz2` file is decompressed first: its inner name picks the kind and the
+highlighter (`notes.txt.gz` badges as `<GZ · TXT>`) and its body previews as
+text unless it decompresses to binary, which keeps the card. It sits beside
 the panes at ≥100 columns and becomes a fullscreen viewer (`v`) below that;
 `⇧V` maximizes it over the whole pane row in either mode, and the next `⇧V`
 restores the previous layout (focus and pane widths included).
@@ -146,22 +149,25 @@ events, with the renderer dimensions as a fallback):
 - Command palette (`^P`): centered, sectioned, with a selected-row marker and
   its own hint footer. `!` opens it in `run CMD` mode; the `:` key opens the
   command panel instead.
-- Command panel (`:`/`m`): a Commando-style structured view over the operations.
+- Command panel (`:`/`m`): a Commando-style structured view over the commands.
   A filter input at the top narrows the operation list as you type — the
   matching command takes the cursor (`edit` highlights `edit`) — and the left
-  column groups operations by color: white for ordinary commands, amber for
-  caution, and red for destructive. Bold section titles head indented,
-  alphabetized command names. A vertical rule divides the left column from
+  column groups entries by purpose: Command, File, Edit (amber), and Delete
+  (red). Command includes the workspace-view toggle; File's `view` previews the
+  selected path. Bold section titles head indented, alphabetized command names.
+  A vertical rule divides the left column from
   the right one, which shows the selected
   operation's arguments bound from the live context — a `FROM`/`PATH`
   selection argument lists the SRC or active pane's marked paths (falling back
   to the cursor entry) with a `[x]`/`[ ]` toggle each, the basename in full
   followed by its dimmed parent directory, `TO` resolves to the DST pane's
-  directory (editable in place), and textual arguments (`BUF`, `NAME`, `CMD`)
-  are typed in a filled field; read-only values appear plain and muted. The
+  directory (editable in place), and textual arguments (`NAME`, `CMD`) are typed
+  in a filled field. Each argument stacks its label over its value; read-only
+  values appear plain and muted, and clicking one copies it to the clipboard
+  (OSC 52 in the terminal, the Clipboard API in the browser). The
   command list and arguments scroll with their cursors. The `[Run]`/`[Retry]`
   action stays visible beneath the argument list, aligned right and tinted with
-  the command's white/amber/red risk color; errors move focus to it and show the
+  the command category color; errors move focus to it and show the
   error beside `[Retry]`. `replace` additionally previews each `old → new`
   mapping between the arguments and the action. A successful result briefly
   replaces the command bar at the bottom. The selection is transient: toggling edits a draft
@@ -174,19 +180,23 @@ events, with the renderer dimensions as a fallback):
 ╭─ Command · bookmark ────────────────────────────────────────────────────╮
 │ :                        │ bookmark                                     │
 │──────────────────────────│──────────────────────────────────────────────│
-│  White                   │ >  NAME [ (empty) ]                           │
-│    bookmark              │    PATH /home/documents                       │
+│  Command                 │ >  NAME                                      │
+│    bookmark              │    [(empty)]                                 │
+│    view                  │    PATH                                      │
+│  File                    │    /home/documents                           │
 │    copy                  │                                              │
-│    edit                  │ [Run]                                        │
 │    mkdir                 │                                              │
 │    open                  │                                              │
 │    run                   │                                              │
+│    stat                  │ [Run]                                        │
 │    …                     │                                              │
-│  Amber                   │                                              │
+│  Edit                    │                                              │
+│    edit                  │                                              │
 │    move                  │                                              │
 │    rename                │                                              │
 │    replace               │                                              │
-│  Red                     │                                              │
+│    touch                 │                                              │
+│  Delete                  │                                              │
 │    delete                │                                              │
 │    erase                 │                                              │
 │             type to filter  ⇥ args  Spc toggle  ↵ run  Esc close        │
@@ -214,8 +224,10 @@ events, with the renderer dimensions as a fallback):
 - delete PATH (moves to trash)
 - erase PATH (does not move to trash)
 - stat PATH (info, including du)
+- abspath PATH... (normalized absolute paths, shell-quoted for copy/paste)
+- realpath PATH... (absolute paths with symlinks resolved)
 - touch PATH
-- sel BUF? PATH... adds/removes to selection  BUF would be +/- +A/-B (default to +)
+- sel BUF? PATH... adds/removes to selection  BUF would be +/- +A/-B (default to +; script-only, not in the command menu)
 - bookmark [NAME] [PATH] lists, adds or removes named bookmarks
 - edit PATH, edits with $EDITOR
 - view PATH, previews

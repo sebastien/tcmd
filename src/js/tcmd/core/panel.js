@@ -6,9 +6,9 @@
 // Module: tcmd/core/panel
 // The command panel (Commando): the one entry point for the CLI operations
 // (`copy`, `move`, `rename`, `replace`, `delete`, `run` — the `core/operations` registry).
-// They are grouped by risk color (White, Amber, Red) and alphabetized within
-// each group (see `filterPanelEntries`). The internal TinyCmd actions are not
-// listed here — they live on their own keys.
+// They are grouped by purpose (Command, File, Edit, Delete) and alphabetized
+// within each group (see `filterPanelEntries`). The workspace-view toggle is
+// listed alongside the CLI operations; other TinyCmd actions keep their keys.
 //
 // For the selected operation, the panel binds its arguments from the live
 // context — a selection argument shows the SRC/DST pane's marked paths (falling
@@ -28,7 +28,7 @@
 import { hasMatch } from "../vendor/fzy.js"
 import { currentPaneId, PANE_BUFFERS, PANE_LABELS } from "./pane.js"
 import { basename, parent } from "./path.js"
-import { getOperations, pathToken } from "./operations.js"
+import { getOperations, pathToken, shellQuote } from "./operations.js"
 
 // Constant: PANEL_FOCUS
 // The two regions the panel's focus ring moves through: "ops" (the filter and
@@ -36,46 +36,67 @@ import { getOperations, pathToken } from "./operations.js"
 // right pane, where a textual argument owns the keyboard and Space toggles a
 // selection item).
 const PANEL_FOCUS = { OPS: "ops", ARGS: "args" }
-const PANEL_GROUPS = ["White", "Amber", "Red"]
-
-// Function: groupForRisk
-// The command list's visual group: normal operations are white, caution amber,
-// and destructive red.
-function groupForRisk(risk) {
-	if (risk === "caution") return "Amber"
-	if (risk === "destructive") return "Red"
-	return "White"
+const PANEL_GROUPS = ["Command", "File", "Edit", "Delete"]
+const OPERATION_GROUPS = {
+	bookmark: "Command",
+	copy: "File",
+	mkdir: "File",
+	open: "File",
+	run: "File",
+	stat: "File",
+	view: "File",
+	abspath: "File",
+	realpath: "File",
+	edit: "Edit",
+	move: "Edit",
+	rename: "Edit",
+	replace: "Edit",
+	touch: "Edit",
+	delete: "Delete",
+	erase: "Delete",
 }
 
 // Function: panelEntries
-// The entries the panel lists: the CLI operations. They are the only namespace
-// — the internal TinyCmd actions are reached by their own keys, not the panel.
+// The entries the panel lists: the categorized CLI operations and the
+// workspace-view toggle (whose name is distinct from File's preview `view`).
 function panelEntries() {
-	return getOperations()
-		.filter((op) => !op.hidden)
-		.map((op) => ({
-			id: `op:${op.name}`,
-			name: op.name,
-			group: groupForRisk(op.risk),
-			risk: op.risk ?? null,
-			matchNames: [op.name, ...(op.aliases ?? [])],
-			op,
-		}))
+	const entries = getOperations()
+		.filter((op) => !op.hidden && OPERATION_GROUPS[op.name])
+		.map((op) => {
+			const group = OPERATION_GROUPS[op.name]
+			return {
+				id: `op:${op.name}`,
+				name: op.name,
+				group,
+				risk: group === "Edit" ? "caution" : group === "Delete" ? "destructive" : null,
+				matchNames: [op.name, ...(op.aliases ?? [])],
+				op,
+			}
+		})
+	entries.push({
+		id: "command:view",
+		name: "view",
+		group: "Command",
+		risk: null,
+		matchNames: ["view"],
+		commandId: "view.toggleMode",
+	})
+	return entries
 }
 
 // Function: compareEntries
-// The panel's fixed risk-color order, then alphabetical command order.
+// The panel's fixed category order, then alphabetical command order.
 function compareEntries(a, b) {
-	const groupA = PANEL_GROUPS.indexOf(`${a?.group ?? "White"}`)
-	const groupB = PANEL_GROUPS.indexOf(`${b?.group ?? "White"}`)
+	const groupA = PANEL_GROUPS.indexOf(`${a?.group ?? "File"}`)
+	const groupB = PANEL_GROUPS.indexOf(`${b?.group ?? "File"}`)
 	const rankA = groupA < 0 ? PANEL_GROUPS.length : groupA
 	const rankB = groupB < 0 ? PANEL_GROUPS.length : groupB
 	return rankA - rankB || `${a?.name ?? ""}`.localeCompare(`${b?.name ?? ""}`)
 }
 
 // Function: filterPanelEntries
-// Narrows the entry list by command name or alias and keeps the fixed
-// White/Amber/Red group order and alphabetical order within each group.
+// Narrows the entry list by command name or alias and keeps the fixed category
+// order and alphabetical order within each group.
 function filterPanelEntries(entries, query) {
 	const list = entries ?? []
 	const q = `${query ?? ""}`.trim().toLowerCase()
@@ -94,7 +115,7 @@ function panelEntryRows(entries) {
 	let previousGroup = null
 	for (let index = 0; index < (entries ?? []).length; index++) {
 		const entry = entries[index]
-		const group = entry.group ?? "White"
+		const group = entry.group ?? "File"
 		if (group !== previousGroup) {
 			rows.push({ type: "group", id: `group:${group.toLowerCase()}`, name: group, group })
 			previousGroup = group
@@ -289,17 +310,6 @@ function missingBinding(bindings) {
 // or null when the argv is runnable.
 function missingArg(bindings) {
 	return missingBinding(bindings)?.name ?? null
-}
-
-// Function: shellQuote
-// Quotes a token for display as it would appear in a shell: bare when it is
-// already safe (`/home/a`), single-quoted when it contains spaces or shell
-// metacharacters (`'my notes.txt'`). Only the last path segment matters in
-// practice, but quoting the whole token keeps the preview copy-pasteable.
-function shellQuote(token) {
-	const text = `${token ?? ""}`
-	if (text === "") return "''"
-	return /^[A-Za-z0-9_@%+=:,.\/-]+$/.test(text) ? text : `'${text.replace(/'/g, `'\\''`)}'`
 }
 
 // Function: panelCommand

@@ -1,15 +1,23 @@
 import { describe, expect, test } from "bun:test"
 import { components, fileListScrollTop, keepVisible, panelDialogHeight, panelOpScrollTop, registerComponents } from "../../src/js/tcmd/tui/catalogue.js"
+import { tuiTheme } from "../../src/js/tcmd/tui/theme.js"
+
+// The thumb is the only painted scrollbar colour (the track blends into the
+// surface), so a bar is detected from the captured spans by its thumb.
+function rgb(hex) {
+	return [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16))
+}
+const SCROLLBAR_COLORS = [tuiTheme.scrollbarThumbBg].filter(Boolean).map(rgb)
 
 function hasScrollBar(setup) {
-	const colors = [
-		[37, 37, 39],
-		[154, 158, 163],
-	]
 	return setup.captureSpans().lines.some((line) =>
 		line.spans.some((span) => {
-			const bg = span.bg?.buffer
-			return bg && colors.some((color) => bg[0] === color[0] && bg[1] === color[1] && bg[2] === color[2])
+			const channels = [span.fg?.buffer, span.bg?.buffer].filter(Boolean)
+			return channels.some((channel) =>
+				SCROLLBAR_COLORS.some((color) =>
+					color.every((value, at) => channel[at] === value),
+				),
+			)
 		}),
 	)
 }
@@ -244,13 +252,13 @@ describe("fileListScrollTop", () => {
 describe("panelOpScrollTop", () => {
 	test("tracks the selected command through group heading rows", () => {
 		const items = [
-			{ type: "group", name: "White" },
+			{ type: "group", name: "Command" },
 			{ type: "op", entryIndex: 0 },
 			{ type: "op", entryIndex: 1 },
-			{ type: "group", name: "Amber" },
+			{ type: "group", name: "File" },
 			{ type: "op", entryIndex: 2 },
 			{ type: "op", entryIndex: 3 },
-			{ type: "group", name: "Red" },
+			{ type: "group", name: "Delete" },
 			{ type: "op", entryIndex: 4 },
 		]
 		const self = { ref: { ops: { height: 5, scrollTop: 0 } } }

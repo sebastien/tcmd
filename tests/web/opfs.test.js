@@ -41,6 +41,8 @@ describe("opfs fs adapter", () => {
 		expect((await fs.stat("/home/tester/projects")).isDir).toBe(true)
 		expect((await fs.stat("/")).isDir).toBe(true)
 		expect(await fs.stat("/nope.txt")).toBeNull()
+		expect(await fs.realpath("/home/tester/notes.txt")).toBe("/home/tester/notes.txt")
+		await expect(fs.realpath("/nope.txt")).rejects.toThrow("ENOENT")
 		expect(await fs.isDir("/documents")).toBe(true)
 		expect(await fs.isDir("/documents/welcome.txt")).toBe(false)
 		expect(await fs.isDir("/nope")).toBe(false)
@@ -51,6 +53,14 @@ describe("opfs fs adapter", () => {
 		const head = await fs.readTextHead("/home/tester/projects/tcmd/README.md", 12)
 		expect(head).toBe("line 0\nline ")
 		await expect(fs.readTextHead("/nope.txt")).rejects.toThrow("ENOENT")
+	})
+
+	test("readBytes returns the raw prefix and fails on missing files", async () => {
+		const fs = await seededFs()
+		const bytes = await fs.readBytes("/home/tester/notes.txt", 5)
+		expect(bytes).toBeInstanceOf(Uint8Array)
+		expect(new TextDecoder().decode(bytes)).toBe("hello")
+		await expect(fs.readBytes("/nope.txt")).rejects.toThrow("ENOENT")
 	})
 
 	test("du sums file sizes recursively", async () => {

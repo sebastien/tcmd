@@ -345,11 +345,27 @@ describe("web app", () => {
 			// The list has category headings and name-only CLI rows.
 			const names = [...host.querySelectorAll(".panel-ops .panel-name")].map((row) => row.textContent)
 			expect(names).toContain("bookmark")
-			expect(names).toContain("White")
-			expect(names).toContain("Amber")
-			expect(names).toContain("Red")
+				expect(names).toContain("Command")
+				expect(names).toContain("File")
+				expect(names).toContain("Edit")
+				expect(names).toContain("Delete")
 			expect(host.querySelector('.panel-field[data-editable="true"]')).not.toBeNull()
-			expect(host.querySelector('.panel-field[data-editable="false"]')).not.toBeNull()
+			const readonlyField = host.querySelector('.panel-field[data-editable="false"]')
+			expect(readonlyField).not.toBeNull()
+			// Each argument stacks its label over the value.
+			const argLabels = [...host.querySelectorAll(".panel-args .panel-arg-name")].map((row) => row.textContent)
+			expect(argLabels).toContain("NAME")
+			expect(argLabels).toContain("PATH")
+			// Clicking a read-only value sends it to the host clipboard.
+			const copied = []
+			session.os.copy = (text) => {
+				copied.push(text)
+				return true
+			}
+			readonlyField.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await settle()
+			expect(copied).toEqual([session.panelRows.value.find((row) => row.readonly === true)?.summary])
+			expect(host.querySelector('.command-bar [role="status"]').textContent).toContain("copied")
 			expect(names).not.toContain("FROM TO")
 			expect(names).not.toContain("Open file")
 			expect(names.some((name) => name.includes("cli") || name.includes("app"))).toBe(false)

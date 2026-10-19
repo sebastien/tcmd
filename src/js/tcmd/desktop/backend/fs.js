@@ -148,6 +148,32 @@ function createDesktopFs(options = {}) {
 		}
 	}
 
+	// Function: readHead
+	// Leading `maxBytes` (bounded by `PREVIEW_LIMIT`) of a file, as raw bytes.
+	// `readTextHead` decodes it; `readBytes` hands it to the compressed-preview
+	// decompressor on the frontend.
+	async function readHead(pathValue, maxBytes = 65536) {
+		const path = pathArg(pathValue)
+		const requested = Number(maxBytes)
+		const length = Number.isFinite(requested)
+			? Math.max(0, Math.min(PREVIEW_LIMIT, Math.floor(requested)))
+			: 65536
+		if (!length) return new Uint8Array(0)
+		const handle = await runtime.open(path, "r")
+		try {
+			const buffer = new Uint8Array(length)
+			let count = 0
+			while (count < length) {
+				const read = await handle.read(buffer.subarray(count), count)
+				if (read == null || read === 0) break
+				count += read
+			}
+			return buffer.subarray(0, count)
+		} finally {
+			await handle.close()
+		}
+	}
+
 	async function withPathLock(path, action) {
 		const key = pathArg(path)
 		const previous = pathLocks.get(key) ?? Promise.resolve()
@@ -362,30 +388,14 @@ function createDesktopFs(options = {}) {
 		async stat(pathValue) {
 			return statSafe(pathArg(pathValue))
 		},
+		realpath: (pathValue) => runtime.realPath(pathArg(pathValue)),
 		async isDir(pathValue) {
 			return Boolean((await adapter.stat(pathValue))?.isDir)
 		},
 		async readTextHead(pathValue, maxBytes = 65536) {
-			const path = pathArg(pathValue)
-			const requested = Number(maxBytes)
-			const length = Number.isFinite(requested)
-				? Math.max(0, Math.min(PREVIEW_LIMIT, Math.floor(requested)))
-				: 65536
-			if (!length) return ""
-			const handle = await runtime.open(path, "r")
-			try {
-				const buffer = new Uint8Array(length)
-				let count = 0
-				while (count < length) {
-					const read = await handle.read(buffer.subarray(count), count)
-					if (read == null || read === 0) break
-					count += read
-				}
-				return decoder.decode(buffer.subarray(0, count))
-			} finally {
-				await handle.close()
-			}
+			return decoder.decode(await readHead(pathValue, maxBytes))
 		},
+		readBytes: (pathValue, maxBytes = 65536) => readHead(pathValue, maxBytes),
 		async du(pathValue) {
 			const path = pathArg(pathValue)
 			const rootStat = await statSafe(path)
