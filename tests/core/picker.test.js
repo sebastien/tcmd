@@ -25,6 +25,9 @@ async function makeSession(viewMode = "explorer") {
 	return { fs, session }
 }
 
+// Let the picker's queued path resolution (stat + optional navigation) settle.
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+
 // Positions the panel cursor on an argument header by name, then browses it.
 async function browseArg(session, name) {
 	const rowIndex = session.panelRows.value.findIndex(
@@ -40,6 +43,12 @@ async function openOp(session, name) {
 	const index = session.panelFiltered.value.findIndex((entry) => entry.name === name)
 	session.dispatch("panel.setOp", { index })
 	await Promise.resolve()
+}
+
+// Amber/red actions arm `[Confirm]` on the first Run and execute on the second.
+async function runPanel(session) {
+	await session.dispatch("panel.run")
+	return session.dispatch("panel.run")
 }
 
 // Puts the left pane's cursor on `name` (the listing sorts directories first,
@@ -76,18 +85,20 @@ describe("file picker", () => {
 		const { session } = await makeSession()
 		await openOp(session, "copy")
 		await browseArg(session, "TO")
-		expect(session.panelPicking.value).toBe(true)
-		// The picker seats on the current pane's directory. Its parent row stays
-		// visible, while a dir picker excludes the file `notes.txt`.
+		expect(session.pickerOpen.value).toBe(true)
+		// The picker seats on the current pane's directory with an editable
+		// path. Its parent row stays visible, while a dir picker excludes the
+		// file `notes.txt`.
+		expect(session.pickerPathText.value).toBe("/home/")
 		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["..", "docs", "tmp"])
 		expect(binding(session, "TO").value).toBe("")
 		// A file/any picker keeps the listing intact (a directory row descends).
-		session.panelPickerMode.set("any")
+		session.pickerMode.set("any")
 		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["..", "docs", "tmp", "notes.txt"])
-		session.panelPickerMode.set("dir")
-		session.dispatch("panel.pick.setCursor", { index: 1 })
-		await session.dispatch("panel.pick.enter")
-		expect(session.panelPicking.value).toBe(false)
+		session.pickerMode.set("dir")
+		session.dispatch("picker.setCursor", { index: 1 })
+		await session.dispatch("picker.enter")
+		expect(session.pickerOpen.value).toBe(false)
 		expect(binding(session, "TO").value).toBe("/home/docs")
 	})
 
@@ -112,12 +123,14 @@ describe("file picker", () => {
 		const { session } = await makeSession()
 		await openOp(session, "copy")
 		await browseArg(session, "TO")
-		session.dispatch("panel.pick.setCursor", { index: 1 })
-		await session.dispatch("panel.pick.descend")
+		session.dispatch("picker.setCursor", { index: 1 })
+		await session.dispatch("picker.descend")
 		expect(session.pickerPane.path.value).toBe("/home/docs")
+		expect(session.pickerPathText.value).toBe("/home/docs/")
 		expect(session.pickerRows.value.map((row) => row.name)).toEqual([".."])
-		await session.dispatch("panel.pick.parent")
+		await session.dispatch("picker.parent")
 		expect(session.pickerPane.path.value).toBe("/home")
+		expect(session.pickerPathText.value).toBe("/home/")
 		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["..", "docs", "tmp"])
 		// Parent navigation returns the cursor to the directory we came from.
 		expect(session.pickerRows.value[session.panelRowIndex.value].name).toBe("docs")
@@ -128,19 +141,41 @@ describe("file picker", () => {
 		await openOp(session, "copy")
 		await browseArg(session, "TO")
 		expect(session.pickerRows.value[0]).toMatchObject({ type: "parent", name: "..", path: "/" })
-		await session.dispatch("panel.pick.enter")
+		await session.dispatch("picker.enter")
 		expect(session.pickerPane.path.value).toBe("/")
+		expect(session.pickerPathText.value).toBe("/")
 		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["home"])
 	})
 
-	test("typing filters the picker listing", async () => {
+	test("editing the path resolves the directory and filters the entries", async () => {
 		const { session } = await makeSession()
 		await openOp(session, "copy")
 		await browseArg(session, "TO")
-		session.pickerQuery.set("tmp")
-		await Promise.resolve()
+		// A partial name stays in the current directory and filters it.
+		session.pickerPathText.set("/home/t")
+		await tick()
+		expect(session.pickerPane.path.value).toBe("/home")
 		expect(session.pickerRows.value.map((row) => row.name)).toEqual(["..", "tmp"])
 		expect(session.panelRowIndex.value).toBe(1)
+
+		// A complete directory path enters it.
+		session.pickerPathText.set("/home/docs")
+		await tick()
+		expect(session.pickerPane.path.value).toBe("/home/docs")
+		expect(session.pickerRows.value.map((row) => row.name)).toEqual([".."])
+	})
+
+	test("the picker path commits on Enter", async () => {
+		const { session } = await makeSession()
+		await openOp(session, "copy")
+		await browseArg(session, "TO")
+		session.pickerFocus.set("path")
+		// A partial path commits the matching row under the cursor.
+		session.pickerPathText.set("/home/t")
+		await tick()
+		await session.dispatch("picker.path")
+		expect(session.pickerOpen.value).toBe(false)
+		expect(binding(session, "TO").value).toBe("/home/tmp")
 	})
 
 	test("an empty destination opens the picker on run, and choosing resumes the run", async () => {
@@ -149,21 +184,27 @@ describe("file picker", () => {
 		selectEntry(session, "notes.txt")
 		await openOp(session, "copy")
 		await session.dispatch("panel.run")
-		expect(session.panelPicking.value).toBe(true)
-		expect(session.panelPendingRun.value).toBe(true)
-		// Choose `docs`: the copy runs with /home/docs as its destination.
+		expect(session.pickerOpen.value).toBe(true)
+		expect(session.pickerPendingRun.value).toBe(true)
+		// Choose `docs`: the copy is amber, so it arms Confirm instead of
+		// executing immediately.
 		const index = session.pickerRows.value.findIndex((row) => row.name === "docs")
-		session.dispatch("panel.pick.setCursor", { index })
-		await session.dispatch("panel.pick.enter")
+		session.dispatch("picker.setCursor", { index })
+		await session.dispatch("picker.enter")
+		expect(session.panelArmed.value).toBe(true)
+		expect(session.panelRows.value.at(-1).command).toBe("copy /home/notes.txt /home/docs")
+		expect((await fs.readDir("/home/docs")).map((entry) => entry.name)).not.toContain("notes.txt")
+		// The second Run executes.
+		await session.dispatch("panel.run")
 		const names = (await fs.readDir("/home/docs")).map((entry) => entry.name)
 		expect(names).toContain("notes.txt")
 		expect(session.panelOpen.value).toBe(false)
 	})
 
 	test("the picker has its own command-bar hints", () => {
-		const hints = getCommandBarItems({ filtering: null, bookmarkOpen: false, panelOpen: true, panelPicking: true })
-		expect(hints.map((hint) => hint.title)).toContain("Choose")
-		expect(hints.map((hint) => hint.title)).toContain("Up")
+		const hints = getCommandBarItems({ filtering: null, bookmarkOpen: false, panelOpen: true, pickerOpen: true })
+		expect(hints.map((hint) => hint.title)).toContain("Go")
+		expect(hints.map((hint) => hint.title)).toContain("Path")
 	})
 })
 
@@ -179,7 +220,7 @@ describe("replace", () => {
 		expect(session.panelCommand.value).toContain("notes.txt → readme.txt")
 		expect(session.panelPreview.value).toContain("notes.txt → readme.txt")
 		expect(session.panelRunnable.value).toBe(true)
-		await session.dispatch("panel.run")
+		await runPanel(session)
 		const names = (await session.fs.readDir("/home")).map((entry) => entry.name)
 		expect(names).toContain("readme.txt")
 		expect(names).not.toContain("notes.txt")
@@ -202,7 +243,7 @@ describe("replace", () => {
 		expect(preview).toContain("notes.txt → n0tes.txt")
 		expect(preview).toContain("docs → d0cs")
 		expect(session.panelPreview.value).toContain("docs → d0cs")
-		await session.dispatch("panel.run")
+		await runPanel(session)
 		const names = (await session.fs.readDir("/home")).map((entry) => entry.name).sort()
 		expect(names).toEqual(["d0cs", "n0tes.txt", "tmp"])
 	})
@@ -218,7 +259,7 @@ describe("replace", () => {
 				return b
 			}),
 		)
-		await session.dispatch("panel.run")
+		await runPanel(session)
 		expect(session.panelRunError.value).toContain("already exists")
 		expect(session.notice.value).toBeNull()
 	})
@@ -258,7 +299,7 @@ describe("exact rename", () => {
 				return item
 			}),
 		)
-		await session.dispatch("panel.run")
+		await runPanel(session)
 		expect(await session.fs.stat("/home/notes.txt")).toBeNull()
 		expect(await session.fs.stat("/home/memo.txt")).not.toBeNull()
 		await session.dispatch("history.undo")

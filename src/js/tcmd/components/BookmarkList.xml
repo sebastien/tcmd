@@ -6,9 +6,8 @@
 			<text out="sign" out:fg="titleColor"></text>
 			<input ref="query" inout="query" flexGrow="1" height="1" out:focused="focused" on:enter="confirm"></input>
 		</box>
-		<text when="inputVisible" out="target" out:fg="pathFg" paddingLeft="1" wrapMode="none" truncate="true"></text>
 		<text when="emptyList" out="empty" out:fg="emptyFg" paddingLeft="1" wrapMode="none"></text>
-		<scrollbox when="listVisible" ref="list" flexGrow="1">
+		<scrollbox ref="list" flexGrow="1">
 			<box out="rows" flexDirection="column"></box>
 		</scrollbox>
 		<box flexDirection="row" height="1" paddingLeft="1">

@@ -10,13 +10,16 @@
 // source of truth for every presentation layer.
 //
 // Commands carry presentation metadata:
-// - `kind`: "ui" for UI-level actions; the command panel lists the visible UI
-//   actions alongside the CLI operations (see core/panel.js).
-// - `bar`: true when the command appears in the command bar's key hints.
+// - `kind`: "ui" for UI-level actions; the command panel lists the two it can
+//   reach (the workspace-view toggle and Quit) alongside the CLI operations
+//   (see core/panel.js).
 // - `hidden`: true for internal commands that never show in the panel.
+// The default command bar is the explicit `BAR_COMMANDS` list below, in that
+// order.
 
-import { basename, parent as parentOf } from "./path.js"
+import { parent as parentOf } from "./path.js"
 import { PANEL_FOCUS, argvFor, bindingAt, missingBinding, rowAt, withArgValue, withToggledItem } from "./panel.js"
+import { pickerAbsolutePath, pickerDirectoryText } from "./picker.js"
 import { hasBinaryByte, previewKind, previewSource, SNIFF_BYTES } from "./preview.js"
 import { clampCursor, moveCursor } from "./selection.js"
 import { currentPane } from "./pane.js"
@@ -37,19 +40,12 @@ const FILTER_KEYS = [
 	{ id: null, title: "Clear", keys: "Esc" },
 ]
 
-// Constant: BOOKMARK_NAME_KEYS
-// Command-bar hints while naming a bookmark.
-const BOOKMARK_NAME_KEYS = [
-	{ id: null, title: "Save", keys: "Enter", primary: true },
-	{ id: null, title: "Cancel", keys: "Esc" },
-]
-
-// Constant: BOOKMARK_LIST_KEYS
-// Command-bar hints while picking a bookmark.
-const BOOKMARK_LIST_KEYS = [
+// Constant: BOOKMARK_KEYS
+// Command-bar hints while the bookmarks panel owns the keyboard.
+const BOOKMARK_KEYS = [
 	{ id: null, title: "Navigate", keys: "↑/↓" },
-	{ id: null, title: "Remove", keys: "⌫" },
-	{ id: null, title: "Jump", keys: "Enter", primary: true },
+	{ id: null, title: "Remove", keys: "⌫/Del" },
+	{ id: null, title: "Open", keys: "Enter", primary: true },
 	{ id: null, title: "Close", keys: "Esc" },
 ]
 
@@ -64,15 +60,21 @@ const PANEL_HINT_KEYS = [
 	{ id: null, title: "Close", keys: "Esc" },
 ]
 
-// Constant: PANEL_PICK_KEYS
+// Constant: PANEL_CONFIRM_KEYS
+// The same hints after a risky action is armed: Enter now confirms.
+const PANEL_CONFIRM_KEYS = PANEL_HINT_KEYS.map((hint) =>
+	hint.title === "Run" ? { ...hint, title: "Confirm" } : hint,
+)
+
+// Constant: PICKER_KEYS
 // Command-bar hints while the panel's file picker owns the keyboard.
-const PANEL_PICK_KEYS = [
-	{ id: null, title: "Filter", keys: "type" },
+const PICKER_KEYS = [
+	{ id: null, title: "Path", keys: "type" },
 	{ id: null, title: "Row", keys: "↑/↓" },
 	{ id: null, title: "Open", keys: "→" },
-	{ id: null, title: "Choose", keys: "↵", primary: true },
+	{ id: null, title: "Go", keys: "↵", primary: true },
 	{ id: null, title: "Here", keys: "^↵" },
-	{ id: null, title: "Up", keys: "⌫" },
+	{ id: null, title: "Focus", keys: "⇥" },
 	{ id: null, title: "Back", keys: "Esc" },
 ]
 
@@ -88,6 +90,20 @@ const TRASH_KEYS = [
 	{ id: null, title: "Row", keys: "↑/↓" },
 	{ id: null, title: "Restore", keys: "↵", primary: true },
 	{ id: null, title: "Close", keys: "Esc" },
+]
+
+// Constant: BAR_COMMANDS
+// The command bar's default entries, in display order. Kept as an explicit
+// list so the bar stays a short, stable set of primary actions instead of
+// every command that happens to be context-relevant.
+const BAR_COMMANDS = [
+	"panel.open",
+	"list.mark",
+	"filter.start",
+	"pane.toggle",
+	"bookmark.open",
+	"view.toggleMode",
+	"app.help",
 ]
 
 const commands = [
@@ -168,7 +184,6 @@ const commands = [
 		title: "Open",
 		keys: "Enter",
 		kind: "ui",
-		bar: true,
 		primary: true,
 		run(session) {
 			// The entry under the *focused* pane's cursor decides where the
@@ -196,7 +211,6 @@ const commands = [
 		title: "Parent",
 		keys: "←",
 		kind: "ui",
-		bar: true,
 		run(session) {
 			// Stepping up always moves the current directory: the parent
 			// column mirrors it, so navigating that column itself would
@@ -227,7 +241,6 @@ const commands = [
 		title: "Reload",
 		keys: "^R",
 		kind: "ui",
-		bar: true,
 		run(session) {
 			return pane(session).refresh()
 		},
@@ -237,7 +250,6 @@ const commands = [
 		title: "Switch",
 		keys: "Tab",
 		kind: "ui",
-		bar: true,
 		run(session) {
 			// Cycle through the columns the current view mode shows:
 			// source ⇄ destination in commander, parent → current → preview
@@ -263,46 +275,24 @@ const commands = [
 		title: "Mark",
 		keys: "Spc",
 		kind: "ui",
-		bar: true,
 		run(session) {
 			pane(session).toggleMark()
 		},
 	},
 	{
-		id: "bookmark.record",
-		title: "Bookmark",
+		id: "bookmark.open",
+		title: "Bookmarks",
 		keys: "b",
 		kind: "ui",
-		bar: true,
 		run(session) {
-			// Record the entry under the cursor; fall back to the pane's
-			// directory when the listing is empty.
+			// The add row records the entry under the cursor; it falls back to
+			// the pane's directory when the listing is empty.
 			const entry = pane(session).currentEntry()
 			const path = entry?.path ?? pane(session).path.value
 			const isDir = entry ? Boolean(entry.isDir) : true
-			const existing = session.bookmarks.find(path)
-			if (existing) {
-				// Already bookmarked: no need to re-name it.
-				session.notice.set({ kind: "tip", text: `bookmark ${existing.name}` })
-				return
-			}
-			// The default name is the path's basename.
-			session.bookmarkTarget.set({ path, isDir })
-			session.bookmarkQuery.set(basename(path))
-			session.bookmarkMode.set("name")
-			session.bookmarkOpen.set(true)
-		},
-	},
-	{
-		id: "bookmark.jump",
-		title: "Bookmarks",
-		keys: "g",
-		kind: "ui",
-		bar: true,
-		run(session) {
-			session.bookmarkTarget.set(null)
 			session.bookmarkQuery.set("")
-			session.bookmarkMode.set("list")
+			session.bookmarkIndex.set(0)
+			session.bookmarkTarget.set({ path, isDir })
 			session.bookmarkOpen.set(true)
 		},
 	},
@@ -333,37 +323,11 @@ const commands = [
 			const items = session.bookmarkItems.value ?? []
 			const index = clampCursor(session.bookmarkIndex.value, items.length)
 			const item = items[index]
-			if (!item) return
+			// The add row is an action, not a stored bookmark.
+			if (!item || item.add) return
 			if (!(await session.bookmarks.remove(item.name))) return
 			session.bookmarkIndex.set(clampCursor(index, session.bookmarkItems.value.length))
 			session.notice.set({ kind: "tip", text: `removed bookmark ${item.name}` })
-		},
-	},
-	{
-		id: "bookmark.save",
-		title: "Save bookmark",
-		kind: "ui",
-		hidden: true,
-		run(session) {
-			const name = `${session.bookmarkQuery.value ?? ""}`.trim()
-			const target = session.bookmarkTarget.value
-			if (!name) {
-				session.notice.set({ kind: "warning", text: "bookmark needs a name" })
-				return
-			}
-			if (!target) {
-				closeBookmark(session)
-				return
-			}
-			// Close synchronously: the global key handler and the input's
-			// `on:enter` can both fire, and a second save while the overlay is
-			// still open would re-record and flash the notice twice. A rejected
-			// `record` (rejected name) still surfaces through the dispatch's
-			// error notice.
-			closeBookmark(session)
-			return session.bookmarks.record(name, target.path, target.isDir).then(() => {
-				session.notice.set({ kind: "tip", text: `bookmarked ${name}` })
-			})
 		},
 	},
 	{
@@ -384,6 +348,8 @@ const commands = [
 			const items = session.bookmarkItems.value
 			const item = items[clampCursor(session.bookmarkIndex.value, items.length)]
 			if (!item) return
+			// The add row records the current target instead of navigating.
+			if (item.add) return addCurrentBookmark(session)
 			const target = currentPane(session)
 			const path = item.path
 			// Resolve the kind when it is unknown (legacy path-only bookmark).
@@ -422,7 +388,6 @@ const commands = [
 		title: "Undo",
 		keys: "^Z",
 		kind: "ui",
-		bar: true,
 		async run(session) {
 			const entry = await session.journal.undo(session)
 			if (!entry) {
@@ -438,7 +403,6 @@ const commands = [
 		title: "Redo",
 		keys: "^⇧Z",
 		kind: "ui",
-		bar: true,
 		async run(session) {
 			const entry = await session.journal.redo(session)
 			if (!entry) {
@@ -454,7 +418,6 @@ const commands = [
 		title: "History",
 		keys: "u",
 		kind: "ui",
-		bar: true,
 		run(session) {
 			openHistory(session)
 		},
@@ -464,7 +427,6 @@ const commands = [
 		title: "Trash",
 		keys: "⇧T",
 		kind: "ui",
-		bar: true,
 		async run(session) {
 			await openTrash(session)
 		},
@@ -474,11 +436,14 @@ const commands = [
 		title: "New directory",
 		keys: "n",
 		kind: "ui",
-		bar: true,
 		run(session) {
 			// The panel opens on `mkdir` with its NAME field primed, the same
-			// way `!` lands on `run`.
+			// way `!` lands on `run`; PATH is prefilled with the current path.
 			openPanel(session, { name: "mkdir", focus: PANEL_FOCUS.ARGS })
+			const nameIndex = session.panelRows.value.findIndex(
+				(row) => row.type === "arg" && row.name === "NAME",
+			)
+			session.panelRowIndex.set(nameIndex >= 0 ? nameIndex : 0)
 		},
 	},
 	{
@@ -583,7 +548,6 @@ const commands = [
 		title: "Preview",
 		keys: "v",
 		kind: "ui",
-		bar: true,
 		run(session) {
 			session.showPreview.set(!session.showPreview.value)
 		},
@@ -616,10 +580,9 @@ const commands = [
 	},
 	{
 		id: "view.toggleMode",
-		title: "Explorer view",
+		title: "Toggle Mode",
 		keys: "t",
 		kind: "ui",
-		bar: true,
 		run(session) {
 			// Flip the workspace between the two-pane commander and the
 			// three-column explorer (parent · current · preview). Focus on a
@@ -667,7 +630,6 @@ const commands = [
 		title: "Commands",
 		keys: ":",
 		kind: "ui",
-		bar: true,
 		run(session) {
 			openPanel(session)
 		},
@@ -808,6 +770,31 @@ const commands = [
 		},
 	},
 	{
+		id: "panel.moveBit",
+		title: "Move permission bit",
+		kind: "ui",
+		hidden: true,
+		run(session, payload) {
+			// Left/Right walk the r/w/x cells of a focused permission row.
+			const row = rowAt(session.panelRows.value, session.panelRowIndex.value)
+			if (row?.type !== "perm") return
+			const delta = payload?.delta === -1 ? -1 : 1
+			session.panelPermBit.set(Math.min(2, Math.max(0, session.panelPermBit.value + delta)))
+		},
+	},
+	{
+		id: "panel.togglePerm",
+		title: "Toggle permission bit",
+		kind: "ui",
+		hidden: true,
+		run(session, payload) {
+			// A click on one permission cell.
+			const { argIndex, itemIndex } = payload ?? {}
+			if (!Number.isInteger(argIndex) || !Number.isInteger(itemIndex)) return
+			session.panelDraft.set(withToggledItem(session.panelDraft.value, argIndex, itemIndex, true))
+		},
+	},
+	{
 		id: "panel.toggleItem",
 		title: "Toggle argument item",
 		kind: "ui",
@@ -820,10 +807,17 @@ const commands = [
 				session.panelDraft.set(withToggledItem(draft, row.argIndex, row.itemIndex, row.multi !== false))
 				return
 			}
+			if (row.type === "perm") {
+				const bit = row.bits?.[session.panelPermBit.value]
+				if (bit) session.panelDraft.set(withToggledItem(draft, row.argIndex, bit.itemIndex, true))
+				return
+			}
 			// An argument header toggles its whole selection: select all when
 			// some are off, clear when all are on. A single-path argument is a
 			// radio list, so its header has nothing to toggle.
 			const binding = bindingAt(draft, row.argIndex)
+			// Only a selection argument mass-toggles from its header; a
+			// permission grid has no safe "all" state and stays per-bit.
 			if (!binding || binding.kind !== "selection" || binding.multi !== true) return
 			const all = (binding.items ?? []).length > 0 && (binding.items ?? []).every((item) => item.selected)
 			const items = (binding.items ?? []).map((item) => ({ ...item, selected: !all }))
@@ -867,78 +861,153 @@ const commands = [
 		},
 	},
 	{
-		id: "panel.pick.up",
+		id: "picker.up",
 		title: "Previous picker row",
 		kind: "ui",
 		hidden: true,
 		run(session) {
 			const length = session.pickerRows.value.length
+			session.pickerFocus.set("rows")
 			session.panelRowIndex.set(moveCursor(session.panelRowIndex.value, -1, length))
 		},
 	},
 	{
-		id: "panel.pick.down",
+		id: "picker.down",
 		title: "Next picker row",
 		kind: "ui",
 		hidden: true,
 		run(session) {
 			const length = session.pickerRows.value.length
+			session.pickerFocus.set("rows")
 			session.panelRowIndex.set(moveCursor(session.panelRowIndex.value, 1, length))
 		},
 	},
 	{
-		id: "panel.pick.setCursor",
+		id: "picker.setCursor",
 		title: "Highlight picker row",
 		kind: "ui",
 		hidden: true,
 		run(session, payload) {
 			if (payload?.index !== undefined) session.panelRowIndex.set(Math.max(0, payload.index))
+			session.pickerFocus.set("rows")
 		},
 	},
 	{
-		id: "panel.pick.enter",
+		id: "picker.focusPath",
+		title: "Edit the picker path",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			session.pickerFocus.set("path")
+		},
+	},
+	{
+		id: "picker.focusRows",
+		title: "Focus the picker entries",
+		kind: "ui",
+		hidden: true,
+		run(session) {
+			session.pickerFocus.set("rows")
+		},
+	},
+	{
+		id: "picker.type",
+		title: "Type into the picker path",
+		kind: "ui",
+		hidden: true,
+		run(session, payload) {
+			// A printable key pressed while the entry list owns the keyboard
+			// jumps back to the path field and extends it, so typing always
+			// means "narrow the path" no matter where the cursor sits.
+			const text = `${session.pickerPathText.value ?? ""}`
+			session.pickerPathText.set(`${text}${payload?.char ?? ""}`)
+			session.pickerFocus.set("path")
+		},
+	},
+	{
+		id: "picker.path",
+		title: "Go to the typed picker path",
+		kind: "ui",
+		hidden: true,
+		async run(session) {
+			// Enter in the path field commits it: an existing directory is
+			// chosen (destination) or opened (file/any picker), an existing
+			// file is chosen, and a path that does not exist is reported.
+			const text = `${session.pickerPathText.value ?? ""}`
+			const absolute = pickerAbsolutePath(
+				text,
+				session.pickerBasePath.value || session.pickerPane.path.value || "/",
+				session.fs.home?.() ?? "/",
+			)
+			const stats = await session.fs.stat(absolute)
+			if (!stats) {
+				// A partial path narrowed the listing: Enter takes the match
+				// under the cursor (the `..` parent row is not a match).
+				const row = pickerEntry(session)
+				if (row?.type === "entry") {
+					if (row.isDir && session.pickerMode.value !== "dir") return descendPicker(session, row.path)
+					if (row.isDir || session.pickerMode.value !== "dir") return choosePicker(session, row.path)
+				}
+				session.notice.set({ kind: "warning", text: `no such path: ${absolute}` })
+				return
+			}
+			if (stats.isDir) {
+				if (session.pickerMode.value === "dir") return choosePicker(session, absolute)
+				return descendPicker(session, absolute)
+			}
+			if (session.pickerMode.value === "dir") {
+				session.notice.set({ kind: "warning", text: `not a directory: ${absolute}` })
+				return
+			}
+			return choosePicker(session, absolute)
+		},
+	},
+	{
+		id: "picker.enter",
 		title: "Choose picker row",
 		kind: "ui",
 		hidden: true,
 		run(session) {
 			const entry = pickerEntry(session)
 			if (!entry) return undefined
-			if (entry.type === "parent") return session.dispatch("panel.pick.parent")
+			if (entry.type === "parent") return session.dispatch("picker.parent")
 			// A directory descends unless this is a destination picker, where
 			// every row is already a valid choice.
-			if (entry.isDir && session.panelPickerMode.value !== "dir") {
+			if (entry.isDir && session.pickerMode.value !== "dir") {
 				return descendPicker(session, entry.path)
 			}
 			return choosePicker(session, entry.path)
 		},
 	},
 	{
-		id: "panel.pick.descend",
+		id: "picker.descend",
 		title: "Open the picker's directory",
 		kind: "ui",
 		hidden: true,
 		run(session) {
 			const entry = pickerEntry(session)
-			if (entry?.type === "parent") return session.dispatch("panel.pick.parent")
+			if (entry?.type === "parent") return session.dispatch("picker.parent")
 			if (entry?.isDir) return descendPicker(session, entry.path)
 			return undefined
 		},
 	},
 	{
-		id: "panel.pick.parent",
+		id: "picker.parent",
 		title: "Picker parent directory",
 		kind: "ui",
 		hidden: true,
 		async run(session) {
+			session.pickerPaths.invalidate()
 			session.pickerQuery.set("")
 			const cameFrom = session.pickerPane.path.value
 			await session.pickerPane.up()
+			session.pickerPathText.set(pickerDirectoryText(session.pickerPane.path.value))
 			const index = session.pickerRows.value.findIndex((row) => row.path === cameFrom)
 			session.panelRowIndex.set(index >= 0 ? index : 0)
 		},
 	},
 	{
-		id: "panel.pick.chooseDir",
+		id: "picker.chooseDir",
 		title: "Choose the picker's directory",
 		kind: "ui",
 		hidden: true,
@@ -947,15 +1016,17 @@ const commands = [
 		},
 	},
 	{
-		id: "panel.pick.cancel",
+		id: "picker.cancel",
 		title: "Leave the picker",
 		kind: "ui",
 		hidden: true,
 		run(session) {
 			// Back to the argument column, panel still open.
-			session.panelPicking.set(false)
-			session.panelPickerArg.set(-1)
+			session.pickerPaths.invalidate()
+			session.pickerOpen.set(false)
+			session.pickerArg.set(-1)
 			session.panelFocus.set(PANEL_FOCUS.ARGS)
+			session.pickerFocus.set("path")
 			session.panelRowIndex.set(0)
 		},
 	},
@@ -981,14 +1052,25 @@ const commands = [
 			const missing = missingBinding(draft)
 			if (missing) {
 				if (missing.kind === "dest" || missing.kind === "path") {
-					session.panelPendingRun.set(true)
+					session.pickerPendingRun.set(true)
 					return openPicker(session, missing.index, missing)
 				}
 				focusBinding(session, missing)
 				return
 			}
 			session.panelRunError?.set(null)
-			const status = await runOperation(session, op, argvFor(draft))
+			// Amber (caution) and red (destructive) actions are two-step: the
+			// first Run prints the assembled command and arms `[Confirm]`; the
+			// second executes it without the separate confirm overlay.
+			const risk = entry.risk === "caution" || entry.risk === "destructive"
+			if (risk && !session.panelArmed.value) {
+				session.panelArmed.set(true)
+				return
+			}
+			const status = await runOperation(session, op, argvFor(draft), {
+				panel: true,
+				...(risk ? { confirmed: true } : {}),
+			})
 			// A confirm keeps the panel open until the user answers; a run
 			// closes it. Errors stay open so the draft can be fixed.
 			if (status === "error") keepPanelError(session)
@@ -1012,7 +1094,6 @@ const commands = [
 		title: "Filter",
 		keys: "/",
 		kind: "ui",
-		bar: true,
 		run(session) {
 			// A column with no filter field (the inspector, or a column the
 			// current mode does not show) hands focus to the pane it follows
@@ -1075,29 +1156,29 @@ const commands = [
 			session.confirm.set(null)
 		},
 	},
-	// Quit: presentation-only. The key path intercepts `app.quit` before
-	// dispatch, and the command-bar click does the same (the renderer owns
-	// exiting); the registry entry exists so the bar and the `?` reference
-	// can advertise it. Hidden from the panel, where it could only no-op.
+	// Quit: the key path intercepts `app.quit` before dispatch, while the
+	// panel's synthetic Quit entry dispatches it; both reach the renderer's
+	// host hook (`session.quit`, installed at mount). Hidden from the `?`
+	// keymap's command bar, not from the panel.
 	{
 		id: "app.quit",
 		title: "Quit",
 		keys: "q",
 		kind: "ui",
-		bar: true,
 		hidden: true,
-		run() {},
+		run(session) {
+			return session.quit?.()
+		},
 	},
 	// Help: presentation-only too. Each renderer intercepts `?` and owns its
-	// own overlay cell, and routes a bar click the same way; the registry entry
-	// exists so the bar and the `?` reference can advertise it. Hidden from the
-	// panel, where it could only no-op.
+	// own overlay cell, and routes the bar click the same way; the registry
+	// entry exists so the bar and the `?` reference can advertise it. Hidden
+	// from the panel, where it could only no-op.
 	{
 		id: "app.help",
 		title: "Help",
 		keys: "?",
 		kind: "ui",
-		bar: true,
 		hidden: true,
 		run() {},
 	},
@@ -1120,17 +1201,17 @@ function getCommand(id) {
 
 // Function: getCommandBarItems
 // Command-bar rows for the current context: the panel's key hints while it is
-// open, the filter hints while a pane filter is capturing input, the bookmark
-// hints while the picker owns the keyboard, or the `bar`-flagged UI commands
-// otherwise (keymap order). Takes the context as named fields — four adjacent
-// flags are too easy to transpose.
-function getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, overlay }) {
-	if (panelOpen) return panelPicking ? PANEL_PICK_KEYS : PANEL_HINT_KEYS
-	if (bookmarkOpen) return bookmarkMode === "name" ? BOOKMARK_NAME_KEYS : BOOKMARK_LIST_KEYS
+// open, the bookmark-panel hints while that panel owns the keyboard, the
+// filter hints while a pane filter is capturing input, or the fixed
+// `BAR_COMMANDS` set otherwise, in display order. Takes the context as named
+// fields — four adjacent flags are too easy to transpose.
+function getCommandBarItems({ filtering, bookmarkOpen, panelOpen, pickerOpen, panelArmed, overlay }) {
+	if (panelOpen) return pickerOpen ? PICKER_KEYS : panelArmed ? PANEL_CONFIRM_KEYS : PANEL_HINT_KEYS
+	if (bookmarkOpen) return BOOKMARK_KEYS
 	if (overlay === "history") return HISTORY_KEYS
 	if (overlay === "trash") return TRASH_KEYS
 	if (filtering) return FILTER_KEYS
-	return commands.filter((command) => command.bar).map(barRow)
+	return BAR_COMMANDS.map((id) => getCommand(id)).filter(Boolean).map(barRow)
 }
 
 // Function: barRow
@@ -1145,8 +1226,8 @@ function barRow(command) {
 }
 
 // Function: createDispatch
-// Returns `dispatch(id, payload)` bound to the session. Unknown and `app.*`
-// (presentation-only) commands are ignored here. Failures (sync throws and
+// Returns `dispatch(id, payload)` bound to the session. Unknown commands are
+// ignored here; `app.*` commands run their host hook. Failures (sync throws and
 // rejections) land on the active pane's error cell and the session notice.
 function createDispatch(session) {
 	return (id, payload) => {
@@ -1291,6 +1372,18 @@ function closeBookmark(session) {
 	session.bookmarkOpen.set(false)
 }
 
+// Function: addCurrentBookmark
+// Records the panel's target under an automatic name and closes the panel.
+// Closing happens before the async save so a second Enter cannot add twice.
+function addCurrentBookmark(session) {
+	const target = session.bookmarkTarget.value
+	if (!target) return
+	closeBookmark(session)
+	return session.bookmarks.add(target.path, target.isDir).then(({ name, added }) => {
+		session.notice.set({ kind: "tip", text: added ? `bookmarked ${name}` : `bookmark ${name}` })
+	})
+}
+
 // Function: openHistory
 // Opens the history overlay: one row per journal entry, the cursor parked on
 // the current position. A row carries its journal `index` so activating it can
@@ -1401,9 +1494,9 @@ function openPanel(session, options = {}) {
 	session.panelOpIndex.set(0)
 	session.panelRowIndex.set(0)
 	session.panelFocus.set(PANEL_FOCUS.OPS)
-	session.panelPicking.set(false)
-	session.panelPickerArg.set(-1)
-	session.panelPendingRun.set(false)
+	session.pickerOpen.set(false)
+	session.pickerArg.set(-1)
+	session.pickerPendingRun.set(false)
 	session.panelRunError?.set(null)
 	session.panelOpen.set(true)
 	if (!options.name) return
@@ -1434,11 +1527,12 @@ function pickerEntry(session) {
 // cursor), else on the current pane's directory. Focus moves to the argument
 // column so the picker's own input owns the keyboard.
 async function openPicker(session, argIndex, binding) {
+	session.pickerPaths.invalidate()
 	const mode = binding?.mode ?? "dir"
-	session.panelPickerMode.set(mode)
-	session.panelPickerArg.set(argIndex)
+	session.pickerMode.set(mode)
+	session.pickerArg.set(argIndex)
 	session.pickerQuery.set("")
-	session.panelPicking.set(true)
+	session.pickerOpen.set(true)
 	session.panelFocus.set(PANEL_FOCUS.ARGS)
 	let startPath = currentPane(session)?.path?.value ?? session.fs.cwd?.() ?? "/"
 	let cursorPath = null
@@ -1451,7 +1545,10 @@ async function openPicker(session, argIndex, binding) {
 			cursorPath = value
 		}
 	}
+	session.pickerBasePath.set(startPath)
+	session.pickerFocus.set("path")
 	await session.pickerPane.navigate(startPath, { record: false, cursorPath })
+	session.pickerPathText.set(pickerDirectoryText(session.pickerPane.path.value))
 	const rows = session.pickerRows.value
 	const index = cursorPath ? rows.findIndex((row) => row.path === cursorPath) : -1
 	session.panelRowIndex.set(index >= 0 ? index : 0)
@@ -1462,8 +1559,11 @@ async function openPicker(session, argIndex, binding) {
 // cursor at the top of the fresh listing.
 async function descendPicker(session, path) {
 	if (!path) return undefined
+	session.pickerPaths.invalidate()
 	session.pickerQuery.set("")
 	await session.pickerPane.navigate(path, { record: false })
+	session.pickerPathText.set(pickerDirectoryText(session.pickerPane.path.value))
+	session.pickerFocus.set("rows")
 	session.panelRowIndex.set(0)
 	return undefined
 }
@@ -1474,22 +1574,25 @@ async function descendPicker(session, path) {
 // opened to satisfy a pending run, runs the operation now.
 function choosePicker(session, path) {
 	if (path == null) return undefined
-	const argIndex = session.panelPickerArg.value
+	session.pickerPaths.invalidate()
+	const argIndex = session.pickerArg.value
 	session.panelDraft.set(withArgValue(session.panelDraft.value, argIndex, path))
-	session.panelPicking.set(false)
-	session.panelPickerArg.set(-1)
+	session.pickerOpen.set(false)
+	session.pickerArg.set(-1)
 	session.panelFocus.set(PANEL_FOCUS.ARGS)
+	session.pickerFocus.set("path")
 	const rows = session.panelRows.value
 	const index = rows.findIndex((row) => row.type === "arg" && row.argIndex === argIndex)
 	session.panelRowIndex.set(index >= 0 ? index : 0)
-	if (session.panelPendingRun.value) {
-		session.panelPendingRun.set(false)
+	if (session.pickerPendingRun.value) {
+		session.pickerPendingRun.set(false)
 		return session.dispatch("panel.run")
 	}
 	return undefined
 }
 
 function closePanel(session) {
+	session.pickerPaths.invalidate()
 	session.panelOpen.set(false)
 	session.panelRunError?.set(null)
 }

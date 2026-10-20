@@ -14,9 +14,11 @@ after it. Inside:
 
 - Top bar: the TinyCmd identity (and host).
 - Two panes, each its own single-line box, plus an optional inspector.
-- Status bar: bracket key shorthands (`[Open ⏎]`) wrapping onto as many rows
-  as the width demands; the active pane's marked count trails the list, and a
-  notice or error replaces the keys with a one-line status.
+- Status bar: the fixed key shorthands (`[Commands :]`, `[Mark Spc]`,
+  `[Filter /]`, `[Switch ⇥]`, `[Bookmarks b]`, `[Toggle Mode t]`, `[Help ?]`) on
+  one line; the active pane's marked count trails the list, entries that do not
+  fit are elided behind `…`, and a notice or error replaces the keys with a
+  one-line status.
 - Below the breakpoint the workspace is replaced by a resize hint.
 
 ### View modes
@@ -119,8 +121,7 @@ and `O`/`E` still act on the file.
 │───────────────────────────────────││──────────────────────────────────││                                   │
 │  file · 26B          · -rw-r--r-- ││  file · 19B          · -rw-r--r--││                                   │
 └───────────────────────────────────┘└──────────────────────────────────┘╰───────────────────────────────────╯
-[Open ⏎] [Parent ←] [Reload ^R] [Switch ⇥] [Mark Spc] [Bookmark b] [Bookmarks g] [Preview v] [Commands :]
-[Shell command !] [Filter /] [Quit q] [Help ?]
+[Commands :] [Mark Spc] [Filter /] [Switch ⇥] [Bookmarks b] [Toggle Mode t] [Help ?]
 ```
 
 ## Responsive behavior
@@ -132,9 +133,9 @@ events, with the renderer dimensions as a fallback):
 - `< 100 cols`: the inline inspector collapses; `v` opens the fullscreen viewer.
 - `⇧V` maximizes the inspector over the pane row at any width, hiding the
   columns until the next press brings the previous layout back.
-- The status bar wraps its shorthands onto as many rows as the width demands
-  (up to three at the minimum width); nothing is trimmed — the palette and the
-  `?` reference carry the same bindings.
+- The status bar keeps its shorthands on one line at every width; entries that
+  do not fit are dropped and a trailing `…` marks the truncation. The palette
+  and the `?` reference carry the full bindings.
 
 ## Pane filter
 
@@ -152,9 +153,11 @@ events, with the renderer dimensions as a fallback):
 - Command panel (`:`/`m`): a Commando-style structured view over the commands.
   A filter input at the top narrows the operation list as you type — the
   matching command takes the cursor (`edit` highlights `edit`) — and the left
-  column groups entries by purpose: Command, File, Edit (amber), and Delete
-  (red). Command includes the workspace-view toggle; File's `view` previews the
-  selected path. Bold section titles head indented, alphabetized command names.
+  column groups entries by purpose: Command, File, Create, Edit (amber), and
+  Delete (red). Command includes the workspace-view toggle and Quit; File's `view`
+  previews the selected path; Create holds `mkdir`/`new`; Edit (amber) holds
+  `copy`, the link operations, and the permission and ownership changes;
+  Delete holds `unlink` alongside `delete`/`erase`. Bold section titles head indented, alphabetized command names.
   A vertical rule divides the left column from
   the right one, which shows the selected
   operation's arguments bound from the live context — a `FROM`/`PATH`
@@ -162,53 +165,78 @@ events, with the renderer dimensions as a fallback):
   to the cursor entry) with a `[x]`/`[ ]` toggle each, the basename in full
   followed by its dimmed parent directory, `TO` resolves to the DST pane's
   directory (editable in place), and textual arguments (`NAME`, `CMD`) are typed
-  in a filled field. Each argument stacks its label over its value; read-only
-  values appear plain and muted, and clicking one copies it to the clipboard
-  (OSC 52 in the terminal, the Clipboard API in the browser). The
-  command list and arguments scroll with their cursors. The `[Run]`/`[Retry]`
-  action stays visible beneath the argument list, aligned right and tinted with
-  the command category color; errors move focus to it and show the
-  error beside `[Retry]`. `replace` additionally previews each `old → new`
-  mapping between the arguments and the action. A successful result briefly
+  in a filled field. Labels and values start one cell in from the pane border
+  (` PATH`, ` [value]`); each argument stacks its label over its value,
+  read-only values appear plain and muted, and clicking one copies it to the clipboard
+  (OSC 52 in the terminal, the Clipboard API in the browser); an operation with
+  no arguments shows a `PATH` label over the active pane's path instead of a
+  placeholder. `new`/`mkdir` show that current `PATH` above an editable `NAME`,
+  and `chmod`/`chown` list `PATH` before `MODE`/`OWNER`. A permission
+  argument (`chmod`'s `MODE`) is a compact grid: one row per `u`/`g`/`o` class
+  with three clickable `R`/`W`/`X` cells, seeded from the selected file's
+  current mode and assembled back into its octal value (`←`/`→` move between
+  the cells and `Space` toggles one). `⌃O` opens the
+  file picker on a path/destination argument: its path is an editable string,
+  the matching entries are listed below as in a file panel (kind icons,
+  right-aligned sizes, scrollbar) and `..` stays pinned at the top. Typing a
+  directory enters it, a partial name filters the entries, and `↑↓`/`⇥` move
+  between the path field and the list. The command list and arguments scroll
+  with their cursors. The `[Run]`/`[Retry]`
+  action sits one line below the last field, aligned left and tinted with the
+  command category color; errors move focus to it, turn it into `[Retry]` and
+  show the message in a framed block below the button. `replace` additionally
+  previews each `old → new`
+  mapping between the arguments and the action. A `[Close Esc]` close button
+  sits in the top border, upper right. Amber (Edit) and red (Delete) actions
+  are two-step: the first `[Run]` turns it into `[Confirm]` and prints the
+  assembled command below it in the action's red/amber colour; the second
+  executes (`Retry` after an error stays confirmed). A successful result briefly
   replaces the command bar at the bottom. The selection is transient: toggling edits a draft
   that never mutates the pane marks, and running executes the operation directly
-  (confirms still route through the confirm overlay). Type to filter, `↑↓` move within a
+  (`chmod`/`chown`/link/edit and Delete never steal the separate confirm
+  overlay). Type to filter, `↑↓` move within a
   column, `⇥`/`⇧⇥` cycle the focus ring from the command through each argument
-  and Run (wrapping at both ends), `Space` toggles, `↵` runs, `Esc` closes.
+  and Run (wrapping at both ends), `Space` toggles, `↵` runs/confirms, `Esc` closes.
 
 ```text
-╭─ Command · bookmark ────────────────────────────────────────────────────╮
+╭─ Command · bookmark ─────────────────────────────[Close Esc]────────────╮
 │ :                        │ bookmark                                     │
 │──────────────────────────│──────────────────────────────────────────────│
-│  Command                 │ >  NAME                                      │
-│    bookmark              │    [(empty)]                                 │
-│    view                  │    PATH                                      │
-│  File                    │    /home/documents                           │
-│    copy                  │                                              │
-│    mkdir                 │                                              │
+│  Command                 │ NAME                                         │
+│    bookmark              │ [(empty)]                                    │
+│    quit                  │ PATH                                         │
+│    view                  │ /home/documents                              │
+│  File                    │                                              │
 │    open                  │                                              │
 │    run                   │                                              │
 │    stat                  │ [Run]                                        │
 │    …                     │                                              │
+│  Create                  │                                              │
+│    mkdir                 │                                              │
+│    new                   │                                              │
 │  Edit                    │                                              │
-│    edit                  │                                              │
-│    move                  │                                              │
-│    rename                │                                              │
-│    replace               │                                              │
-│    touch                 │                                              │
+│    chmod                 │                                              │
+│    chown                 │                                              │
+│    copy                  │                                              │
+│    hardlink              │                                              │
+│    symlink               │                                              │
+│    …                     │                                              │
 │  Delete                  │                                              │
 │    delete                │                                              │
 │    erase                 │                                              │
-│             type to filter  ⇥ args  Spc toggle  ↵ run  Esc close        │
+│    unlink                │                                              │
+│             type to filter  ⇥ args  Spc toggle  ↵ run                    │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
-- Bookmarks (`b`/`g`): centered. `b` opens a naming prompt (defaulting to the
-  path's basename) for the cursor entry (or the pane directory), then `g` opens
-  a fzf-style picker over bookmark names and paths. Each bookmark remembers
-  whether it is a file or a directory: jumping to a directory opens it, while
-  jumping to a file selects it in its directory and previews it.
-- Confirm (destructive operations): centered modal with the question and
-  `[y]es [n]o`.
+- Bookmarks (`b`): centered. One panel filters the stored bookmarks by name or
+  path; with an empty filter it also offers, as its first row, to add the
+  cursor entry (or the pane directory) under a basename-derived name. `Enter`
+  opens the selected bookmark, `⌫`/`Delete` removes it. Each bookmark remembers
+  whether it is a file or a directory: opening a directory navigates into it,
+  while opening a file selects it in its directory and previews it.
+- Confirm (destructive script operations outside the panel): centered modal
+  with the question and `[y]es [n]o`; panel actions use the inline
+  `[Confirm]` step instead.
 - Keys (`?`): a keymap-and-registry reference so it cannot drift from the
   actual bindings, laid out in two columns balanced by line count. Each entry
   uses the command bar's bracket style (`[Open →/⏎]`), listing every distinct
@@ -221,11 +249,17 @@ events, with the renderer dimensions as a fallback):
 
 - copy FROM TO (supports directories automatically)
 - move FROM TO
+- new PATH... (creates empty files, refusing existing paths)
+- hardlink FROM TO (hard links, into TO when it is a directory)
+- symlink FROM TO (symbolic links, into TO when it is a directory)
+- chmod MODE PATH... (octal permission bits; the panel edits MODE as R/W/X cells for u/g/o)
+- chown OWNER PATH... (USER[:GROUP], names or numeric ids)
 - delete PATH (moves to trash)
 - erase PATH (does not move to trash)
+- unlink PATH... (removes symbolic links only, never their targets)
 - stat PATH (info, including du)
-- abspath PATH... (normalized absolute paths, shell-quoted for copy/paste)
-- realpath PATH... (absolute paths with symlinks resolved)
+- abspath PATH... (normalized absolute paths, shell-quoted for copy/paste, copied to the clipboard)
+- realpath PATH... (absolute paths with symlinks resolved, copied to the clipboard)
 - touch PATH
 - sel BUF? PATH... adds/removes to selection  BUF would be +/- +A/-B (default to +; script-only, not in the command menu)
 - bookmark [NAME] [PATH] lists, adds or removes named bookmarks
@@ -263,12 +297,12 @@ The token set is grouped (see `tui/theme.js` for the palette values):
   warning and tip;
 - content: `fileFg`, `linkFg` (symlinks), `devFg` (device nodes) and `dirFg`.
 
-Each command-bar action renders as a plain bracket shorthand — `[Open ⏎]`:
+Each command-bar action renders as a plain bracket shorthand — `[Commands :]`:
 the bracket and title in the text colour, the shortcut glyph in the accent
 (primary for the context's main action, secondary for the rest), and a
 trailing space before the next entry. Entries without a shortcut (the marked
-count) render as a dimmed plain word. The shorthands wrap onto as many rows
-as the width demands, and every registered `bar` command stays visible at
-every width.
+count) render as a dimmed plain word. The shorthands stay on one line; entries
+that do not fit are elided behind a trailing dimmed `…`, while the command
+panel and the `?` reference keep every binding reachable.
 
 Only the TUI consumes this theme; the web view keeps its CSS state classes.

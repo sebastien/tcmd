@@ -13,8 +13,9 @@ function makeData(overrides = {}) {
 			panelFocus: "args",
 			panelItems: [],
 			panelOpen: true,
-			panelPicking: false,
+			pickerOpen: false,
 			panelTextual: false,
+			pickerFocus: "path",
 			pickerQuery: "",
 			...overrides,
 		},
@@ -29,57 +30,80 @@ describe("App panel picker", () => {
 		expect(calls).toEqual([{ id: "panel.browse", payload: undefined }])
 	})
 
-	test("the picker sub-mode owns navigation, choice and its own cancel", () => {
+	test("the path field owns typing and commits on Enter", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
-		const picker = (overrides) => makeData({ panelPicking: true, ...overrides })
-		const keys = [
-			["escape", undefined],
-			["tab", undefined],
-			["up", undefined],
-			["down", undefined],
-			["right", undefined],
-			["return", undefined],
-			["enter", { ctrl: true }],
-		]
-		const run = picker()
-		for (const [name, mods] of keys) behaviors.keys(null, run.data, { name, ...(mods ?? {}) })
-		expect(run.calls.map((call) => call.id)).toEqual([
-			"panel.pick.cancel",
-			"panel.pick.cancel",
-			"panel.pick.up",
-			"panel.pick.down",
-			"panel.pick.descend",
-			"panel.pick.enter",
-			"panel.pick.chooseDir",
+		const { calls, data } = makeData({ pickerOpen: true, pickerFocus: "path" })
+		behaviors.keys(null, data, { name: "escape" })
+		behaviors.keys(null, data, { name: "down" })
+		behaviors.keys(null, data, { name: "tab" })
+		behaviors.keys(null, data, { name: "return" })
+		// Printable keys and Backspace are the input's; nothing is dispatched.
+		behaviors.keys(null, data, { name: "x" })
+		behaviors.keys(null, data, { name: "backspace" })
+		expect(calls.map((call) => call.id)).toEqual([
+			"picker.cancel",
+			"picker.focusRows",
+			"picker.focusRows",
+			"picker.path",
 		])
 	})
 
-	test("backspace steps up only when the picker filter is empty", () => {
+	test("the entry list owns navigation and choice once focused", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
-		const empty = makeData({ panelPicking: true, pickerQuery: "" })
+		const { calls, data } = makeData({ pickerOpen: true, pickerFocus: "rows" })
+		const keys = [
+			["up", undefined],
+			["down", undefined],
+			["left", undefined],
+			["right", undefined],
+			["return", undefined],
+			["enter", { ctrl: true }],
+			["tab", undefined],
+		]
+		for (const [name, mods] of keys) behaviors.keys(null, data, { name, ...(mods ?? {}) })
+		expect(calls.map((call) => call.id)).toEqual([
+			"picker.up",
+			"picker.down",
+			"picker.focusPath",
+			"picker.descend",
+			"picker.enter",
+			"picker.chooseDir",
+			"picker.focusPath",
+		])
+	})
+
+	test("backspace steps up only when the picker path has no fragment", () => {
+		const behaviors = createBehaviors({ quit: () => {} })
+		const empty = makeData({ pickerOpen: true, pickerFocus: "rows", pickerQuery: "" })
 		behaviors.keys(null, empty.data, { name: "backspace" })
-		expect(empty.calls).toEqual([{ id: "panel.pick.parent", payload: undefined }])
-		// A non-empty filter: the input owns Backspace and edits itself.
-		const typing = makeData({ panelPicking: true, pickerQuery: "doc" })
+		expect(empty.calls).toEqual([{ id: "picker.parent", payload: undefined }])
+		// A typed fragment is edited by the path input instead.
+		const typing = makeData({ pickerOpen: true, pickerFocus: "rows", pickerQuery: "doc" })
 		behaviors.keys(null, typing.data, { name: "backspace" })
-		behaviors.keys(null, typing.data, { name: "x" })
 		expect(typing.calls).toEqual([])
+	})
+
+	test("typing while the rows are focused returns to the path field", () => {
+		const behaviors = createBehaviors({ quit: () => {} })
+		const { calls, data } = makeData({ pickerOpen: true, pickerFocus: "rows" })
+		behaviors.keys(null, data, { name: "x" })
+		expect(calls).toEqual([{ id: "picker.type", payload: { char: "x" } }])
 	})
 
 	test("clicking a picker row chooses it, Enter while picking chooses", () => {
 		const events = createEvents()
 		const { calls, data } = makeData({
-			panelPicking: true,
+			pickerOpen: true,
 			panelRows: [{ key: "/home/docs", type: "entry", isDir: true }],
 		})
 		events["panel:select"](null, data, { data: "/home/docs" })
 		expect(calls).toEqual([
 			{ id: "panel.focusArg", payload: undefined },
-			{ id: "panel.pick.setCursor", payload: { index: 0 } },
-			{ id: "panel.pick.enter", payload: undefined },
+			{ id: "picker.setCursor", payload: { index: 0 } },
+			{ id: "picker.enter", payload: undefined },
 		])
-		const confirm = makeData({ panelPicking: true })
+		const confirm = makeData({ pickerOpen: true })
 		events["panel:confirm"](null, confirm.data, {})
-		expect(confirm.calls).toEqual([{ id: "panel.pick.enter", payload: undefined }])
+		expect(confirm.calls).toEqual([{ id: "picker.enter", payload: undefined }])
 	})
 })

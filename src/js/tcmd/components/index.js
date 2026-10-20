@@ -11,7 +11,7 @@
 
 // Binding
 export { bind } from "./bind.js"
-export { commandBarMarks, commandBarMarksItem, commandBarRowCount, commandBarStatus } from "./CommandBar.js"
+export { commandBarFit, commandBarMarks, commandBarMarksItem, commandBarStatus } from "./CommandBar.js"
 
 // Behaviors
 export { createBehaviors as appBehaviors, createEvents as appEvents, createInit as appInit } from "./App.js"
@@ -26,6 +26,8 @@ export { createBehaviors as confirmBehaviors } from "./Confirm.js"
 export { createBehaviors as crumbBehaviors } from "./Crumb.js"
 export { createBehaviors as entryDetailBehaviors } from "./EntryDetail.js"
 export { createBehaviors as fileListBehaviors } from "./FileList.js"
+export { createBehaviors as filePickerBehaviors } from "./FilePicker.js"
+export { createBehaviors as filePickerRowBehaviors } from "./FilePickerRow.js"
 export { createBehaviors as filePreviewBehaviors } from "./FilePreview.js"
 export { createBehaviors as fileRowBehaviors } from "./FileRow.js"
 export { createBehaviors as filterBarBehaviors } from "./FilterBar.js"
@@ -38,6 +40,6 @@ export { createBehaviors as summaryBehaviors } from "./Summary.js"
 // Helpers
 export { formatCounts, formatDisk, formatMode, formatSize, formatTime } from "./format.js"
 export { iconFor, iconsEnabled, lucideIconFor, sourceMarker } from "./icons.js"
-export { bookmarkRows, commandItemRows, crumbRows, fileRows, fileWindow, helpRows, listingWindow, overlayRows, panelArgRows, panelOpRows, panelRunRows } from "./rows.js"
+export { bookmarkRows, commandItemRows, crumbRows, filePickerRows, fileRows, fileWindow, helpRows, listingWindow, overlayRows, panelArgRows, panelOpRows, panelRunRows } from "./rows.js"
 
 // EOF

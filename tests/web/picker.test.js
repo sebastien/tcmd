@@ -73,12 +73,13 @@ describe("web picker", () => {
 			const picker = host.querySelector(".panel-picker")
 			expect(picker).not.toBeNull()
 			expect(host.querySelector(".panel-picker-pane")).not.toBeNull()
-			expect(host.querySelector(".panel-picker-path").textContent).toBe("/home")
+			// The path is an editable input, not a read-only label.
+			expect(host.querySelector(".panel-picker-path").value).toBe("/home/")
 			// A destination picker lists directories only: the file is excluded.
-			const names = [...host.querySelectorAll(".panel-args .panel-name")].map((el) => el.textContent)
+			const names = [...host.querySelectorAll(".panel-picker-rows .name")].map((el) => el.textContent)
 			expect(names).toEqual(["..", "docs/", "tmp/"])
-			// Its own input owns the keyboard.
-			expect(document.activeElement).toBe(host.querySelector(".panel-picker-query"))
+			// The path input owns the keyboard.
+			expect(document.activeElement).toBe(host.querySelector(".panel-picker-path"))
 		} finally {
 			instance?.unmount?.()
 		}
@@ -88,11 +89,11 @@ describe("web picker", () => {
 		const { host, instance, session } = await mountApp()
 		try {
 			await browse(session, "copy", "TO")
-			host.querySelector('.panel-row[data-type="parent"]').click()
+			host.querySelector('.picker-row[data-type="parent"]').click()
 			await settle()
 			expect(session.pickerPane.path.value).toBe("/")
-			expect(host.querySelector(".panel-picker-path").textContent).toBe("/")
-			expect([...host.querySelectorAll(".panel-args .panel-name")].map((el) => el.textContent)).toEqual(["etc/", "home/"])
+			expect(host.querySelector(".panel-picker-path").value).toBe("/")
+			expect([...host.querySelectorAll(".panel-picker-rows .name")].map((el) => el.textContent)).toEqual(["etc/", "home/"])
 		} finally {
 			instance?.unmount?.()
 		}
@@ -102,12 +103,12 @@ describe("web picker", () => {
 		const { host, instance, session } = await mountApp()
 		try {
 			await browse(session, "copy", "TO")
-			const query = host.querySelector(".panel-picker-query")
-			query.value = "tmp"
-			query.dispatchEvent(new query.ownerDocument.defaultView.Event("input", { bubbles: true }))
+			const path = host.querySelector(".panel-picker-path")
+			path.value = "/home/t"
+			path.dispatchEvent(new path.ownerDocument.defaultView.Event("input", { bubbles: true }))
 			await settle()
-			expect([...host.querySelectorAll(".panel-args .panel-name")].map((el) => el.textContent)).toEqual(["..", "tmp/"])
-			await session.dispatch("panel.pick.enter")
+			expect([...host.querySelectorAll(".panel-picker-rows .name")].map((el) => el.textContent)).toEqual(["..", "tmp/"])
+			await session.dispatch("picker.enter")
 			await settle()
 			expect(host.querySelector(".panel-picker")).toBeNull()
 			const dst = session.panelDraft.value.find((binding) => binding.name === "TO")
@@ -121,12 +122,12 @@ describe("web picker", () => {
 		const { host, instance, session } = await mountApp()
 		try {
 			await browse(session, "copy", "TO")
-			const query = host.querySelector(".panel-picker-query")
-			query.value = "no-such-entry"
-			query.dispatchEvent(new query.ownerDocument.defaultView.Event("input", { bubbles: true }))
+			const path = host.querySelector(".panel-picker-path")
+			path.value = "/home/no-such-entry"
+			path.dispatchEvent(new path.ownerDocument.defaultView.Event("input", { bubbles: true }))
 			await settle()
-			expect(host.querySelector('.panel-row[data-type="parent"]')).not.toBeNull()
-			expect(host.querySelector(".panel-picker-pane .panel-args-empty").textContent).toContain("empty")
+			expect(host.querySelector('.picker-row[data-type="parent"]')).not.toBeNull()
+			expect(host.querySelector(".panel-picker-pane .panel-args-empty").textContent).toContain("no matches")
 		} finally {
 			instance?.unmount?.()
 		}

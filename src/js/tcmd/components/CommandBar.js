@@ -5,16 +5,17 @@
 
 // Module: tcmd/components/CommandBar
 // CommandBar: the bottom bar. By default it shows the keys available in the
-// current context (the command registry's `bar` commands, or the hints of the
+// current context (the command registry's `BAR_COMMANDS`, or the hints of the
 // overlay that owns the keyboard); a pane error or a session notice takes
-// its place. Entries are bracket shorthands (see `CommandItem.js`) that wrap
-// onto as many rows as the width demands; the active pane's marked count
-// joins the list as a dimmed, non-clickable entry. The row logic lives in
-// `CommandItem.js`; this parent maps its `items` to rows.
+// its place. Entries are bracket shorthands (see `CommandItem.js`) that stay
+// on one line: entries that do not fit are dropped and a trailing ellipsis
+// takes their place, while the active pane's marked count joins the list as a
+// dimmed, non-clickable entry. The row logic lives in `CommandItem.js`; this
+// parent maps its `items` to rows.
 //
 // The web presentation swaps the key list for a single status line
 // (`showKeys`/`showStatus`/`status`/`statusClass`); the TUI presentation
-// keeps the wrapped key list and swaps it for the status when there is one.
+// keeps the single-line key list and swaps it for the status when there is one.
 //
 // Environment: `rows(data)` returning the keyed row list, `listClass` (web
 // root class), `errorClass` (web), and the TUI colors plus the
@@ -22,6 +23,10 @@
 
 import { unwrap } from "select/state/cells"
 import { commandWidth } from "./CommandItem.js"
+
+// Constant: ELLIPSIS
+// The trailing marker shown when the bar cannot fit every entry.
+const ELLIPSIS = { id: null, title: "…", dim: true }
 
 // Function: commandBarStatus
 // The one-line status the bar shows when something needs attention: the
@@ -52,22 +57,25 @@ function commandBarMarksItem(data) {
 	return marks ? { id: null, title: marks, dim: true } : null
 }
 
-// Function: commandBarRowCount
-// How many rows the wrapped entries occupy at `width` columns (greedy fill,
-// matching the flex layout). `width <= 0` (unknown) assumes a single row.
-function commandBarRowCount(items, width) {
-	if (!width || width <= 0) return 1
-	let rows = 1
-	let cols = 0
-	for (const item of items ?? []) {
-		const w = commandWidth(item)
-		if (cols > 0 && cols + w > width) {
-			rows++
-			cols = 0
+// Function: commandBarFit
+// Truncates entries to `width` columns, appending a dim ellipsis when an entry
+// had to be dropped. `width <= 0` (not measured yet) keeps every entry and
+// lets the renderer clip. The bar is always one line: entries never wrap.
+function commandBarFit(items, width) {
+	const list = items ?? []
+	if (!width || width <= 0) return list
+	let used = 0
+	for (let i = 0; i < list.length; i++) {
+		const next = used + commandWidth(list[i])
+		if (next > width) {
+			const kept = list.slice(0, i)
+			// The ellipsis needs its own column plus the separating space.
+			while (kept.length && used + 2 > width) used -= commandWidth(kept.pop())
+			return [...kept, ELLIPSIS]
 		}
-		cols += w
+		used = next
 	}
-	return rows
+	return list
 }
 
 // Function: isInfo
@@ -119,6 +127,6 @@ function createBehaviors(env) {
 	return behaviors
 }
 
-export { commandBarMarks, commandBarMarksItem, commandBarRowCount, commandBarStatus, createBehaviors }
+export { commandBarFit, commandBarMarks, commandBarMarksItem, commandBarStatus, createBehaviors }
 
 // EOF

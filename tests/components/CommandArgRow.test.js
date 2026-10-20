@@ -53,9 +53,37 @@ describe("CommandArgRow", () => {
 		// An item row draws the sides; the list indents under the value
 		// (marker + gap).
 		expect(behaviors.listBorder(null, { row: { type: "item" } })).toEqual(["left", "right"])
-		expect(behaviors.rowIndent(null, { row: { type: "item" } })).toBe(3)
-		expect(behaviors.listSpacer(null, {})).toBe("\u00a0".repeat(3))
+		expect(behaviors.rowIndent(null, { row: { type: "item" } })).toBe(1)
+		expect(behaviors.listSpacer(null, {})).toBe("\u00a0")
 		expect(behaviors.rowIndent(null, { row: { type: "arg" } })).toBe(0)
+	})
+
+	test("renders permission class rows with a bit cursor", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		const row = {
+			type: "perm",
+			label: "user",
+			bits: [
+				{ id: "r", selected: true },
+				{ id: "w", selected: false },
+				{ id: "x", selected: true },
+			],
+		}
+		expect(rowName(row)).toBe("user")
+		expect(behaviors.isPerm(null, { row })).toBe(true)
+		expect(behaviors.permClass(null, { row })).toBe("user")
+		expect(behaviors.permR(null, { row })).toBe("r")
+		expect(behaviors.permW(null, { row })).toBe("-")
+		expect(behaviors.permX(null, { row })).toBe("x")
+		expect(behaviors.permXOn(null, { row })).toBe("true")
+		expect(behaviors.permWOn(null, { row })).toBe("false")
+		// Enabled bits use the secondary accent; the cursor bit is highlighted.
+		expect(behaviors.permRFg(null, { row })).toBe("mark")
+		expect(behaviors.permWFg(null, { row })).toBe("dim")
+		const focused = { row, index: 1, cursor: 1, focus: "args", permBit: 2 }
+		expect(behaviors.permXBg(null, focused)).toBe("accentSecondaryBg")
+		expect(behaviors.permRBg(null, focused)).toBeUndefined()
+		expect(behaviors.permXClass(null, focused)).toBe("is-on is-bit-focused")
 	})
 
 	test("summarises headers and shows an item's parent", () => {
@@ -78,6 +106,9 @@ describe("CommandArgRow", () => {
 		expect(behaviors.isRun(null, { row: { type: "run" } })).toBe(true)
 		expect(behaviors.runLabel()).toBe("[Run]")
 		expect(behaviors.runLabel(null, { row: { type: "run", error: "failed" } })).toBe("[Retry]")
+		expect(behaviors.runLabel(null, { row: { type: "run", armed: true } })).toBe("[Confirm]")
+		expect(behaviors.runAriaLabel(null, { row: { type: "run", armed: true } })).toBe("Confirm command")
+		expect(rowName({ type: "run", armed: true })).toBe("[Confirm]")
 		expect(behaviors.runMarginTop(null, { row: { type: "run" } })).toBe(1)
 		expect(behaviors.runMarginTop(null, { row: { type: "arg" } })).toBe(0)
 		expect(behaviors.runError(null, { row: { type: "run", error: "failed" } })).toBe("failed")

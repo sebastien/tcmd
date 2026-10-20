@@ -12,19 +12,24 @@
 //
 // Registry entries carry presentation metadata used by the panel and help:
 // `signature`, `description`, `aliases` and an optional `confirmText`. An
-// optional `risk` ("caution" for a move, "destructive" for delete/erase) sets
-// the operation's color group and tint.
+// optional `risk` ("caution" or "destructive") is the single source for the
+// operation's colour group and the panel's two-step `[Confirm]` step.
 //
 // They also carry `args`, the structured signature the command panel renders:
 // one descriptor per positional argument. A descriptor is
-// `{ name, kind, role?, optional?, variadic? }` where `kind` is:
+// `{ name, kind, role?, optional?, variadic?, panelOrder?, prefill? }` where
+// `kind` is:
 // - "selection": one or more paths from a pane's selection (marks, falling
 //   back to the cursor entry). `role` picks the pane: "source" (SRC), "dest"
 //   (DST) or "active" (default).
 // - "dest": a single destination directory (the DST pane's path).
+// - "path": a typeable/browsable path; `prefill: "current"` seeds it with the
+//   active pane's path.
+// - "permissions": the chmod R/W/X grid for u/g/o.
 // - "buffer": a selection-buffer label (`+A`, `-B`, …).
 // - "literal": free text (a name), edited in the panel's text field.
 // - "raw": the rest of the line, unparsed (a shell command).
+// `panelOrder` reorders only the panel rows, leaving the argv order intact.
 
 import { basename, extname, join, normalize, parent as parentOf } from "./path.js"
 import { currentPane, currentPaneId, PANE_BUFFERS } from "./pane.js"
@@ -81,6 +86,7 @@ const operations = [
 		name: "copy",
 		signature: "copy FROM TO",
 		description: "Copy files and directories",
+		risk: "caution",
 		arity: { min: 2, max: 2 },
 		args: [
 			{ name: "FROM", kind: "selection", role: "source", variadic: true },
@@ -135,9 +141,12 @@ const operations = [
 		signature: "mkdir PATH...",
 		description: "Create directories",
 		arity: { min: 1 },
-		args: [{ name: "PATH", kind: "literal", variadic: true }],
-		async run(session, args) {
-			const paths = expandAll(session, args)
+		args: [
+			{ name: "PATH", kind: "path", mode: "dir", prefill: "current" },
+			{ name: "NAME", kind: "literal" },
+		],
+		async run(session, args, options) {
+			const paths = creationPaths(session, args, options)
 			const requested = new Set()
 			const created = new Set()
 			for (const path of paths) {
@@ -177,6 +186,48 @@ const operations = [
 				},
 			})
 			return `created ${createdPaths.length} director${createdPaths.length === 1 ? "y" : "ies"}`
+		},
+	},
+	{
+		name: "new",
+		signature: "new PATH...",
+		description: "Create empty files",
+		arity: { min: 1 },
+		args: [
+			{ name: "PATH", kind: "path", mode: "dir", prefill: "current" },
+			{ name: "NAME", kind: "literal" },
+		],
+		async run(session, args, options) {
+			const paths = creationPaths(session, args, options)
+			const requested = new Set()
+			for (const path of paths) {
+				const normalized = normalize(path)
+				if (requested.has(normalized)) throw new Error(`duplicate path: ${normalized}`)
+				requested.add(normalized)
+				if (await pathExists(session.fs, normalized)) throw new Error(`already exists: ${normalized}`)
+				const parent = parentOf(normalized)
+				if (parent && !(await session.fs.stat(parent))?.isDir) {
+					throw new Error(`no such directory: ${parent}`)
+				}
+			}
+			for (const path of paths) await session.fs.touch(path)
+			await refreshPanes(session)
+			recordHistory(session, {
+				label: `new ${paths.map((path) => basename(path)).join(", ")}`,
+				undo: async () => {
+					for (const path of paths) {
+						const stats = await session.fs.stat(path)
+						if (!stats) continue
+						if (stats.size > 0) throw new Error(`file changed since new: ${path}`)
+					}
+					await session.fs.erase(paths)
+				},
+				redo: async () => {
+					await assertPathsAbsent(session.fs, paths)
+					for (const path of paths) await session.fs.touch(path)
+				},
+			})
+			return `created ${paths.length} file${paths.length === 1 ? "" : "s"}`
 		},
 	},
 	{
@@ -400,6 +451,40 @@ const operations = [
 		},
 	},
 	{
+		name: "unlink",
+		signature: "unlink PATH...",
+		description: "Remove symbolic links, leaving their targets alone",
+		risk: "destructive",
+		arity: { min: 1 },
+		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
+		async run(session, args) {
+			const paths = expandAll(session, args)
+			const links = []
+			for (const path of paths) {
+				const entry = await linkEntry(session.fs, path)
+				// Only links are unlinked: a typo on a regular file must not
+				// remove it. The whole batch is checked before anything runs.
+				if (!entry) throw new Error(`not a symbolic link: ${path}`)
+				links.push({ path, target: entry.target ?? "" })
+			}
+			for (const link of links) await session.fs.unlink(link.path)
+			await refreshPanes(session)
+			if (links.length) {
+				recordHistory(session, {
+					label: `unlink ${links.length} link${links.length === 1 ? "" : "s"}`,
+					undo: async () => {
+						await assertPathsAbsent(session.fs, links.map((link) => link.path))
+						for (const link of links) await session.fs.symlink(link.target, link.path)
+					},
+					redo: async () => {
+						for (const link of links) await session.fs.unlink(link.path)
+					},
+				})
+			}
+			return `unlinked ${links.length} link${links.length === 1 ? "" : "s"}`
+		},
+	},
+	{
 		name: "stat",
 		signature: "stat PATH...",
 		description: "Show file information, including disk usage",
@@ -430,7 +515,9 @@ const operations = [
 		arity: { min: 1 },
 		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
 		async run(session, args) {
-			return expandAll(session, args).map((path) => shellQuote(absolutePath(path))).join(" ")
+			const text = expandAll(session, args).map((path) => shellQuote(absolutePath(path))).join(" ")
+			copyText(session, text)
+			return text
 		},
 	},
 	{
@@ -443,13 +530,16 @@ const operations = [
 			const paths = expandAll(session, args)
 			const resolved = []
 			for (const path of paths) resolved.push(await session.fs.realpath(absolutePath(path)))
-			return resolved.map(shellQuote).join(" ")
+			const text = resolved.map(shellQuote).join(" ")
+			copyText(session, text)
+			return text
 		},
 	},
 	{
 		name: "touch",
 		signature: "touch PATH...",
 		description: "Create files or bump their modification time",
+		risk: "caution",
 		arity: { min: 1 },
 		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
 		async run(session, args) {
@@ -457,6 +547,51 @@ const operations = [
 			for (const path of paths) await session.fs.touch(path)
 			await refreshPanes(session)
 			return `touched ${paths.length} path${paths.length === 1 ? "" : "s"}`
+		},
+	},
+	{
+		name: "chmod",
+		signature: "chmod MODE PATH...",
+		description: "Set read/write/execute permissions for user, group and other",
+		risk: "caution",
+		arity: { min: 2 },
+		args: [
+			{ name: "MODE", kind: "permissions", panelOrder: 1 },
+			{ name: "PATH", kind: "selection", role: "active", variadic: true, panelOrder: 0 },
+		],
+		async run(session, args) {
+			const modeText = `${args[0] ?? ""}`.trim()
+			if (!/^0?[0-7]{1,4}$/.test(modeText)) throw new Error("chmod: MODE must be octal (e.g. 644)")
+			const paths = expandAll(session, args.slice(1))
+			for (const path of paths) {
+				if (!(await session.fs.stat(path))) throw new Error(`not found: ${path}`)
+			}
+			const mode = Number.parseInt(modeText, 8)
+			for (const path of paths) await session.fs.chmod(path, mode)
+			await refreshPanes(session)
+			return `chmod ${modeText} ${paths.length} path${paths.length === 1 ? "" : "s"}`
+		},
+	},
+	{
+		name: "chown",
+		signature: "chown OWNER PATH...",
+		description: "Set path ownership (OWNER is USER[:GROUP])",
+		risk: "caution",
+		arity: { min: 2 },
+		args: [
+			{ name: "OWNER", kind: "literal", panelOrder: 1 },
+			{ name: "PATH", kind: "selection", role: "active", variadic: true, panelOrder: 0 },
+		],
+		async run(session, args) {
+			const owner = `${args[0] ?? ""}`.trim()
+			if (!owner) throw new Error("chown: OWNER must be USER[:GROUP]")
+			const paths = expandAll(session, args.slice(1))
+			for (const path of paths) {
+				if (!(await session.fs.stat(path))) throw new Error(`not found: ${path}`)
+			}
+			for (const path of paths) await session.fs.chown(path, owner)
+			await refreshPanes(session)
+			return `chowned ${paths.length} path${paths.length === 1 ? "" : "s"} to ${owner}`
 		},
 	},
 	{
@@ -489,6 +624,7 @@ const operations = [
 		name: "edit",
 		signature: "edit PATH",
 		description: "Edit a file with $EDITOR",
+		risk: "caution",
 		arity: { min: 1, max: 1 },
 		args: [{ name: "PATH", kind: "selection", role: "active" }],
 		async run(session, args) {
@@ -498,6 +634,47 @@ const operations = [
 			await session.os.edit(path)
 			await refreshPanes(session)
 			return `edited ${path}`
+		},
+	},
+	{
+		name: "hardlink",
+		signature: "hardlink FROM TO",
+		description: "Create hard links to paths",
+		risk: "caution",
+		arity: { min: 2, max: 2 },
+		args: [
+			{ name: "FROM", kind: "selection", role: "source", variadic: true },
+			{ name: "TO", kind: "dest" },
+		],
+		async run(session, args) {
+			const links = await linkPlan(session, args, "hardlink")
+			for (const link of links) {
+				const stats = await session.fs.stat(link.from)
+				if (!stats) throw new Error(`not found: ${link.from}`)
+				if (stats.isDir) throw new Error(`hardlink: cannot link a directory: ${link.from}`)
+			}
+			for (const link of links) await session.fs.hardlink(link.from, link.to)
+			await refreshPanes(session)
+			recordLinkHistory(session, "hardlink", links, (link) => session.fs.hardlink(link.from, link.to))
+			return `linked ${links.length} path${links.length === 1 ? "" : "s"} to ${links[0].to}`
+		},
+	},
+	{
+		name: "symlink",
+		signature: "symlink FROM TO",
+		description: "Create symbolic links to paths",
+		risk: "caution",
+		arity: { min: 2, max: 2 },
+		args: [
+			{ name: "FROM", kind: "selection", role: "source", variadic: true },
+			{ name: "TO", kind: "dest" },
+		],
+		async run(session, args) {
+			const links = await linkPlan(session, args, "symlink")
+			for (const link of links) await session.fs.symlink(link.from, link.to)
+			await refreshPanes(session)
+			recordLinkHistory(session, "symlink", links, (link) => session.fs.symlink(link.from, link.to))
+			return `symlinked ${links.length} path${links.length === 1 ? "" : "s"} to ${links[0].to}`
 		},
 	},
 	{
@@ -654,6 +831,18 @@ function expandAll(session, tokens) {
 	return paths
 }
 
+// Function: creationPaths
+// The paths `new`/`mkdir` create. Scripts keep the one-token-per-path syntax
+// (`new a b`); the command panel supplies a PATH directory plus a NAME and
+// opts into composing them here.
+function creationPaths(session, args, options) {
+	if (!options?.panel) return expandAll(session, args)
+	const directory = `${args[0] ?? ""}`.trim()
+	const names = args.slice(1).map((name) => `${name ?? ""}`.trim()).filter(Boolean)
+	if (!directory || !names.length) return []
+	return expandAll(session, names.map((name) => join(directory, name)))
+}
+
 async function isDir(session, path) {
 	const stats = await session.fs.stat(path)
 	return Boolean(stats?.isDir)
@@ -663,6 +852,69 @@ async function refreshPanes(session) {
 	// Every rendered column: the two panes, plus the explorer's parent mirror
 	// and the directory the inspector is showing.
 	await Promise.all(Object.values(session.panes).map((pane) => pane.refresh()))
+}
+
+// Function: copyText
+// Best-effort clipboard write through the host adapter (OSC 52 in the TUI, the
+// Clipboard API in a browser). A host without a clipboard returns false; the
+// operation still reports its result normally.
+function copyText(session, text) {
+	try {
+		return Boolean(session.os?.copy?.(text))
+	} catch (error) {
+		return false
+	}
+}
+
+// Function: linkPlan
+// The source/destination pairs a hardlink or symlink creates: the destination
+// is the TO path, or `TO/basename(source)` when TO is an existing directory —
+// the same rule copy and move use. Every destination must be absent.
+async function linkPlan(session, args, label) {
+	const sources = expandAll(session, [args[0]])
+	const targets = expandAll(session, [args[1]])
+	if (targets.length !== 1) throw new Error(`${label}: TO must be a single path`)
+	const [target] = targets
+	if (sources.length > 1 && !(await isDir(session, target))) {
+		throw new Error(`${label}: TO must be an existing directory for multiple FROM`)
+	}
+	const into = await isDir(session, target)
+	const links = sources.map((source) => ({
+		from: source,
+		to: into ? join(target, basename(source)) : target,
+	}))
+	await assertPathsAbsent(session.fs, links.map((link) => link.to))
+	return links
+}
+
+// Function: recordLinkHistory
+// Journals a batch of links: undo erases them, redo recreates them through the
+// operation that made them (`hardlink` or `symlink`).
+function recordLinkHistory(session, label, links, create) {
+	recordHistory(session, {
+		label: `${label} ${links.length} path${links.length === 1 ? "" : "s"}`,
+		undo: async () => {
+			await session.fs.erase(links.map((link) => link.to))
+		},
+		redo: async () => {
+			await assertPathsAbsent(session.fs, links.map((link) => link.to))
+			for (const link of links) await create(link)
+		},
+	})
+}
+
+// Function: linkEntry
+// The listing entry for `path` when it is a symbolic link (its own identity,
+// not what it points at). Null for a regular file or directory.
+async function linkEntry(fs, path) {
+	const parent = parentOf(path)
+	if (!parent) return null
+	try {
+		const entry = (await fs.readDir(parent)).find((candidate) => candidate.name === basename(path))
+		return entry?.isSymlink ? entry : null
+	} catch (error) {
+		return null
+	}
 }
 
 // Function: recordHistory
@@ -696,13 +948,13 @@ async function assertPathsAbsent(fs, paths) {
 	}
 }
 
-function assertNoOverlappingPaths(paths, operation) {
+function assertNoOverlappingPaths(paths, label) {
 	for (let i = 0; i < paths.length; i++) {
 		for (let j = i + 1; j < paths.length; j++) {
 			const a = paths[i]
 			const b = paths[j]
 			if (a === b || isAncestorPath(a, b) || isAncestorPath(b, a)) {
-				throw new Error(`${operation}: overlapping paths: ${a} and ${b}`)
+				throw new Error(`${label}: overlapping paths: ${a} and ${b}`)
 			}
 		}
 	}

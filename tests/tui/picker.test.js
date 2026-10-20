@@ -30,18 +30,35 @@ describe("tui picker", () => {
 		const { setup, session } = await makeSetup(TREE, 100, 20)
 		try {
 			await openPicker(setup, session)
-			expect(session.panelPicking.value).toBe(true)
+			expect(session.pickerOpen.value).toBe(true)
 			const frame = setup.captureCharFrame()
-			expect(frame).toContain("⌕")
-			expect(frame).toContain("/home")
+			// The editable path line shows the browsed directory with a trailing
+			// slash, and the rows render like a file panel.
+			expect(frame).toContain("›")
+			expect(frame).toContain("/home/")
 			expect(frame).toContain("..")
-			expect(frame).toContain("┌")
-			expect(frame).toContain("└")
-			// A destination picker lists directories only, suffixed with a slash.
 			expect(frame).toContain("docs/")
 			expect(frame).toContain("tmp/")
+			expect(frame).toContain("<dir>")
 			// The picker hints replace the panel's.
-			expect(frame).toContain("Choose")
+			expect(frame).toContain("Go")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("typing edits the path and narrows the entries", async () => {
+		const { setup, session } = await makeSetup(TREE, 100, 20)
+		try {
+			await openPicker(setup, session)
+			expect(session.pickerPathText.value).toBe("/home/")
+			await setup.mockInput.typeText("d")
+			await settle(setup)
+			expect(session.pickerPathText.value).toBe("/home/d")
+			expect(session.pickerRows.value.map((row) => row.name)).toEqual(["..", "docs"])
+			const frame = setup.captureCharFrame()
+			expect(frame).toContain("/home/d")
+			expect(frame).toContain("docs/")
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -51,12 +68,12 @@ describe("tui picker", () => {
 		const { setup, session } = await makeSetup(TREE, 100, 20)
 		try {
 			await openPicker(setup, session)
-			session.dispatch("panel.pick.setCursor", {
+			session.dispatch("picker.setCursor", {
 				index: session.pickerRows.value.findIndex((row) => row.name === "docs"),
 			})
-			await session.dispatch("panel.pick.enter")
+			await session.dispatch("picker.enter")
 			await settle(setup)
-			expect(session.panelPicking.value).toBe(false)
+			expect(session.pickerOpen.value).toBe(false)
 			expect(session.panelOpen.value).toBe(true)
 			expect(session.panelDraft.value.find((binding) => binding.name === "TO").value).toBe("/home/docs")
 		} finally {

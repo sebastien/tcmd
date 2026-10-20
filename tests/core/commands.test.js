@@ -478,30 +478,23 @@ describe("commands", () => {
 		expect(session.dispatch("nope")).toBeNull()
 	})
 
-	test("the command bar marks the Open action as primary", () => {
-		const items = getCommandBarItems({ filtering: null, bookmarkOpen: false, bookmarkMode: "list", panelOpen: false })
-		const open = items.find((item) => item.id === "pane.enter")
-		expect(open.primary).toBe(true)
-		const others = items.filter((item) => item.id && item.id !== "pane.enter")
-		expect(others.every((item) => item.primary !== true)).toBe(true)
-		// The panel is the command entry point, so it is on the bar; the
-		// palette it replaced is gone.
+	test("the command bar exposes the fixed action set", () => {
+		const items = getCommandBarItems({ filtering: null, bookmarkOpen: false, panelOpen: false })
+		// The bar is the explicit, short action list: the panel is the command
+		// entry point, and no entry claims a primary highlight.
 		expect(items.some((item) => item.id === "panel.open")).toBe(true)
 		expect(items.some((item) => item.id === "panel.toggle")).toBe(false)
+		expect(items.some((item) => item.primary)).toBe(false)
 	})
 
 	test("the bookmark bar offers removal from the selected row", () => {
-		const items = getCommandBarItems({
-			filtering: null,
-			bookmarkOpen: true,
-			bookmarkMode: "list",
-			panelOpen: false,
-		})
-		expect(items.find((item) => item.title === "Remove")?.keys).toBe("⌫")
+		const items = getCommandBarItems({ filtering: null, bookmarkOpen: true, panelOpen: false })
+		expect(items.find((item) => item.title === "Remove")?.keys).toBe("⌫/Del")
+		expect(items.find((item) => item.title === "Open")?.keys).toBe("Enter")
 	})
 
 	test("the bar carries the `?` reference", () => {
-		const items = getCommandBarItems({ filtering: null, bookmarkOpen: false, bookmarkMode: "list", panelOpen: false })
+		const items = getCommandBarItems({ filtering: null, bookmarkOpen: false, panelOpen: false })
 		expect(items.some((item) => item.id === "app.help")).toBe(true)
 	})
 
@@ -529,6 +522,8 @@ describe("commands", () => {
 		expect(session.panelOpen.value).toBe(true)
 		expect(session.panelEntry.value.name).toBe("mkdir")
 		expect(session.panelFocus.value).toBe(PANEL_FOCUS.ARGS)
+		// PATH is prefilled above; the cursor lands on NAME to be typed.
+		expect(session.panelRows.value[session.panelRowIndex.value].name).toBe("NAME")
 	})
 
 	test("history.open lists the journal and activating a row rewinds", async () => {
@@ -563,7 +558,7 @@ describe("commands", () => {
 		await session.bookmarks.record("alpha", "/home", true)
 		await session.bookmarks.record("beta", "/home/tester", true)
 		await session.bookmarks.record("gamma", "/home/notes.txt", false)
-		session.dispatch("bookmark.jump")
+		session.dispatch("bookmark.open")
 		session.bookmarkIndex.set(1)
 
 		await session.dispatch("bookmark.remove")
@@ -576,6 +571,16 @@ describe("commands", () => {
 		await session.dispatch("bookmark.remove")
 		expect(session.bookmarkItems.value.map((item) => item.name)).toEqual(["alpha"])
 		expect(session.bookmarkIndex.value).toBe(0)
+	})
+
+	test("bookmark.remove ignores the add row", async () => {
+		const session = makeSession()
+		await load(session)
+		session.dispatch("bookmark.open")
+		expect(session.bookmarkItems.value[0].add).toBe(true)
+		await session.dispatch("bookmark.remove")
+		expect(session.bookmarks.entries.value).toEqual({})
+		expect(session.bookmarkOpen.value).toBe(true)
 	})
 
 	test("trash.open lists the trash and activating a row restores it", async () => {

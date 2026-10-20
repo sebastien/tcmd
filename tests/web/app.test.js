@@ -411,6 +411,14 @@ describe("web app", () => {
 			let copies = 0
 			const copy = session.fs.copy
 			session.fs.copy = (...args) => { copies++; return copy(...args) }
+			// copy is amber: the first click prints the command and arms Confirm.
+			host.querySelector(".panel-run-button").dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await settle()
+			expect(copies).toBe(0)
+			expect(session.panelOpen.value).toBe(true)
+			expect(host.querySelector(".panel-run-button").textContent).toBe("[Confirm]")
+			expect(host.querySelector(".panel-confirm-command").textContent).toContain("copy")
+			// The second click executes exactly once.
 			host.querySelector(".panel-run-button").dispatchEvent(new MouseEvent("click", { bubbles: true }))
 			await settle()
 			expect(copies).toBe(1)
@@ -432,15 +440,17 @@ describe("web app", () => {
 			const index = session.panelFiltered.value.findIndex((entry) => entry.name === "mkdir")
 			session.dispatch("panel.setOp", { index })
 			session.panelDraft.set(
-				session.panelDraft.value.map((binding) =>
-				binding.name === "PATH" ? { ...binding, value: "/home/tester" } : binding,
-				),
+				session.panelDraft.value.map((binding) => {
+					if (binding.name === "PATH") return { ...binding, value: "/home" }
+					if (binding.name === "NAME") return { ...binding, value: "tester" }
+					return binding
+				}),
 			)
 			await settle()
 			await session.dispatch("panel.run")
 			await settle()
 			expect(session.panelOpen.value).toBe(true)
-			expect(host.querySelector(".panel-run-action .panel-run-error").textContent).toContain("already exists")
+			expect(host.querySelector(".panel-run-error-block").textContent).toContain("already exists")
 			expect(host.querySelector(".panel-run-action .panel-run-button").textContent).toBe("[Retry]")
 			host.querySelector(".panel-run-action .panel-run-button").dispatchEvent(new MouseEvent("click", { bubbles: true }))
 			await settle()
@@ -487,21 +497,48 @@ describe("web app", () => {
 			expect(press(host, "p", { ctrlKey: true }).defaultPrevented).toBe(false)
 			await settle()
 			expect(session.panelOpen.value).toBe(false)
+			// `g` no longer has a binding.
+			press(host, "g")
+			await settle()
+			expect(session.bookmarkOpen.value).toBe(false)
+
+			// `b` opens one panel: empty filter, add row for the cursor entry.
 			press(host, "b")
 			await settle()
 			expect(document.activeElement === host.querySelector(".bookmark-query")).toBe(true)
+			expect(host.querySelector(".bookmark-rows").textContent).toContain("add current path")
 			expect(press(host, " ").defaultPrevented).toBe(false)
-			type(host.querySelector(".bookmark-query"), "tester")
+			type(host.querySelector(".bookmark-query"), "")
 			press(host, "Enter")
 			await settle()
 			expect(session.bookmarks.entries.value.tester).toEqual({ path: "/home/tester", isDir: true })
-			press(host, "g")
+			expect(session.bookmarkOpen.value).toBe(false)
+
+			// Reopening lists the bookmark (no add row for a bookmarked path),
+			// and Enter opens it.
+			press(host, "b")
 			await settle()
 			expect(document.activeElement === host.querySelector(".bookmark-query")).toBe(true)
 			expect(host.querySelector(".bookmark-rows").textContent).toContain("tester/")
+			expect(host.querySelector(".bookmark-rows").textContent).not.toContain("add current path")
 			expect(host.querySelector('.bookmark-row use[href="#lucide-folder"]')).not.toBeNull()
+			press(host, "Enter")
+			await settle()
+			expect(session.panes.left.path.value).toBe("/home/tester")
+			expect(session.bookmarkOpen.value).toBe(false)
+
+			// Typing filters; Delete removes the selected bookmark.
+			press(host, "b")
+			await settle()
+			type(host.querySelector(".bookmark-query"), "tester")
+			press(host, "Delete")
+			await settle()
+			expect(session.bookmarks.entries.value.tester).toBeUndefined()
+			expect(session.bookmarkOpen.value).toBe(true)
 			press(host, "Escape")
 			await settle()
+			expect(session.bookmarkOpen.value).toBe(false)
+
 			expect(press(host, "/").defaultPrevented).toBe(false)
 			await settle()
 			expect(document.activeElement === host.querySelector(".filter-input")).toBe(true)
@@ -542,7 +579,7 @@ describe("web app", () => {
 			expect(host.querySelector('.help-entry use[href="#lucide-terminal"]')).not.toBeNull()
 			expect(host.querySelector('.help-entry use[href="#lucide-circle-question-mark"]')).not.toBeNull()
 			expect(host.querySelector(".help-entry .help-key").textContent).toBe("↑")
-			const bookmarkHelp = [...host.querySelectorAll(".help-entry")].find((entry) => entry.querySelector(".help-title")?.textContent === "Bookmark")
+			const bookmarkHelp = [...host.querySelectorAll(".help-entry")].find((entry) => entry.querySelector(".help-title")?.textContent === "Bookmarks")
 			expect(bookmarkHelp.querySelector(".help-key").textContent).toBe("b")
 			expect(host.querySelector(".command-bar").textContent).toContain("[Help ?]")
 			expect(document.activeElement === host.querySelector(".help")).toBe(true)
@@ -717,6 +754,11 @@ describe("web app", () => {
 			type(host.querySelector(".panel-query"), "copy")
 			await settle()
 			expect(host.querySelector(".panel-run-action [data-type=\"run\"]").textContent).toContain("[Run]")
+			// copy is amber: arm Confirm, then execute.
+			press(host, "Enter")
+			await settle()
+			expect(session.panelOpen.value).toBe(true)
+			expect(calls).not.toContain("copy")
 			press(host, "Enter")
 			await settle()
 			expect(session.panelOpen.value).toBe(false)
@@ -834,6 +876,115 @@ describe("web app", () => {
 			await settle()
 			expect(session.panes.left.filter.value).toBe("tester")
 			expect(session.panes.left.cursor.value).toBe(0)
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("chmod renders permission checkboxes and the upper-right close shorthand", async () => {
+		const { host, instance, session } = await mountApp({ viewMode: "commander" })
+		try {
+			session.panes.left.cursor.set(1)
+			press(host, ":")
+			await new Promise((resolve) => setTimeout(resolve, 160))
+			type(host.querySelector(".panel-query"), "chmod")
+			await settle()
+			expect(session.panelEntry.value.name).toBe("chmod")
+			// One row per class with three R/W/X cells, seeded from the file mode.
+			const rows = [...host.querySelectorAll('.panel-args [data-type="perm"]')]
+			expect(rows).toHaveLength(3)
+			expect(rows[0].textContent).toContain("user")
+			const cells = [...rows[0].querySelectorAll(".panel-perm-bit")]
+			expect(cells.map((cell) => cell.textContent)).toEqual(["r", "w", "-"])
+			expect(cells.map((cell) => cell.getAttribute("aria-pressed"))).toEqual(["true", "true", "false"])
+			expect(cells[0].classList.contains("panel-perm-bit")).toBe(true)
+			expect(cells[0].classList.contains("is-on")).toBe(true)
+			expect(cells[2].classList.contains("is-off")).toBe(true)
+			// PATH is the first argument row, MODE follows it.
+			const argNames = [...host.querySelectorAll(".panel-args .panel-arg-name")].map((node) => node.textContent)
+			expect(argNames.slice(0, 2)).toEqual(["PATH", "MODE"])
+			const modeRow = () => session.panelRows.value.find((row) => row.name === "MODE")
+			expect(modeRow().summary).toBe("644 · rw-r--r--")
+			// Clicking a cell toggles just that bit and updates the mode.
+			cells[2].dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await settle()
+			const toggled = host.querySelectorAll('.panel-args [data-type="perm"]')[0].querySelectorAll(".panel-perm-bit")
+			expect([...toggled].map((cell) => cell.textContent)).toEqual(["r", "w", "x"])
+			expect(modeRow().summary).toBe("744 · rwxr--r--")
+			// The close shorthand sits in the dialog header, not the footer.
+			const close = host.querySelector(".panel-close")
+			expect(close.textContent).toBe("[Close Esc]")
+			// The close action belongs to the dialog frame, not its content header.
+			expect(close.parentElement.classList.contains("command-dialog")).toBe(true)
+			expect(host.querySelector(".command-dialog > footer").textContent).not.toContain("Esc")
+			close.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await settle()
+			expect(session.panelOpen.value).toBe(false)
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("the panel's Quit command quits the app", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			expect(typeof session.quit).toBe("function")
+			press(host, ":")
+			await new Promise((resolve) => setTimeout(resolve, 160))
+			type(host.querySelector(".panel-query"), "quit")
+			await settle()
+			expect(session.panelEntry.value.name).toBe("quit")
+			press(host, "Enter")
+			await settle()
+			expect(host.querySelector(".app")).toBeNull()
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("a command with no arguments shows PATH over the active path", async () => {
+		const { host, instance, session } = await mountApp({ viewMode: "commander" })
+		try {
+			press(host, ":")
+			await new Promise((resolve) => setTimeout(resolve, 160))
+			type(host.querySelector(".panel-query"), "view")
+			await settle()
+			session.dispatch("panel.setOp", { index: 0 })
+			await settle()
+			expect(session.panelEntry.value.name).toBe("view")
+			expect(host.querySelector(".panel-args .panel-arg-name").textContent).toBe("PATH")
+			expect(host.querySelector(".panel-args .panel-field-value").textContent).toBe(session.activePath.value)
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("amber and red runs print the command and arm Confirm", async () => {
+		const { host, instance, session } = await mountApp({ viewMode: "commander" })
+		try {
+			const notes = session.panes.left.entries.value.findIndex((entry) => entry.name === "notes.txt")
+			session.panes.left.cursor.set(notes)
+			press(host, ":")
+			await new Promise((resolve) => setTimeout(resolve, 160))
+			type(host.querySelector(".panel-query"), "delete")
+			await settle()
+			expect(session.panelEntry.value.name).toBe("delete")
+			const button = () => host.querySelector(".panel-run-button")
+			expect(button().textContent).toBe("[Run]")
+			// First press prints the command and arms the second step.
+			button().dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await settle()
+			expect(session.panelOpen.value).toBe(true)
+			expect(session.panelArmed.value).toBe(true)
+			expect(button().textContent).toBe("[Confirm]")
+			expect(host.querySelector(".panel-confirm-command").textContent).toContain("delete /home/notes.txt")
+			expect(host.querySelector(".panel-confirm-command").getAttribute("data-risk")).toBe("destructive")
+			expect(await session.fs.stat("/home/notes.txt")).not.toBeNull()
+			// Second press executes it.
+			button().dispatchEvent(new MouseEvent("click", { bubbles: true }))
+			await settle()
+			expect(session.panelOpen.value).toBe(false)
+			expect(await session.fs.stat("/home/notes.txt")).toBeNull()
 		} finally {
 			instance?.unmount?.()
 		}

@@ -80,7 +80,7 @@ describe("components Help", () => {
 
 	test("toolbar-backed help shortcuts match their command-bar labels", () => {
 		const entries = new Map([...helpBlocks().left, ...helpBlocks().right].map((row) => [row.key, row]))
-		expect(entries.get("entry:bookmark.record").shortcut).toBe("b")
+		expect(entries.get("entry:bookmark.open").shortcut).toBe("b")
 		expect(entries.get("entry:list.mark").shortcut).toBe("Spc")
 		expect(entries.get("entry:pane.enter").shortcut).toBe("⏎")
 		expect(entries.get("entry:pane.toggle").shortcut).toBe("⇥")

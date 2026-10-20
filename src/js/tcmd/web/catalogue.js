@@ -24,6 +24,8 @@ import confirmHtml from "../components/Confirm.html" with { type: "text" }
 import crumbHtml from "../components/Crumb.html" with { type: "text" }
 import entryDetailHtml from "../components/EntryDetail.html" with { type: "text" }
 import fileListHtml from "../components/FileList.html" with { type: "text" }
+import filePickerHtml from "../components/FilePicker.html" with { type: "text" }
+import filePickerRowHtml from "../components/FilePickerRow.html" with { type: "text" }
 import filePreviewHtml from "../components/FilePreview.html" with { type: "text" }
 import fileRowHtml from "../components/FileRow.html" with { type: "text" }
 import filterBarHtml from "../components/FilterBar.html" with { type: "text" }
@@ -42,6 +44,7 @@ import {
 	bookmarkRows,
 	breadcrumbsBehaviors,
 	commandBarBehaviors,
+	commandBarFit,
 	commandBarMarksItem,
 	commandArgRowBehaviors,
 	commandItemBehaviors,
@@ -52,6 +55,9 @@ import {
 	crumbRows,
 	entryDetailBehaviors,
 	fileListBehaviors,
+	filePickerBehaviors,
+	filePickerRowBehaviors,
+	filePickerRows,
 	filePreviewBehaviors,
 	fileRowBehaviors,
 	fileRows,
@@ -96,6 +102,7 @@ function createComponents() {
 	}))
 	const crumb = bind(ui, "Crumb", crumbHtml, crumbBehaviors(webTheme))
 	const fileRow = bind(ui, "FileRow", fileRowHtml, fileRowBehaviors(webTheme))
+	const filePickerRow = bind(ui, "FilePickerRow", filePickerRowHtml, filePickerRowBehaviors(webTheme))
 	const filterBar = bind(ui, "FilterBar", filterBarHtml, filterBarBehaviors(webTheme))
 	const bookmarkRow = bind(ui, "BookmarkRow", bookmarkRowHtml, bookmarkRowBehaviors(webTheme))
 	const overlayRow = bind(ui, "OverlayRow", overlayRowHtml, overlayRowBehaviors(webTheme))
@@ -119,9 +126,17 @@ function createComponents() {
 			...webTheme,
 			listClass: "command-bar-keys",
 			rows: (self, data) => {
+				const viewport = unwrap(data.uiSize)
+				const viewportWidth = Math.floor(viewport?.width ?? 0)
+				// The measured box is exact but still shows the previous width on
+				// the frame a resize arrives; prefer the injected viewport then.
+				const width = viewportWidth > 0 ? viewportWidth - 1 : columnWidth(self.ref.box)
 				const marks = commandBarMarksItem(data)
 				const items = unwrap(data.items) ?? []
-				return commandItemRows(commandItem)(self, { ...data, items: marks ? [...items, marks] : items })
+				return commandItemRows(commandItem)(self, {
+					...data,
+					items: commandBarFit(marks ? [...items, marks] : items, width),
+				})
 			},
 		})),
 		CommandPanel: bind(ui, "CommandPanel", commandPanelHtml, commandPanelBehaviors({
@@ -135,6 +150,10 @@ function createComponents() {
 		FileList: bind(ui, "FileList", fileListHtml, fileListBehaviors({
 			...webTheme,
 			rows: fileRows(fileRow),
+		})),
+		FilePicker: bind(ui, "FilePicker", filePickerHtml, filePickerBehaviors({
+			...webTheme,
+			rows: filePickerRows(filePickerRow),
 		})),
 		FilePreview: bind(ui, "FilePreview", filePreviewHtml, filePreviewBehaviors({
 			...webTheme,
@@ -168,6 +187,7 @@ function registerWebComponents() {
 	ui.format("Confirm", components.Confirm)
 	ui.format("EntryDetail", components.EntryDetail)
 	ui.format("FileList", components.FileList)
+	ui.format("FilePicker", components.FilePicker)
 	ui.format("FilePreview", components.FilePreview)
 	ui.format("FilterBar", components.FilterBar)
 	ui.format("Header", components.Header)

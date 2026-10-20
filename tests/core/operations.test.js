@@ -20,9 +20,14 @@ const TREE = {
 
 function fakeOs() {
 	return {
+		copied: [],
 		edited: [],
 		opened: [],
 		ran: [],
+		copy(text) {
+			this.copied.push(text)
+			return true
+		},
 		async edit(path) {
 			this.edited.push(path)
 		},
@@ -89,6 +94,15 @@ describe("operations", () => {
 		expect(session.notice.value.text).toBe("/home/alias")
 		await runLine(session, "realpath alias")
 		expect(session.notice.value.text).toBe("'/target file.txt'")
+	})
+
+	test("abspath and realpath copy their result to the clipboard", async () => {
+		const { os, session } = await makeSession()
+		await runLine(session, "abspath notes.txt")
+		expect(session.notice.value.text).toBe("/home/notes.txt")
+		await runLine(session, "realpath notes.txt")
+		expect(session.notice.value.text).toBe("/home/notes.txt")
+		expect(os.copied).toEqual(["/home/notes.txt", "/home/notes.txt"])
 	})
 
 	test("copy copies files and directories recursively", async () => {
@@ -174,6 +188,67 @@ describe("operations", () => {
 		expect(session.notice.value.kind).toBe("error")
 		expect(await session.fs.stat("/home/keep/later.txt")).not.toBeNull()
 		expect((await session.fs.stat("/home/keep"))?.isDir).toBe(true)
+	})
+
+	test("new creates empty files and refuses existing ones", async () => {
+		const { fs, session } = await makeSession()
+		await runLine(session, "new fresh.txt")
+		expect(await names(fs, "/home")).toEqual(["docs", "notes.txt", "fresh.txt"])
+		expect(await fs.readTextHead("/home/fresh.txt")).toBe("")
+		expect(session.notice.value.text).toContain("created 1 file")
+
+		await runLine(session, "new fresh.txt")
+		expect(session.notice.value.kind).toBe("error")
+		expect(session.notice.value.text).toContain("already exists")
+
+		await session.dispatch("history.undo")
+		expect(await fs.stat("/home/fresh.txt")).toBeNull()
+	})
+
+	test("hardlink and symlink create links in the destination and undo them", async () => {
+		const { fs, session } = await makeSession()
+		await runLine(session, "hardlink notes.txt /tmp")
+		expect(await fs.readTextHead("/tmp/notes.txt")).toBe("hello\nworld\n")
+		await session.dispatch("history.undo")
+		expect(await fs.stat("/tmp/notes.txt")).toBeNull()
+
+		await runLine(session, "symlink notes.txt /tmp")
+		const link = (await fs.readDir("/tmp")).find((entry) => entry.name === "notes.txt")
+		expect(link).toMatchObject({ isSymlink: true, target: "/home/notes.txt" })
+		await session.dispatch("history.undo")
+		expect(await fs.stat("/tmp/notes.txt")).toBeNull()
+	})
+
+	test("chmod and chown update file metadata", async () => {
+		const { fs, session } = await makeSession()
+		await runLine(session, "chmod 600 notes.txt")
+		expect((await fs.stat("/home/notes.txt")).mode & 0o777).toBe(0o600)
+		await runLine(session, "chown 1000:1000 notes.txt")
+		expect(await fs.stat("/home/notes.txt")).toMatchObject({ uid: 1000, gid: 1000 })
+
+		await runLine(session, "chmod nope notes.txt")
+		expect(session.notice.value.kind).toBe("error")
+		expect(session.notice.value.text).toContain("MODE must be octal")
+		expect((await fs.stat("/home/notes.txt")).mode & 0o777).toBe(0o600)
+	})
+
+	test("unlink removes only symbolic links and restores them on undo", async () => {
+		const { fs, session } = await makeSession()
+		await fs.symlink("/home/notes.txt", "/home/alias")
+		await runLine(session, "unlink alias")
+		expect(await fs.stat("/home/alias")).toBeNull()
+		expect(await fs.stat("/home/notes.txt")).not.toBeNull()
+
+		await session.dispatch("history.undo")
+		expect((await fs.readDir("/home")).find((entry) => entry.name === "alias")).toMatchObject({
+			isSymlink: true,
+			target: "/home/notes.txt",
+		})
+
+		await runLine(session, "unlink notes.txt")
+		expect(session.notice.value.kind).toBe("error")
+		expect(session.notice.value.text).toContain("not a symbolic link")
+		expect(await fs.stat("/home/notes.txt")).not.toBeNull()
 	})
 
 	test("move, rename and replace journal their inverse", async () => {

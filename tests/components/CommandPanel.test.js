@@ -29,22 +29,51 @@ describe("CommandPanel", () => {
 		expect(behaviors.footer()).toBe(PANEL_FOOTER)
 		expect(behaviors.open(null, { open: true })).toBe(true)
 		expect(behaviors.open(null, { open: false })).toBe(false)
+		// The close shorthand moved to the dialog's upper-right corner, so the
+		// footer no longer repeats it.
+		expect(behaviors.closeHint()).toBe("[Close Esc]")
+		expect(behaviors.closeHintFg()).toBe("dim")
+		expect(PANEL_FOOTER).not.toContain("Esc")
+		// The permission grid advertises its extra bit cursor.
+		expect(behaviors.footer(null, { entry: { name: "chmod" } })).toBe(`${PANEL_FOOTER}   ←→ bits`)
+		// An armed risky action advertises the confirmation step.
+		expect(
+			behaviors.footer(null, { entry: { name: "delete" }, rows: [{ type: "run", armed: true }] }),
+		).toBe(PANEL_FOOTER.replace("↵ run", "↵ confirm"))
 	})
 
-	test("an entry with no bound arguments shows the empty state", () => {
+	test("prints the armed command below Confirm in the action colour", () => {
 		const behaviors = createBehaviors(behaviorEnv)
-		expect(behaviors.argsEmptyText()).toBe("no arguments")
-		// A TinyCmd action binds nothing; a CLI operation always has rows.
-		expect(behaviors.argsEmpty(null, { rows: [] })).toBe(true)
-		expect(behaviors.argsEmpty(null, { rows: [{ type: "run", key: "panel:run" }] })).toBe(true)
-		expect(behaviors.argsEmpty(null, { rows: [{ key: "arg:0" }] })).toBe(false)
+		const rows = [{ type: "run", armed: true, command: "delete /home/docs" }]
+		expect(behaviors.confirmCommand(null, { rows })).toBe("delete /home/docs")
+		expect(behaviors.hasConfirmCommand(null, { rows })).toBe(true)
+		expect(behaviors.hasConfirmCommand(null, { rows: [{ type: "run", command: null }] })).toBe(false)
+		expect(behaviors.confirmRisk(null, { entry: { risk: "destructive" } })).toBe("destructive")
+		expect(behaviors.confirmCommandFg(null, { entry: { risk: "destructive" } })).toBe("error")
+		expect(behaviors.confirmCommandFg(null, { entry: { risk: "caution" } })).toBe("warning")
 	})
 
-	test("a parent row does not hide the picker's no-matches state", () => {
+	test("shows a run error in its framed block", () => {
 		const behaviors = createBehaviors(behaviorEnv)
-		expect(behaviors.pickerEmpty(null, { picking: true, rows: [{ type: "parent" }] })).toBe(true)
-		expect(behaviors.pickerEmpty(null, { picking: true, rows: [{ type: "parent" }, { type: "entry" }] })).toBe(false)
-		expect(behaviors.pickerEmpty(null, { picking: false, rows: [] })).toBe(false)
+		const rows = [{ type: "arg" }, { type: "run", error: "already exists" }]
+		expect(behaviors.hasRunError(null, { rows })).toBe(true)
+		expect(behaviors.runError(null, { rows })).toBe("already exists")
+		expect(behaviors.runErrorFg()).toBe("error")
+		expect(behaviors.hasRunError(null, { rows: [{ type: "run" }] })).toBe(false)
+	})
+
+	test("passes the editable picker path and rows to the FilePicker", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		const rows = [{ type: "parent" }, { type: "entry" }]
+		expect(
+			behaviors.pickerView(null, {
+				picking: true,
+				pickerPathText: "/home/",
+				pickerFocus: "path",
+				pickerRows: rows,
+				argCursor: 1,
+			}),
+		).toEqual({ open: true, path: "/home/", focus: "path", rows, cursor: 1 })
 	})
 
 	test("draws a rule between the columns and under the filter", () => {

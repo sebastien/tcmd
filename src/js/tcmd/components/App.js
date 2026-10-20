@@ -48,10 +48,8 @@ function createInit(session) {
 		appPath: session.activePath,
 		bookmarkIndex: session.bookmarkIndex,
 		bookmarkItems: session.bookmarkItems,
-		bookmarkMode: session.bookmarkMode,
 		bookmarkOpen: session.bookmarkOpen,
 		bookmarkQuery: session.bookmarkQuery,
-		bookmarkTarget: session.bookmarkTarget,
 		commandBarItems: session.commandBarItems,
 		confirm: session.confirm,
 		currentId: session.currentId,
@@ -82,7 +80,7 @@ function createInit(session) {
 		panelOpIndex: session.panelOpIndex,
 		panelItems: session.panelItems,
 		panelOpen: session.panelOpen,
-		panelPicking: session.panelPicking,
+		panelPermBit: session.panelPermBit,
 		panelPreview: session.panelPreview,
 		panelQuery: session.panelQuery,
 		panelRowIndex: session.panelRowIndex,
@@ -127,9 +125,12 @@ function createInit(session) {
 		rightSetFilter: (value) => right.setFilter(value),
 		showPreview: session.showPreview,
 		viewMode: session.viewMode,
-		// The panel's file picker: its filter input and the directory it
-		// currently browses, so the panel can render the picker view.
-		pickerPath: session.pickerPane?.path,
+		// The panel's file picker: its open mode, editable path, focus region
+		// and rows, so the panel can render the picker view.
+		pickerOpen: session.pickerOpen,
+		pickerPathText: session.pickerPathText,
+		pickerFocus: session.pickerFocus,
+		pickerRows: session.pickerRows,
 		pickerQuery: session.pickerQuery,
 	})
 }
@@ -175,41 +176,63 @@ function createBehaviors(env) {
 				return
 			}
 			if (unwrap(data.panelOpen)) {
-				// The picker is a sub-mode of the panel: it owns navigation and
-				// choice, while typing filters through its own input.
-				if (unwrap(data.panelPicking)) {
+				// The picker is a sub-mode of the panel: its editable path owns
+				// typing, and the entry list owns navigation once focused.
+				if (unwrap(data.pickerOpen)) {
+					const field = unwrap(data.pickerFocus) === "rows" ? "rows" : "path"
 					if (key?.name === "escape") {
-						data.dispatch("panel.pick.cancel")
+						data.dispatch("picker.cancel")
 						return
 					}
 					if (key?.name === "tab") {
-						data.dispatch("panel.pick.cancel")
+						data.dispatch(field === "path" ? "picker.focusRows" : "picker.focusPath")
+						return
+					}
+					if (field === "path") {
+						// Typing, Backspace and caret movement belong to the path
+						// input. Up/Down hand over to the entries, Enter commits
+						// the typed path.
+						if (key?.name === "up" || key?.name === "down") {
+							data.dispatch("picker.focusRows")
+							return
+						}
+						if (key?.name === "return" || key?.name === "enter") {
+							data.dispatch("picker.path")
+							return
+						}
 						return
 					}
 					if (key?.name === "up") {
-						data.dispatch("panel.pick.up")
+						data.dispatch("picker.up")
 						return
 					}
 					if (key?.name === "down") {
-						data.dispatch("panel.pick.down")
+						data.dispatch("picker.down")
+						return
+					}
+					if (key?.name === "left") {
+						data.dispatch("picker.focusPath")
 						return
 					}
 					if (key?.name === "right") {
-						data.dispatch("panel.pick.descend")
+						data.dispatch("picker.descend")
 						return
 					}
 					if (key?.name === "backspace") {
-						// An empty filter steps up; otherwise the filter input
-						// owns Backspace and edits itself.
-						if (`${unwrap(data.pickerQuery) ?? ""}` === "") data.dispatch("panel.pick.parent")
+						// An empty path (the current directory) steps up; a
+						// typed fragment is edited in the path input instead.
+						if (`${unwrap(data.pickerQuery) ?? ""}` === "") data.dispatch("picker.parent")
 						return
 					}
 					if (key?.name === "return" || key?.name === "enter") {
-						data.dispatch(key.ctrl ? "panel.pick.chooseDir" : "panel.pick.enter")
+						data.dispatch(key.ctrl ? "picker.chooseDir" : "picker.enter")
 						return
 					}
-					// Everything else (typing, caret movement) is the filter
-					// input's to handle.
+					// Typing anywhere in the picker narrows the path.
+					const char = key?.name === "space" ? " " : key?.name
+					if (char && char.length === 1 && !key.ctrl && !key.meta) {
+						data.dispatch("picker.type", { char })
+					}
 					return
 				}
 				const focus = unwrap(data.panelFocus)
@@ -250,6 +273,11 @@ function createBehaviors(env) {
 				// it. Intercepting Backspace here used to bounce the cursor
 				// back to the command filter mid-edit.
 				if (fieldOwns) return
+				// A focused permission row: Left/Right walk its r/w/x cells.
+				if ((key?.name === "left" || key?.name === "right") && focus === PANEL_FOCUS.ARGS) {
+					data.dispatch("panel.moveBit", { delta: key.name === "left" ? -1 : 1 })
+					return
+				}
 				// A focused non-textual argument row: Space toggles its
 				// selection, any other printable key jumps back to the command
 				// filter and appends the character; Backspace edits the filter.
@@ -268,20 +296,14 @@ function createBehaviors(env) {
 				return
 			}
 			if (unwrap(data.bookmarkOpen)) {
-				const mode = unwrap(data.bookmarkMode)
+				// One panel: the filter input owns typing, arrows move the
+				// list, Enter activates the row. Backspace edits the query while
+				// it has text and removes the selected bookmark once it is
+				// empty; Delete always removes.
 				if (key?.name === "escape") {
 					data.dispatch("bookmark.cancel")
 					return
 				}
-				if (mode === "name") {
-					// The input owns typing; Enter saves.
-					if (key?.name === "return" || key?.name === "enter") {
-						self.pub("bookmark:confirm")
-						return
-					}
-					return
-				}
-				// List mode: arrows move, Enter jumps.
 				if (key?.name === "up") {
 					data.dispatch("bookmark.up")
 					return
@@ -290,7 +312,11 @@ function createBehaviors(env) {
 					data.dispatch("bookmark.down")
 					return
 				}
-				if (key?.name === "backspace") {
+				if (key?.name === "delete") {
+					data.dispatch("bookmark.remove")
+					return
+				}
+				if (key?.name === "backspace" && !`${unwrap(data.bookmarkQuery) ?? ""}`.trim()) {
 					data.dispatch("bookmark.remove")
 					return
 				}
@@ -298,7 +324,7 @@ function createBehaviors(env) {
 					self.pub("bookmark:confirm")
 					return
 				}
-				// Let the focused input handle typing the fuzzy query.
+				// Let the focused input handle typing the filter.
 				return
 			}
 			// The shared list overlay (history / trash) is modal: arrows move,
@@ -388,19 +414,13 @@ function createBehaviors(env) {
 
 // Function: createEvents
 // App event subscriptions, registered with `.sub(...)`. Handlers receive
-// `(self, data, event)` with the published payload in `event.data`. The
-// environment carries the renderer's `quit` hook, so the command bar's Quit
-// entry takes the same path as the `q` key.
-function createEvents(env = {}) {
+// `(self, data, event)` with the published payload in `event.data`.
+function createEvents() {
 	// Last listing row clicked, for the double-click-to-open gesture: a second
 	// click on the same row within `DOUBLE_CLICK_MS` opens it like Enter.
 	let lastRowClick = { paneId: null, index: -1, at: 0 }
 	return {
 		"commandbar:run": (self, data, event) => {
-			if (event.data === "app.quit") {
-				env.quit?.(self)
-				return
-			}
 			// Below the inline breakpoint the bar's `[Preview v]` opens the
 			// viewer overlay, the same as the key (see `createBehaviors#keys`).
 			if (event.data === "view.togglePreview" && isNarrow(data, self)) {
@@ -414,7 +434,7 @@ function createEvents(env = {}) {
 			// inert); clicking an argument/item row focuses the right pane
 			// (toggling an item); clicking a picker row chooses or navigates it.
 			const items = unwrap(data.panelItems) ?? []
-			const item = items.find((row) => row.id === event.data)
+			const item = items.find((row) => row.key === event.data)
 			if (item?.type === "op") {
 				data.dispatch("panel.setOp", { index: item.entryIndex })
 				return
@@ -426,8 +446,8 @@ function createEvents(env = {}) {
 			const row = rows[rowIndex]
 			if (row?.type === "entry" || row?.type === "parent") {
 				data.dispatch("panel.focusArg")
-				data.dispatch("panel.pick.setCursor", { index: rowIndex })
-				data.dispatch(row.type === "parent" ? "panel.pick.parent" : "panel.pick.enter")
+				data.dispatch("picker.setCursor", { index: rowIndex })
+				data.dispatch(row.type === "parent" ? "picker.parent" : "picker.enter")
 				return
 			}
 			if (row?.type === "run") {
@@ -451,11 +471,27 @@ function createEvents(env = {}) {
 			// Published by a focused panel input's `on:enter`; the key handler
 			// leaves Enter to it (see `fieldOwnsKeys`).
 			if (!unwrap(data.panelOpen)) return
-			if (unwrap(data.panelPicking)) {
-				data.dispatch("panel.pick.enter")
+			if (unwrap(data.pickerOpen)) {
+				data.dispatch("picker.enter")
 				return
 			}
 			data.dispatch("panel.run")
+		},
+		"panel:perm": (_self, data, event) => {
+			// A click on one r/w/x cell: focus its class row, then toggle the
+			// bit. The payload is `argIndex:itemIndex:rowIndex` (see
+			// `core/panel#panelRowList`).
+			const [argIndex, itemIndex, rowIndex] = `${event.data ?? ""}`.split(":").map(Number)
+			if (![argIndex, itemIndex, rowIndex].every(Number.isInteger)) return
+			data.dispatch("panel.focusArg")
+			data.dispatch("panel.setRow", { index: rowIndex })
+			data.dispatch("panel.togglePerm", { argIndex, itemIndex })
+		},
+		"panel:close": (_self, data) => {
+			// The dialog's upper-right close shorthand: back out of the picker
+			// sub-mode first, otherwise close the panel.
+			if (!unwrap(data.panelOpen)) return
+			data.dispatch(unwrap(data.pickerOpen) ? "picker.cancel" : "panel.cancel")
 		},
 		"crumbs:go": (_self, data, event) => {
 			// The "…" truncation marker carries no path.
@@ -481,18 +517,17 @@ function createEvents(env = {}) {
 		// Clicking the identity bar's view-mode word flips explorer/commander.
 		"view:toggleMode": (_self, data) => data.dispatch("view.toggleMode"),
 		"bookmark:select": (_self, data, event) => {
-			// Clicking a bookmark row selects and jumps to it.
+			// Clicking a bookmark (or the add) row selects and activates it.
 			if (!unwrap(data.bookmarkOpen)) return
 			const items = unwrap(data.bookmarkItems) ?? []
-			const index = items.findIndex((row) => row.name === event.data)
+			const index = items.findIndex((row) => row.key === event.data)
 			if (index < 0) return
 			data.dispatch("bookmark.setIndex", { index })
 			data.dispatch("bookmark.select")
 		},
 		"bookmark:confirm": (_self, data) => {
 			if (!unwrap(data.bookmarkOpen)) return
-			if (unwrap(data.bookmarkMode) === "name") data.dispatch("bookmark.save")
-			else data.dispatch("bookmark.select")
+			data.dispatch("bookmark.select")
 		},
 		"overlay:select": (_self, data, event) => {
 			// Clicking an overlay row moves the cursor to it and activates it.

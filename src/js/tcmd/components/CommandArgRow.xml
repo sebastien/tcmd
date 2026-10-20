@@ -8,27 +8,34 @@
 		<text when="isItem" out="listName" flexShrink="0" out:fg="rowFg" wrapMode="none"></text>
 		<text when="isItem" out="listSummary" flexGrow="1" flexShrink="1" minWidth="0" out:fg="summaryFg" wrapMode="none" truncate="true"></text>
 	</box>
-	<!-- An argument header: its label on one line, the value field under it. -->
-	<box when="isArg" flexDirection="column" flexGrow="1" flexShrink="1" minWidth="0">
+	<!-- An argument header: its label on one line, the value field under it.
+	     Both start one cell in from the pane border. -->
+	<box when="isArg" flexDirection="column" flexGrow="1" flexShrink="1" minWidth="0" paddingLeft="1">
 		<box flexDirection="row" height="1" columnGap="1" minWidth="0">
-			<text out="marker" width="2" out:fg="markerFg"></text>
 			<text out="name" flexShrink="0" out:fg="rowFg" wrapMode="none"></text>
 		</box>
-		<box flexDirection="row" height="1" paddingLeft="3" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
+		<box flexDirection="row" height="1" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
 			<box when="editing" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" out:backgroundColor="fieldBg" overflow="hidden">
-				<text out="fieldOpen" out:fg="fieldFg"></text>
+				<text when="textual" out="fieldOpen" out:fg="fieldFg"></text>
 				<input inout="value" flexGrow="1" minWidth="6" height="1" out:focused="editing"></input>
-				<text out="fieldClose" out:fg="fieldFg"></text>
+				<text when="textual" out="fieldClose" out:fg="fieldFg"></text>
 			</box>
 			<box when="!editing" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" out:backgroundColor="fieldBg" overflow="hidden">
-				<text out="fieldOpen" out:fg="fieldFg"></text>
+				<text when="textual" out="fieldOpen" out:fg="fieldFg"></text>
 				<text out="summary" flexGrow="1" flexShrink="1" minWidth="0" out:fg="summaryFg" wrapMode="none" truncate="true"></text>
-				<text out="fieldClose" out:fg="fieldFg"></text>
+				<text when="textual" out="fieldClose" out:fg="fieldFg"></text>
 			</box>
 		</box>
 	</box>
-	<box when="isRun" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" columnGap="1" justifyContent="flex-end">
-		<text when="hasRunError" out="runError" flexGrow="1" flexShrink="1" minWidth="0" out:fg="runErrorFg" wrapMode="none" truncate="true"></text>
+	<!-- A permission class: its label and three clickable r/w/x cells. The bit
+	     cursor marks the cell Space toggles. -->
+	<box when="isPerm" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" height="1" columnGap="1" paddingLeft="1">
+		<text out="permClass" width="7" out:fg="rowFg" wrapMode="none"></text>
+		<box height="1" on:click="row.keyR!panel:perm." out:backgroundColor="permRBg"><text out="permR" width="1" out:fg="permRFg"></text></box>
+		<box height="1" on:click="row.keyW!panel:perm." out:backgroundColor="permWBg"><text out="permW" width="1" out:fg="permWFg"></text></box>
+		<box height="1" on:click="row.keyX!panel:perm." out:backgroundColor="permXBg"><text out="permX" width="1" out:fg="permXFg"></text></box>
+	</box>
+	<box when="isRun" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" columnGap="1" justifyContent="flex-start">
 		<text out="runLabel" out:fg="runFg" wrapMode="none"></text>
 	</box>
 	<!-- Bold color-group title; operations below it are indented. -->

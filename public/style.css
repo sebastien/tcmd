@@ -63,27 +63,27 @@
 
 /* Every scrollable surface gets a visible, thin bar only while overflowing.
    The WebKit rules keep Chromium/Electron and Safari consistent with Firefox. */
-:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .bookmark-rows, .overlay-rows, .help-columns) {
+:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .panel-args-scroll, .bookmark-rows, .overlay-rows, .help-columns) {
 	scrollbar-width: thin;
 	scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
-:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .bookmark-rows, .overlay-rows, .help-columns)::-webkit-scrollbar {
+:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .panel-args-scroll, .bookmark-rows, .overlay-rows, .help-columns)::-webkit-scrollbar {
 	width: 0.65rem;
 	height: 0.65rem;
 }
 
-:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .bookmark-rows, .overlay-rows, .help-columns)::-webkit-scrollbar-track {
+:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .panel-args-scroll, .bookmark-rows, .overlay-rows, .help-columns)::-webkit-scrollbar-track {
 	background: var(--scrollbar-track);
 }
 
-:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .bookmark-rows, .overlay-rows, .help-columns)::-webkit-scrollbar-thumb {
+:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .panel-args-scroll, .bookmark-rows, .overlay-rows, .help-columns)::-webkit-scrollbar-thumb {
 	background: var(--scrollbar-thumb);
 	border: 2px solid var(--scrollbar-track);
 	border-radius: 999px;
 }
 
-:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .bookmark-rows, .overlay-rows, .help-columns)::-webkit-scrollbar-thumb:hover {
+:is(.desktop-toolbar, .file-list, .preview-text, .preview-card, .panel-ops, .panel-args, .panel-args-scroll, .bookmark-rows, .overlay-rows, .help-columns)::-webkit-scrollbar-thumb:hover {
 	background: var(--accent);
 }
 
@@ -704,8 +704,10 @@ body {
 
 .command-bar-keys {
 	display: flex;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
 	gap: 0.45rem;
+	min-width: 0;
+	overflow: hidden;
 }
 
 .command-key {
@@ -717,6 +719,7 @@ body {
 	font: inherit;
 	font-size: 11px;
 	padding: 0.05rem 0.4rem;
+	white-space: nowrap;
 }
 
 .command-key:hover {
@@ -805,6 +808,7 @@ input:focus-visible {
 }
 
 .command-dialog {
+	position: relative;
 	height: 72vh;
 }
 
@@ -813,13 +817,36 @@ input:focus-visible {
 	width: min(640px, 95vw);
 }
 
-.command-dialog > header,
+.panel-title,
 .help-dialog > header,
 .bookmark-dialog h2 {
 	color: var(--text);
 	font: inherit;
 	font-weight: 600;
 	margin: 0 0 0.4rem;
+}
+
+/* The dialog's close action sits in the top border like a close button: the
+   panel background masks the border run underneath it. */
+.panel-close {
+	position: absolute;
+	top: -0.55rem;
+	right: 0.9rem;
+	z-index: 2;
+	padding: 0 0.3rem;
+	border: none;
+	border-radius: 3px;
+	background: var(--bg-panel);
+	color: var(--text-dim);
+	font: inherit;
+	line-height: 1.1;
+	cursor: pointer;
+}
+
+.panel-close:hover,
+.panel-close:focus-visible {
+	color: var(--text);
+	background: var(--accent-soft);
 }
 
 .panel-query-line,
@@ -892,7 +919,7 @@ input:focus-visible {
 }
 
 .panel-row[data-type="run"] {
-	justify-content: flex-end;
+	justify-content: flex-start;
 	margin-top: 0;
 	padding-top: 0.25rem;
 	padding-bottom: 0.25rem;
@@ -915,8 +942,7 @@ input:focus-visible {
 	flex: none;
 	list-style: none;
 	margin: 0;
-	padding: 0.25rem 0.6rem 0.4rem;
-	border-top: 1px solid var(--border);
+	padding: 0 0.6rem 0.4rem 0;
 }
 
 .panel-run-button {
@@ -943,12 +969,68 @@ input:focus-visible {
 	color: var(--error);
 }
 
-.panel-run-error {
-	flex: 1;
-	min-width: 0;
+.panel-run-error-block {
+	margin: 0.25rem 0.6rem 0.35rem 0.5rem;
+	padding: 0.25rem 0.5rem;
+	border: 1px solid var(--error);
+	border-radius: 4px;
+}
+
+.panel-run-error-block p {
+	margin: 0;
 	color: var(--error);
-	overflow: hidden;
-	text-overflow: ellipsis;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/* The armed command, printed below `[Confirm]` in the action's risk colour. */
+.panel-confirm-command {
+	margin: 0;
+	padding: 0.15rem 0.6rem 0.4rem 0.5rem;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.panel-confirm-command[data-risk="caution"] {
+	color: var(--warning);
+}
+
+.panel-confirm-command[data-risk="destructive"] {
+	color: var(--error);
+}
+
+/* A permission class row: a label and three r/w/x cells. */
+.panel-perm {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.6rem;
+}
+
+.panel-perm-class {
+	width: 3.5rem;
+	color: var(--text-dim);
+}
+
+.panel-perm-bit {
+	width: 1.4rem;
+	padding: 0;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--text-dim);
+	font: inherit;
+	font-weight: 600;
+	text-align: center;
+	cursor: pointer;
+}
+
+.panel-perm-bit.is-on {
+	color: var(--accent);
+}
+
+.panel-perm-bit.is-bit-focused {
+	background: var(--accent-soft);
+	color: var(--text);
 }
 
 .panel-field {
@@ -1059,9 +1141,21 @@ input:focus-visible {
 	min-height: 0;
 }
 
-.panel-ops,
-.panel-args {
+.panel-ops {
 	flex: 1 1 0;
+}
+
+/* The argument pane scrolls as a whole so the Run action follows the last
+   field instead of being pinned to the bottom of the column. */
+.panel-args-scroll {
+	flex: 1 1 0;
+	min-height: 0;
+	overflow: auto;
+}
+
+.panel-args {
+	flex: none;
+	overflow: visible;
 }
 
 /* The argument column: an empty state (a TinyCmd action binds no arguments)
@@ -1075,11 +1169,15 @@ input:focus-visible {
 }
 
 .panel-args-empty {
-	margin: 0;
-	padding: 0.3rem 0.6rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.1rem;
+	margin: 0.3rem 0;
+	padding: 0 0.6rem;
 	color: var(--text-dim);
-	font-style: italic;
 }
+
+
 
 /* File picker sub-mode: a nested pane containing its path, filter and entries
    (which reuse `.panel-row` through the shared arg-row map). */
@@ -1107,11 +1205,18 @@ input:focus-visible {
 }
 
 .panel-picker-path {
+	flex: 1;
+	min-width: 0;
 	margin: 0;
-	color: var(--text-dim);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	padding: 0;
+	background: transparent;
+	border: none;
+	color: var(--text);
+	font: inherit;
+}
+
+.panel-picker-path:focus {
+	outline: none;
 }
 
 .panel-picker-line {
@@ -1126,13 +1231,9 @@ input:focus-visible {
 	color: var(--accent);
 }
 
-.panel-picker-query {
-	flex: 1;
-	min-width: 0;
-	background: transparent;
-	border: none;
-	color: var(--text);
-	font: inherit;
+.panel-picker-rows .picker-row {
+	padding-left: 0.6rem;
+	padding-right: 0.6rem;
 }
 
 .panel-row,
@@ -1156,24 +1257,31 @@ input:focus-visible {
    first line, the value field aligned under the label on the second. */
 .panel-row[data-type="arg"] {
 	display: grid;
-	grid-template-columns: 1.25rem minmax(0, 1fr);
+	grid-template-columns: minmax(0, 1fr);
 	grid-template-rows: auto auto;
 	row-gap: 0.1rem;
 	align-items: baseline;
 }
 
+/* Labels and values start one space in from the pane border. */
+.panel-args .panel-row[data-type="arg"],
+.panel-args .panel-row[data-type="perm"],
+.panel-run-action .panel-row {
+	padding-left: 0.5rem;
+}
+
 .panel-row[data-type="arg"] > .panel-marker {
-	grid-area: 1 / 1;
+	display: none;
 }
 
 .panel-row[data-type="arg"] > .panel-name {
-	grid-area: 1 / 2;
+	grid-area: 1 / 1;
 	min-width: 0;
 	overflow: hidden;
 }
 
 .panel-row[data-type="arg"] > .panel-field {
-	grid-area: 2 / 2;
+	grid-area: 2 / 1;
 }
 
 .panel-row.is-focused,
@@ -1226,7 +1334,6 @@ input:focus-visible {
 .command-dialog > footer,
 .bookmark-dialog > footer,
 .help-dialog > footer,
-.bookmark-target,
 .bookmark-empty {
 	color: var(--text-dim);
 	padding-top: 0.3rem;

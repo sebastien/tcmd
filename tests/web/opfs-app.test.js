@@ -88,6 +88,10 @@ describe("opfs web bootstrap", () => {
 			await new Promise((resolve) => setTimeout(resolve, 20))
 			expect(host.querySelector(".panel-args").textContent).toContain("notes.txt")
 			expect(host.querySelector(".panel-run-button").textContent).toBe("[Run]")
+			// copy is amber: arm Confirm, then execute.
+			await session.dispatch("panel.run")
+			expect(session.panelOpen.value).toBe(true)
+			expect(session.panelArmed.value).toBe(true)
 			await session.dispatch("panel.run")
 			expect(session.panelOpen.value).toBe(false)
 			expect(await fs.readTextHead("/notes.txt")).toBe(await fs.readTextHead("/home/tester/notes.txt"))

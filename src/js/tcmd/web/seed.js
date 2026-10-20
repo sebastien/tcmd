@@ -23,7 +23,7 @@ const DEMO_TREE = {
 		"- Left/Backspace  go to the parent directory",
 		"- Tab  switch pane",
 		"- Space  mark the current entry",
-		"- b / g  record / jump to a bookmark",
+		"- b  bookmarks (filter, add current path, Enter open, Del remove)",
 		"- :  command panel (operations and app actions)",
 		"- !  shell command",
 		"- q  quit (unmounts the UI; reload to start over)",

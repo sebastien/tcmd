@@ -65,9 +65,9 @@ describe("cross-engine parity", () => {
 				expect(webText).toContain(name)
 				expect(frame).toContain(name)
 			}
-			// Both engines advertise the same bracket shorthand for Open.
-			expect(webText).toContain("[Open ⏎]")
-			expect(frame).toContain("[Open ⏎]")
+			// Both engines advertise the same bracket shorthand for Commands.
+			expect(webText).toContain("[Commands :]")
+			expect(frame).toContain("[Commands :]")
 		} finally {
 			webInstance?.unmount?.()
 		}

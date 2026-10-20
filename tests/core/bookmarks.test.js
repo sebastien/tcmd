@@ -5,6 +5,8 @@ import {
 	createMemoryBookmarkStore,
 	isValidName,
 	normalizeName,
+	suggestName,
+	uniqueName,
 } from "../../src/js/tcmd/core/bookmarks.js"
 
 describe("bookmarks", () => {
@@ -34,6 +36,25 @@ describe("bookmarks", () => {
 	test("record rejects an empty name", async () => {
 		const bookmarks = createBookmarks()
 		await expect(bookmarks.record("  ", "/a")).rejects.toThrow("name")
+	})
+
+	test("suggestName derives a valid, readable basename", () => {
+		expect(suggestName("/home/notes.txt")).toBe("notes.txt")
+		expect(suggestName("/home/My Docs")).toBe("My-Docs")
+		// The filesystem root has no segment to borrow.
+		expect(suggestName("/")).toBe("bookmark")
+		expect(uniqueName({ home: {} }, "home")).toBe("home-2")
+		expect(uniqueName({ home: {}, "home-2": {} }, "home")).toBe("home-3")
+	})
+
+	test("add auto-names, disambiguates and leaves existing paths alone", async () => {
+		const bookmarks = createBookmarks()
+		expect(await bookmarks.add("/home/notes.txt", false)).toEqual({ name: "notes.txt", added: true })
+		expect(await bookmarks.add("/home/notes.txt", false)).toEqual({ name: "notes.txt", added: false })
+		expect(await bookmarks.add("/tmp/notes.txt", false)).toEqual({ name: "notes.txt-2", added: true })
+		expect(await bookmarks.add("/", true)).toEqual({ name: "bookmark", added: true })
+		expect(bookmarks.entries.value["notes.txt-2"]).toEqual({ path: "/tmp/notes.txt", isDir: false })
+		expect(bookmarks.entries.value.bookmark).toEqual({ path: "/", isDir: true })
 	})
 
 	test("find and findByName resolve stored bookmarks", async () => {

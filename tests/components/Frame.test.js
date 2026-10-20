@@ -148,17 +148,16 @@ describe("components Frame", () => {
 		expect(behaviors.showInspectorInline(wide, { showPreview: true })).toBe(true)
 	})
 
-	test("the command bar wraps and the listing windows around it", () => {
+	test("the command bar stays one line and the listing windows around it", () => {
 		const behaviors = createFrameBehaviors({ theme })
 		const items = [
 			{ id: "pane.enter", title: "Open", keys: "Enter" },
 			{ id: "pane.up", title: "Parent", keys: "←" },
 		]
 		const data = { commandBarItems: items, active: "left", leftMarked: new Set(), rightMarked: new Set() }
-		// Two entries share one row on a wide viewport.
+		// The bar is one line at any width; overflowing entries are elided.
 		expect(behaviors.barHeight(selfAt(120, 30), data)).toBe(1)
-		// A 20-column bar only holds "[Open ⏎] " (9 columns) per row.
-		expect(behaviors.barHeight(selfAt(20, 30), data)).toBe(2)
+		expect(behaviors.barHeight(selfAt(20, 30), data)).toBe(1)
 		// A notice or error swaps the keys for a one-line status.
 		expect(behaviors.barHeight(selfAt(20, 30), { ...data, notice: { kind: "tip", text: "hi" } })).toBe(1)
 		// The listing windows around the chrome: seven fixed rows plus the

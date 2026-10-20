@@ -66,7 +66,11 @@ function connectEffects(session, root, { size, help, viewer }) {
 		if (help.value) return root.querySelector(".help")
 		if (viewerOpen()) return root.querySelector(".viewer")
 		if (session.panelOpen.value) {
-			if (session.panelPicking.value) return root.querySelector(".panel-picker-query")
+			if (session.pickerOpen.value) {
+				return session.pickerFocus.value === "path"
+					? root.querySelector(".panel-picker-path")
+					: root.querySelector(".command-panel")
+			}
 			if (session.panelFocus.value === "ops") return root.querySelector(".panel-query")
 			return root.querySelector(session.panelTextual.value ? ".panel-value" : ".command-panel")
 		}
@@ -118,7 +122,11 @@ function connectEffects(session, root, { size, help, viewer }) {
 		// Editing keeps native text/caret keys except the ones the shared
 		// controller explicitly owns (vertical arrows, Enter and Tab).
 		if (input && [" ", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) return
-		if (input && event.key === "Backspace" && !(session.bookmarkOpen.value && session.bookmarkMode.value === "list")) return
+		// The bookmark filter edits its query like any input; once it is empty,
+		// Backspace removes the selected bookmark instead. Delete always does.
+		const bookmarkFilterEmpty = session.bookmarkOpen.value && !`${session.bookmarkQuery?.value ?? ""}`.trim()
+		if (input && event.key === "Backspace" && !bookmarkFilterEmpty) return
+		if (session.bookmarkOpen.value && event.key === "Delete") event.preventDefault()
 		if ([" ", "Backspace", "Enter", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Escape"].includes(event.key)) event.preventDefault()
 	}
 	const focusIn = (event) => {
@@ -142,7 +150,7 @@ function connectEffects(session, root, { size, help, viewer }) {
 			session.panelOpIndex,
 			session.panelRowIndex,
 			session.panelTextual,
-			session.panelPicking,
+			session.pickerOpen,
 			session.bookmarkOpen,
 			session.filtering,
 			session.confirm,

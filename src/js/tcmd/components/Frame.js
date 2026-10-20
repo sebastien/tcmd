@@ -12,7 +12,7 @@
 // reference's text lives with its overlay in `Help.js`.
 
 import { unwrap } from "select/state/cells"
-import { commandBarMarksItem, commandBarRowCount, commandBarStatus } from "./CommandBar.js"
+import { commandBarStatus } from "./CommandBar.js"
 import pkg from "../../../../package.json" with { type: "json" }
 
 // Constant: VERSION
@@ -128,24 +128,6 @@ function paneColumnWidth(width, paneId, { viewMode, currentId, showPreview } = {
 	return Math.floor((total * weight) / sum)
 }
 
-// Function: commandBarRowsFor
-// The entries the bar currently shows: the context hints or the `bar`
-// commands, plus the active pane's marked count as a trailing entry.
-function commandBarRowsFor(data) {
-	const items = unwrap(data?.commandBarItems) ?? []
-	const marks = commandBarMarksItem(data)
-	return marks ? [...items, marks] : items
-}
-
-// Function: commandBarLines
-// Rows the wrapped command bar occupies at the current viewport (the bar
-// is inset one column from the viewport edge).
-function commandBarLines(data, self) {
-	const width = Math.floor(sizeOf(data, self)?.width ?? 0)
-	if (width <= 0) return 1
-	return commandBarRowCount(commandBarRowsFor(data), width - 1)
-}
-
 // Function: paneListHeight
 // Rows available to a pane's listing: the viewport height minus the app header
 // (1 row in the web UI, 2 for the desktop toolbar), the pane border (2), pane
@@ -157,8 +139,8 @@ function paneListHeight(data, self) {
 	if (height <= 0) return 0
 	const desktop = Boolean(unwrap(data?.desktopMode))
 	// A notice or error keeps a one-line status in desktop mode; otherwise that
-	// renderer has no bottom command bar at all.
-	const bar = commandBarStatus(data) ? 1 : desktop ? 0 : commandBarLines(data, self)
+	// renderer has no bottom command bar at all. The bar is always one line.
+	const bar = commandBarStatus(data) || !desktop ? 1 : 0
 	return Math.max(1, height - (desktop ? 8 : 7) - bar)
 }
 
@@ -317,14 +299,12 @@ function createFrameBehaviors(env) {
 		// The windowed listing height for both panes (they share the row).
 		listViewport: (self, data) => paneListHeight(data, self),
 
-		// The command bar's height: one line for a status, otherwise as many
-		// rows as the wrapped bracket shorthands need.
-		barHeight: (self, data) => (commandBarStatus(data) ? 1 : commandBarLines(data, self)),
+		// The command bar's height: always a single line, status or key hints.
+		barHeight: () => 1,
 	}
 }
 
 export {
-	commandBarLines,
 	createFrameBehaviors,
 	currentColumnId,
 	INSPECTOR_INLINE_WIDTH,

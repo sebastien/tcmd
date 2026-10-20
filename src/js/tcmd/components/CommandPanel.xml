@@ -18,36 +18,42 @@
 			<box width="1" out:border="sideRule" out:borderColor="ruleFg"></box>
 			<!-- Right pane: the command name, arguments and trailing Run action. -->
 			<box flexDirection="column" flexGrow="3" flexBasis="0" overflow="hidden">
+				<!-- The command name heads the pane. -->
 				<box flexDirection="row" height="1" paddingLeft="1" overflow="hidden">
-					<text out="commandName" out:fg="commandNameFg" wrapMode="none"></text>
+					<text out="commandName" out:fg="commandNameFg" flexGrow="1" flexShrink="1" minWidth="0" wrapMode="none" truncate="true"></text>
 				</box>
 				<box height="1" out:border="headRule" out:borderColor="ruleFg"></box>
-				<text when="argsEmpty" out="argsEmptyText" out:fg="labelFg" paddingLeft="1" wrapMode="none"></text>
+				<!-- Arguments, preflight preview and the Run action share one
+				     scroller, so Run lands one line below the last field rather
+				     than pinned to the bottom of the pane. -->
 				<scrollbox when="!picking" ref="args" flexGrow="1" flexShrink="1" minHeight="0" out:scrollTop="argScrollTop">
 					<box out="argRows" flexDirection="column"></box>
-				</scrollbox>
-				<scrollbox when="hasPreview" flexGrow="0" flexShrink="1" minHeight="0" maxHeight="5">
-					<text out="preview" out:fg="previewFg" wrapMode="word"></text>
-				</scrollbox>
-				<box when="!picking" out="runRows" flexDirection="column" flexShrink="0" paddingLeft="1" paddingRight="1"></box>
-				<box when="picking" flexDirection="column" flexGrow="1" flexShrink="1" minHeight="0" paddingLeft="1" paddingRight="1" paddingBottom="1">
-					<box flexDirection="column" flexGrow="1" flexShrink="1" minHeight="0" border borderStyle="single" out:borderColor="ruleFg">
-						<text out="pickerPath" out:fg="labelFg" paddingLeft="1" paddingRight="1" wrapMode="none" truncate="true"></text>
-						<box flexDirection="row" height="1" paddingLeft="1" paddingRight="1" overflow="hidden">
-							<text out="pickerSign" out:fg="signFg" wrapMode="none"></text>
-							<input ref="pickQuery" inout="pickerQuery" flexGrow="1" height="1" out:focused="pickerFocused"></input>
-						</box>
-						<box height="1" out:border="pickerBottomRule" out:borderColor="ruleFg"></box>
-						<scrollbox ref="pickerList" flexGrow="1" flexShrink="1" minHeight="0" out:scrollTop="argScrollTop">
-							<box out="argRows" flexDirection="column"></box>
-						</scrollbox>
-						<text when="pickerEmpty" out="pickerEmptyText" out:fg="labelFg" paddingLeft="1" wrapMode="none"></text>
+					<box ref="previewBox" when="hasPreview" flexDirection="column" flexShrink="0" maxHeight="5" paddingLeft="1" overflow="hidden">
+						<text out="preview" out:fg="previewFg" wrapMode="word"></text>
 					</box>
-				</box>
+					<box out="runRows" flexDirection="column" flexShrink="0" paddingLeft="1" paddingRight="1"></box>
+					<box when="hasRunError" border borderStyle="single" out:borderColor="runErrorFg"
+					     flexDirection="column" flexShrink="0" marginTop="1" marginLeft="1" marginRight="1"
+					     paddingLeft="1" paddingRight="1">
+						<text out="runError" out:fg="runErrorFg" wrapMode="word"></text>
+					</box>
+					<box when="hasConfirmCommand" paddingLeft="1">
+						<text out="confirmCommand" out:fg="confirmCommandFg" wrapMode="word"></text>
+					</box>
+				</scrollbox>
+				<filepicker when="picking" flexGrow="1" flexShrink="1" minHeight="0"
+				            in:open="picking" in:path="pickerPathText" in:focus="pickerFocus"
+				            in:rows="pickerRows" in:cursor="argCursor"></filepicker>
 			</box>
 		</box>
 		<box flexDirection="row" height="1" paddingLeft="1">
 			<text out="footer" out:fg="footerFg"></text>
+		</box>
+		<!-- The close action sits in the top border, upper-right, like a close
+		     button; the background masks the border run underneath. -->
+		<box position="absolute" top="-1" right="2" height="1" zIndex="3"
+		     out:backgroundColor="bg" on:click="!panel:close.">
+			<text out="closeHint" out:fg="closeHintFg" wrapMode="none"></text>
 		</box>
 	</box>
 </box>

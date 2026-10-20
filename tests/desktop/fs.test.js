@@ -164,6 +164,29 @@ describe("tinyjs filesystem adapter", () => {
 		expect(await readFile(join(source, "file"), "utf8")).toBe("keep")
 	})
 
+	test("creates hard and symbolic links, changes modes and unlinks links", async () => {
+		const source = join(root, "source.txt")
+		const hard = join(root, "hard.txt")
+		const symbolic = join(root, "symbolic.txt")
+		await writeFile(source, "contents")
+		await adapter.hardlink(source, hard)
+		expect(await readFile(hard, "utf8")).toBe("contents")
+		await expect(adapter.hardlink(source, hard)).rejects.toMatchObject({ code: "EEXIST" })
+
+		await adapter.symlink(source, symbolic)
+		const entry = (await adapter.readDir(root)).find((candidate) => candidate.name === "symbolic.txt")
+		expect(entry).toMatchObject({ isSymlink: true, target: source })
+		await expect(adapter.symlink(source, symbolic)).rejects.toMatchObject({ code: "EEXIST" })
+
+		await adapter.chmod(source, 0o600)
+		expect((await lstat(source)).mode & 0o777).toBe(0o600)
+
+		await expect(adapter.unlink(source)).rejects.toThrow("not a symbolic link")
+		await adapter.unlink(symbolic)
+		await expect(lstat(symbolic)).rejects.toMatchObject({ code: "ENOENT" })
+		expect(await readFile(source, "utf8")).toBe("contents")
+	})
+
 	test("move does not replace targets and root erasure is refused", async () => {
 		const source = join(root, "source.txt")
 		const target = join(root, "target.txt")

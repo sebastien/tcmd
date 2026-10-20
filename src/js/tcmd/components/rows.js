@@ -173,7 +173,7 @@ function panelOpRows(CommandArgRow) {
 				index: item.type === "op" ? item.entryIndex ?? index : -1,
 				row: {
 					type: item.type,
-					key: item.id,
+					key: item.key,
 					name: item.name,
 					group: item.group,
 					risk: item.risk ?? null,
@@ -181,8 +181,38 @@ function panelOpRows(CommandArgRow) {
 				cursor: data.opCursor,
 				focus: data.focus,
 			}),
-			(item) => item.id,
+			(item) => item.key,
 		)
+}
+
+// Function: filePickerRows
+// `{ item, index, key, currentRow, markedRow, active }` bags for the file
+// picker's `FilePickerRow`s. The picker rows are already flat (parent row plus
+// entries); the same bounded window as an unwindowed listing keeps a huge
+// directory from mounting every row in the terminal.
+function filePickerRows(FilePickerRow) {
+	return (self, data) => {
+		const rows = unwrap(data.rows) ?? []
+		const cursor = isCell(data.cursor) ? unwrap(data.cursor) : (data.cursor ?? 0)
+		const { start, len } = listingWindow({ entries: rows, cursor }, 0)
+		const bag = (item, index) => ({
+			item,
+			index,
+			key: item.key ?? item.path,
+			currentRow: index === cursor,
+			markedRow: false,
+			active: true,
+			paneId: null,
+		})
+		if (start === 0 && len === rows.length) {
+			return FilePickerRow.map(rows, bag, (item) => item.key ?? item.path)
+		}
+		return FilePickerRow.map(
+			rows.slice(start, start + len),
+			(item, index) => bag(item, start + index),
+			(item) => item.key ?? item.path,
+		)
+	}
 }
 
 // Function: panelArgRows
@@ -216,6 +246,7 @@ function panelArgRows(CommandArgRow) {
 				row: item,
 				cursor: data.argCursor,
 				focus: data.focus,
+				permBit: data.permBit,
 				value: data.value,
 			}),
 			(item) => item.key,
@@ -259,16 +290,17 @@ function helpRows(HelpRow) {
 }
 
 // Function: bookmarkRows
-// `{ item: { name, path }, index, selectedRow }` bags for `BookmarkRow` rows.
-// `selectedRow` is the plain per-row selection flag so a picker move rewrites
-// only the changed rows.
+// `{ item: { key, name, path }, index, selectedRow }` bags for `BookmarkRow`
+// rows. `selectedRow` is the plain per-row selection flag so a picker move
+// rewrites only the changed rows; `key` separates the synthetic add row from
+// stored bookmarks.
 function bookmarkRows(BookmarkRow) {
 	return (self, data) => {
 		const selected = isCell(data.selected) ? unwrap(data.selected) : data.selected
 		return BookmarkRow.map(
 			data.items ?? [],
 			(item, index) => ({ item, index, selectedRow: index === selected }),
-			(bookmark) => bookmark.name,
+			(bookmark) => bookmark.key ?? bookmark.name,
 		)
 	}
 }
@@ -293,6 +325,7 @@ export {
 	bookmarkRows,
 	commandItemRows,
 	crumbRows,
+	filePickerRows,
 	fileRows,
 	fileWindow,
 	helpRows,

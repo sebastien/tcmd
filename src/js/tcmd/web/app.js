@@ -70,11 +70,9 @@ function webViewBehaviors() {
 		desktopPreviewLabel: (_self, data) => unwrap(data.showPreview) ? "Hide preview" : "Show preview",
 		bookmarkView: (_self, data) => ({
 			items: data.bookmarkItems,
-			mode: data.bookmarkMode,
 			open: data.bookmarkOpen,
 			query: data.bookmarkQuery,
 			selected: data.bookmarkIndex,
-			target: data.bookmarkTarget,
 		}),
 		commandBarView: (_self, data) => ({
 			items: data.commandBarItems,
@@ -85,6 +83,7 @@ function webViewBehaviors() {
 			active: data.active,
 			leftMarked: data.leftMarked,
 			rightMarked: data.rightMarked,
+			uiSize: data.uiSize,
 		}),
 		confirmView: (_self, data) => ({ confirm: data.confirm }),
 		leftCrumbsView: (_self, data) => ({
@@ -146,9 +145,10 @@ function webViewBehaviors() {
 			argCursor: data.panelRowIndex,
 			focus: data.panelFocus,
 			preview: data.panelPreview,
-			picking: data.panelPicking,
-			pickerQuery: data.pickerQuery,
-			pickerPath: data.pickerPath,
+			picking: data.pickerOpen,
+			pickerPathText: data.pickerPathText,
+			pickerFocus: data.pickerFocus,
+			pickerRows: data.pickerRows,
 			query: data.panelQuery,
 			value: data.panelValue,
 		}),
@@ -225,20 +225,24 @@ function createWebApp(session, options = {}) {
 	const quit = options.onQuit ?? ((self) => self.unmount?.())
 	// DOM inputs have no native `enter` event; the root routes Enter for them.
 	const baseKeys = appBehaviors({ normalizeKey, quit }).keys
-	const events = appEvents({ quit })
+	const events = appEvents()
 	return ui(appHtml)
-		.init(() => ({
-			...appInit(session)(),
-			desktopMode: Boolean(options.desktopMode),
-			uiSize: size,
-			helpOpen: help,
-			viewerOpen: viewer,
-			paneWidth,
-			leftSegments: crumbs("left", session.panes.left),
-			parentSegments: crumbs("parent", session.panes.parent),
-			rightSegments: crumbs("right", session.panes.right),
-			previewSegments: crumbs("preview", session.panes.preview),
-		}))
+		.init((self) => {
+			// The panel's Quit command reaches the host through this hook.
+			session.quit = () => quit(self)
+			return {
+				...appInit(session)(),
+				desktopMode: Boolean(options.desktopMode),
+				uiSize: size,
+				helpOpen: help,
+				viewerOpen: viewer,
+				paneWidth,
+				leftSegments: crumbs("left", session.panes.left),
+				parentSegments: crumbs("parent", session.panes.parent),
+				rightSegments: crumbs("right", session.panes.right),
+				previewSegments: crumbs("preview", session.panes.preview),
+			}
+		})
 		.does({
 			...createFrameBehaviors({ theme: webTheme }),
 			...webViewBehaviors(),
@@ -287,7 +291,7 @@ function createWebApp(session, options = {}) {
 			...events,
 			"dialog:panel-cancel": (_self, data) => {
 				if (!unwrap(data.desktopMode)) return
-				data.dispatch(unwrap(data.panelPicking) ? "panel.pick.cancel" : "panel.cancel")
+				data.dispatch(unwrap(data.pickerOpen) ? "picker.cancel" : "panel.cancel")
 			},
 			"dialog:bookmark-cancel": (_self, data) => {
 				if (unwrap(data.desktopMode)) data.dispatch("bookmark.cancel")

@@ -65,9 +65,9 @@ describe("golden frames", () => {
 			expect(frame).not.toContain("[Open O] [Edit E]")
 			// The status bar shows bracket shorthands on the left, inside the
 			// frame — no Powerline pill caps.
-			const bar = frame.split("\n").find((line) => line.includes("[Open ⏎]"))
+			const bar = frame.split("\n").find((line) => line.includes("[Commands :]"))
 			expect(bar).toBeDefined()
-			expect(bar).toContain("[Open ⏎]")
+			expect(bar).toContain("[Commands :]")
 			// The pane headers keep a leading space before the path.
 			expect(frame).toContain(" /home")
 			// A symlink row prints its target, `ls -l` style.
@@ -210,8 +210,9 @@ describe("golden frames", () => {
 				.flatMap((line) => line.spans)
 				.filter((span) => ["Command", "File", "Edit"].includes(span.text))
 			expect(groupSpans.map((span) => span.attributes)).toEqual([1, 1, 1])
-			expect(frame).toContain("copy")
-			expect(frame).not.toContain("copy FROM TO")
+			expect(frame).toContain("quit")
+			expect(frame).toContain("mkdir")
+			expect(frame).not.toContain("mkdir PATH")
 			// bookmark's PATH is a single path: it renders as a pre-filled,
 			// read-only path, not a list.
 			expect(frame).toContain("/home/documents")
@@ -229,6 +230,14 @@ describe("golden frames", () => {
 				expect(frame).not.toContain("bookmark /home/documents")
 			// The filter prompt is the colon in the left pane.
 			expect(frame).toContain(":")
+			// The close action sits in the top border, upper right, and Run
+			// starts one cell in from the pane border, below the last field.
+			expect(frame).toMatch(/╭─ Command · bookmark [^\n]*\[Close Esc\][^\n]*╮/)
+			expect(frame).toMatch(/│ NAME\b/)
+			expect(frame).toMatch(/│ \[\(empty\)/)
+			expect(frame).toMatch(/│ PATH\b/)
+			const runText = lines[runLine]
+			expect(runText).toMatch(/│\s+\[Run\]/)
 			// The panel keys are advertised in its own footer.
 			expect(frame).toContain("type to filter")
 			// The command bar underneath switches to the panel hints.
@@ -246,7 +255,7 @@ describe("golden frames", () => {
 			await setup.mockInput.typeText("open")
 			await settle(setup)
 			// Only the File operation matches the query.
-			expect(session.panelItems.value.map((item) => item.id)).toEqual(["group:file", "op:open"])
+			expect(session.panelItems.value.map((item) => item.key)).toEqual(["group:file", "op:open"])
 			const frame = setup.captureCharFrame()
 			expect(frame).toContain(" Command · open ")
 			expect(frame).not.toContain("open PATH...")
@@ -266,8 +275,8 @@ describe("golden frames", () => {
 			await settle(setup)
 			await new Promise((resolve) => setTimeout(resolve, 30))
 			const lines = setup.captureCharFrame().split("\n")
-			const eraseLine = lines.findIndex((line) => line.includes(">  erase"))
-			expect(eraseLine).toBeGreaterThanOrEqual(0)
+			const lastLine = lines.findIndex((line) => line.includes(">  unlink"))
+			expect(lastLine).toBeGreaterThanOrEqual(0)
 			expect(lines.some((line) => line.includes("[Run]"))).toBe(true)
 			// The final category is in view after the list scrolls, while the
 			// arguments and Run action remain available in the right pane.
@@ -350,6 +359,15 @@ describe("golden frames", () => {
 			await settle(setup)
 			setup.mockInput.pressKey("\t")
 			await settle(setup)
+			// copy is amber: the first Enter arms Confirm and prints the
+			// command, the second runs it.
+			setup.mockInput.pressKey("\r")
+			await settle(setup)
+			expect(session.panelOpen.value).toBe(true)
+			expect(session.panelArmed.value).toBe(true)
+			const armed = setup.captureCharFrame()
+			expect(armed).toContain("[Confirm]")
+			expect(armed).toContain("copy /home/documents")
 			setup.mockInput.pressKey("\r")
 			await settle(setup)
 			await new Promise((resolve) => setTimeout(resolve, 20))
@@ -384,7 +402,7 @@ describe("golden frames", () => {
 		}
 	})
 
-	test("a resize collapses the inline inspector and compacts the status bar", async () => {
+	test("a resize collapses the inline inspector and elides the command bar", async () => {
 		const { setup, size } = await makeSetup(120, 30)
 		try {
 			await setup.renderOnce()
@@ -393,14 +411,17 @@ describe("golden frames", () => {
 			expect(setup.captureCharFrame()).toContain("report.txt")
 
 			// Shrink the viewport: the inline inspector collapses and the bar
-			// wraps its shorthands onto more rows.
+			// stays on one line, dropping the entries that no longer fit behind
+			// a trailing ellipsis.
 			size.set({ width: 70, height: 20 })
 			await settle(setup)
 			const narrow = setup.captureCharFrame()
 			expect(narrow).not.toContain("report.txt")
 			expect(narrow).toContain("[Switch ⇥]")
-			// The bookmark hint stays visible; the bar wraps instead of trimming.
-			expect(narrow).toContain("Bookmarks")
+			expect(narrow).toContain("[Bookmarks b]")
+			expect(narrow).not.toContain("[Toggle Mode t]")
+			const bar = narrow.split("\n").find((line) => line.includes("[Commands :]"))
+			expect(bar.trimEnd()).toEndWith("…")
 
 			// Grow again: the inspector returns.
 			size.set({ width: 120, height: 30 })
@@ -414,9 +435,9 @@ describe("golden frames", () => {
 	test("the listing fills the pane: chrome takes nine rows, not one more", async () => {
 		// A tall listing makes the visible row count readable off the frame:
 		// the fixed chrome (identity bar, pane border, header, rule, detail,
-		// command bar) consumes seven rows plus the wrapped bar, which is
-		// what the windowed viewport (`frame.paneListHeight`) is derived
-		// from.
+		// command bar) consumes seven rows plus the single command-bar row,
+		// which is what the windowed viewport (`frame.paneListHeight`) is
+		// derived from.
 		const tall = {
 			"/": [{ name: "home", isDir: true }],
 			"/home": Array.from({ length: 40 }, (_, i) => ({
@@ -425,25 +446,25 @@ describe("golden frames", () => {
 				size: i,
 			})),
 		}
-		// 120x40 → 31 listing rows (seven chrome rows + the two-row wrapped
-		// bar): the last visible row is f30, f31 is not.
+		// 120x40 → 32 listing rows (seven chrome rows + the one-line bar):
+		// the last visible row is f31, f32 is not.
 		const { setup: big } = await makeSetupTui(tall, 120, 40)
 		try {
 			await settle(big)
 			const frame = big.captureCharFrame()
-			expect(frame).toContain("f30.txt")
-			expect(frame).not.toContain("f31.txt")
+			expect(frame).toContain("f31.txt")
+			expect(frame).not.toContain("f32.txt")
 		} finally {
 			big.renderer.destroy()
 		}
 
-		// 120x30 → 21 listing rows: f20 in, f21 out.
+		// 120x30 → 22 listing rows: f21 in, f22 out.
 		const { setup: small } = await makeSetupTui(tall, 120, 30)
 		try {
 			await settle(small)
 			const frame = small.captureCharFrame()
-			expect(frame).toContain("f20.txt")
-			expect(frame).not.toContain("f21.txt")
+			expect(frame).toContain("f21.txt")
+			expect(frame).not.toContain("f22.txt")
 		} finally {
 			small.renderer.destroy()
 		}

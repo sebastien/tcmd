@@ -21,13 +21,20 @@ import { createBookmarks } from "./bookmarks.js"
 import { createJournal } from "./journal.js"
 import { createDispatch, getCommandBarItems } from "./commands.js"
 import { createNullOs } from "./os.js"
-import { PANEL_FOCUS, argvFor, bindArgs, filterPanelEntries, isTextualRow, panelCommand, panelEntries, panelEntryRows, panelRowList, panelRunnable, pickerRowList, rowAt, withArgValue } from "./panel.js"
+import { PANEL_FOCUS, argvFor, bindArgs, filterPanelEntries, isTextualRow, panelCommand, panelEntries, panelEntryRows, panelRowList, panelRunnable, rowAt, withArgValue } from "./panel.js"
+import { createPickerPathQueue, pickerRowList, pickerVisibleEntries } from "./picker.js"
 import { basename, parent as parentPath } from "./path.js"
 import { hasBinaryByte, PREVIEW_BYTES, previewKind, previewSource } from "./preview.js"
 import { compressedBytes, decompressHead } from "./decompress.js"
 import { indexOfPath } from "./selection.js"
 import { createPane, PANE_BUFFERS } from "./pane.js"
 import { hasMatch, score } from "../vendor/fzy.js"
+
+// Constant: BOOKMARK_ADD_KEY
+// Key and display label of the synthetic "add current path" row. It contains
+// spaces, which a bookmark name may not, so it can never collide with a stored
+// row.
+const BOOKMARK_ADD_KEY = "+ add current path"
 
 // Function: createSession
 // Creates the shared model for a two-pane browser.
@@ -55,6 +62,9 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	session.pickerPane = createPane({ fs, path: left.path.value })
 	// Shown in the header title; empty when the environment has no hostname.
 	session.host = host ?? ""
+	// The renderer installs its quit hook at mount; the panel's Quit command
+	// calls it (core cannot exit a process or unmount a DOM app itself).
+	session.quit = null
 	// Bookmark model (named paths). The store defaults to in-memory.
 	session.bookmarks = bookmarks ?? createBookmarks()
 	// Undo/redo journal: reversible file operations (`mkdir`, `copy`, `move`,
@@ -162,13 +172,12 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 		else sync()
 	})
 
-	// Bookmark overlay: `bookmarkMode` is "name" while recording (an input for
-	// the new bookmark's name) or "list" while jumping (a fuzzy picker).
+	// Bookmark panel: one modal list. `bookmarkQuery` filters the stored
+	// bookmarks by name or path; `bookmarkIndex` is its cursor; `bookmarkTarget`
+	// is the `{ path, isDir }` the add row would record (null while closed).
 	session.bookmarkOpen = cell(false)
-	session.bookmarkMode = cell("list")
 	session.bookmarkQuery = cell("")
 	session.bookmarkIndex = cell(0)
-	// The path being recorded while in "name" mode.
 	session.bookmarkTarget = cell(null)
 
 	// Command panel (`:`): the one entry point, listing the CLI operations,
@@ -184,29 +193,45 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	session.panelQuery = cell("")
 	session.panelOpIndex = cell(0)
 	session.panelRowIndex = cell(0)
+	// The bit cursor inside a permission row (0=r, 1=w, 2=x): Space toggles
+	// the cell it marks, Left/Right move it.
+	session.panelPermBit = cell(0)
 	session.panelFocus = cell(PANEL_FOCUS.OPS)
 	session.panelDraft = cell([])
 	session.panelEntries = cell(panelEntries())
 	// Errors from a panel run stay beside the action so the user can retry
 	// without losing the command draft.
 	session.panelRunError = cell(null)
+	// Amber/red operations are two-step: the first Run prints the assembled
+	// command and arms `[Confirm]`; the second executes it. Any draft or
+	// operation change disarms it.
+	session.panelArmed = cell(false)
 
 	// Picker sub-mode: while a `dest`/`path` argument is being browsed the
 	// panel's argument column shows the picker's listing instead of the
-	// argument rows. `panelPickerMode` ("dir"/"file"/"any") decides what the
-	// list offers and what Enter accepts; `panelPickerArg` is the argument the
-	// chosen path is written back to; `panelPendingRun` reruns the operation
+	// argument rows. `pickerMode` ("dir"/"file"/"any") decides what the
+	// list offers and what Enter accepts; `pickerArg` is the argument the
+	// chosen path is written back to; `pickerPendingRun` reruns the operation
 	// once a pick that was holding up a run completes.
-	session.panelPicking = cell(false)
-	session.panelPickerMode = cell("dir")
-	session.panelPickerArg = cell(-1)
-	session.panelPendingRun = cell(false)
-	// The picker's fuzzy filter, written by the picker input and routed to the
-	// picker pane's own filter (see the effect below).
+	session.pickerOpen = cell(false)
+	session.pickerMode = cell("dir")
+	session.pickerArg = cell(-1)
+	session.pickerPendingRun = cell(false)
+	// The picker's editable path and the region that owns the keyboard: "path"
+	// (the text field) or "rows" (the entry list). `pickerQuery` is the fragment
+	// the path text resolves to and drives the pane's fuzzy filter.
+	session.pickerPathText = cell("")
+	session.pickerFocus = cell("path")
+	// The directory relative path text resolves against (set when the picker
+	// opens), so typing a relative path does not drift as the picker navigates.
+	session.pickerBasePath = cell("")
 	session.pickerQuery = cell("")
+	// Serializes path resolution and drops stale keystrokes (see
+	// `core/picker#createPickerPathQueue`).
+	session.pickerPaths = createPickerPathQueue(session)
 
-	// The bookmark picker keeps its cursor on the first match whenever the
-	// query changes.
+	// The bookmark panel keeps its cursor on the first match whenever the query
+	// changes.
 	effect([session.bookmarkQuery], () => session.bookmarkIndex.set(0))
 
 	// Filter editing is bound to the active pane: switching pane drops the
@@ -337,34 +362,42 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 		},
 	)
 
-	// Bookmark picker rows: the bookmarks fuzzily matched by name or path,
-	// ranked by fzy score. Only meaningful in "list" mode.
+	// Bookmark rows: the stored bookmarks fuzzily matched by name or path,
+	// ranked by fzy score. With no query, a first row offers to record
+	// `bookmarkTarget` when that path is not bookmarked yet.
 	session.bookmarkItems = derived(
-		[session.bookmarks.entries, session.bookmarkQuery, session.bookmarkMode],
-		([entries, query, mode]) => {
-			if (mode !== "list") return []
-			const rows = Object.entries(entries ?? {}).map(([name, entry]) => ({ name, ...entry }))
+		[session.bookmarks.entries, session.bookmarkQuery, session.bookmarkTarget],
+		([entries, query, target]) => {
+			const rows = Object.entries(entries ?? {}).map(([name, entry]) => ({ key: name, name, ...entry }))
 			const q = `${query ?? ""}`.trim()
-			if (!q) return rows.sort((a, b) => a.name.localeCompare(b.name))
-			const ranked = []
-			for (const row of rows) {
-				const best = Math.max(
-					hasMatch(q, row.name) ? score(q, row.name) : -Infinity,
-					hasMatch(q, row.path) ? score(q, row.path) : -Infinity,
-				)
-				if (best > -Infinity) ranked.push({ row, score: best })
+			let items
+			if (!q) {
+				items = rows.sort((a, b) => a.name.localeCompare(b.name))
+			} else {
+				const ranked = []
+				for (const row of rows) {
+					const best = Math.max(
+						hasMatch(q, row.name) ? score(q, row.name) : -Infinity,
+						hasMatch(q, row.path) ? score(q, row.path) : -Infinity,
+					)
+					if (best > -Infinity) ranked.push({ row, score: best })
+				}
+				ranked.sort((a, b) => (a.score !== b.score ? b.score - a.score : a.row.name.localeCompare(b.row.name)))
+				items = ranked.map((match) => match.row)
 			}
-			ranked.sort((a, b) => (a.score !== b.score ? b.score - a.score : a.row.name.localeCompare(b.row.name)))
-			return ranked.map((match) => match.row)
+			if (!q && target && !items.some((row) => row.path === target.path)) {
+				items = [{ key: BOOKMARK_ADD_KEY, add: true, name: BOOKMARK_ADD_KEY, path: target.path, isDir: target.isDir }, ...items]
+			}
+			return items
 		},
 	)
 
 	// Command bar rows: context-dependent key hints (see core/commands). The
 	// panel button is dropped when a host disables the panel.
 	session.commandBarItems = derived(
-		[session.filtering, session.bookmarkOpen, session.bookmarkMode, session.panelOpen, session.panelPicking, session.overlay],
-		([filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, overlay]) =>
-			getCommandBarItems({ filtering, bookmarkOpen, bookmarkMode, panelOpen, panelPicking, overlay }),
+		[session.filtering, session.bookmarkOpen, session.panelOpen, session.pickerOpen, session.panelArmed, session.overlay],
+		([filtering, bookmarkOpen, panelOpen, pickerOpen, panelArmed, overlay]) =>
+			getCommandBarItems({ filtering, bookmarkOpen, panelOpen, pickerOpen, panelArmed, overlay }),
 	)
 
 	// The entry list filtered by the typed query; `panelOpIndex` indexes into
@@ -382,8 +415,8 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// lists directories only, so every row is a valid choice; a file/any
 	// picker keeps the listing intact, where a directory row descends.
 	session.pickerVisible = derived(
-		[session.pickerPane.entries, session.panelPickerMode],
-		([entries, mode]) => (mode === "dir" ? (entries ?? []).filter((entry) => entry.isDir) : entries ?? []),
+		[session.pickerPane.entries, session.pickerMode],
+		([entries, mode]) => pickerVisibleEntries(entries, mode),
 	)
 	session.pickerRows = derived(
 		[session.pickerVisible, session.pickerPane.path],
@@ -392,19 +425,48 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// The argument column: the picker's entry rows while picking; otherwise the
 	// selected operation's arguments followed by its explicit Run action.
 	session.panelRows = derived(
-		[session.panelDraft, session.panelEntry, session.panelPicking, session.pickerRows, session.panelRunError],
-		([draft, entry, picking, picker, runError]) => {
-			if (picking) return picker
+		[session.panelDraft, session.panelEntry, session.pickerOpen, session.pickerRows, session.panelRunError, session.panelArmed, session.activePath],
+		([draft, entry, open, picker, runError, armed, activePath]) => {
+			if (open) return picker
 			if (!entry) return []
 			const rows = panelRowList(draft)
+			// A command with no arguments still shows the context it would act
+			// on: a read-only PATH row over the active pane's path.
+			if (!rows.length && entry.showPath) {
+				rows.push({
+					type: "arg",
+					key: "arg:path",
+					rowIndex: 0,
+					argIndex: -1,
+					itemIndex: -1,
+					name: "PATH",
+					summary: activePath ?? "",
+					kind: "path",
+					role: "active",
+					optional: false,
+					variadic: false,
+					textual: false,
+					editable: false,
+					picker: false,
+					mode: "dir",
+					multi: false,
+					readonly: true,
+					value: activePath ?? "",
+					count: 0,
+				})
+			}
+			const args = armed ? panelCommand(draft) : ""
 			rows.push({
 				type: "run",
 				key: "panel:run",
 				rowIndex: rows.length,
-				name: runError ? "Retry" : "Run",
+				name: runError ? "Retry" : armed ? "Confirm" : "Run",
 				risk: entry.risk ?? null,
 				group: entry.group ?? "File",
 				error: runError,
+				armed,
+				// The command printed below `[Confirm]`.
+				command: armed ? (args ? `${entry.name} ${args}` : entry.name) : null,
 			})
 			return rows
 		},
@@ -471,22 +533,32 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	effect([session.panelEntry], () => {
 		session.panelRowIndex.set(0)
 		session.panelRunError.set(null)
+		session.panelArmed.set(false)
 	})
-	// Editing the draft after an error gives the next attempt a clean action row.
+	// Editing the draft after an error gives the next attempt a clean action
+	// row, and disarms a pending Confirm (the command changed under it).
 	effect([session.panelDraft], () => {
 		if (session.panelRunError.value) session.panelRunError.set(null)
+		if (session.panelArmed.value) session.panelArmed.set(false)
 	})
 	// Typing a query re-anchors the entry cursor on the first match.
 	effect([session.panelQuery], () => {
 		session.panelOpIndex.set(0)
 	})
 
-	// The picker's query drives the picker pane's fuzzy filter and re-anchors
-	// the picker cursor on the first match. Only while picking, so the effect
-	// can never reset the argument cursor outside the picker.
+	// The editable path resolves to a directory plus a filter fragment; the
+	// queue drops stale keystrokes and keeps fast typing from landing an older
+	// navigation after a newer one (see `core/picker#createPickerPathQueue`).
+	effect([session.pickerPathText, session.pickerOpen], ([text, open]) => {
+		if (open) session.pickerPaths.schedule(text)
+	})
+
+	// The picker's resolved fragment drives the picker pane's fuzzy filter and
+	// re-anchors the picker cursor on the first match. Only while picking, so
+	// the effect can never reset the argument cursor outside the picker.
 	effect([session.pickerQuery], ([query]) => {
 		session.pickerPane.setFilter(`${query ?? ""}`)
-		if (session.panelPicking.value) {
+		if (session.pickerOpen.value) {
 			const rows = session.pickerRows.value
 			const firstMatch = `${query ?? ""}` ? rows.findIndex((row) => row.type === "entry") : 0
 			session.panelRowIndex.set(firstMatch >= 0 ? firstMatch : 0)
@@ -495,9 +567,10 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// Closing the panel leaves the picker (it lives inside the panel).
 	effect([session.panelOpen], ([open]) => {
 		if (open) return
-		session.panelPicking.set(false)
-		session.panelPickerArg.set(-1)
-		session.panelPendingRun.set(false)
+		session.pickerOpen.set(false)
+		session.pickerArg.set(-1)
+		session.pickerPendingRun.set(false)
+		session.panelArmed.set(false)
 	})
 
 	session.dispatch = createDispatch(session)

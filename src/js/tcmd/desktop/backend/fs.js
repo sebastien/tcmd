@@ -111,6 +111,43 @@ function assertNoNested(paths) {
 	}
 }
 
+// Function: parseColonIds
+// Reads a passwd/group-style file into `{ id -> name }`; an unreadable file
+// yields an empty map (numeric ids still work).
+async function parseColonIds(runtime, path) {
+	const map = new Map()
+	try {
+		const text = decoder.decode(await runtime.readFile(path))
+		for (const line of text.split("\n")) {
+			const parts = line.split(":")
+			const id = Number(parts[2])
+			if (parts.length > 2 && Number.isFinite(id)) map.set(id, parts[0])
+		}
+	} catch {
+		// No passwd/group file: names cannot be resolved.
+	}
+	return map
+}
+
+function idForName(names, value, kind) {
+	const text = `${value ?? ""}`.trim()
+	if (/^\d+$/.test(text)) return Number(text)
+	for (const [id, name] of names ?? []) if (name === text) return id
+	throw new Error(`chown: unknown ${kind}: ${text}`)
+}
+
+async function resolveOwnerIds(runtime, owner) {
+	const text = `${owner ?? ""}`.trim()
+	if (!text) throw new Error("chown: OWNER must be USER[:GROUP]")
+	const [user, group] = text.split(":")
+	const users = user ? await parseColonIds(runtime, "/etc/passwd") : null
+	const groups = group ? await parseColonIds(runtime, "/etc/group") : null
+	return {
+		uid: user ? idForName(users, user, "user") : -1,
+		gid: group ? idForName(groups, group, "group") : -1,
+	}
+}
+
 function createDesktopFs(options = {}) {
 	const runtime = options.runtime
 	if (!runtime) throw new TypeError("txiki.js runtime is required")
@@ -425,6 +462,44 @@ function createDesktopFs(options = {}) {
 		},
 		copy,
 		move,
+		async hardlink(fromValue, toValue) {
+			const from = pathArg(fromValue)
+			const to = pathArg(toValue)
+			assertMutable(to)
+			if (typeof runtime.link !== "function") throw new Error("hard links are not available in this runtime")
+			await withPathLock(to, async () => {
+				if (await lstatOrNull(to)) throw pathExistsError(to)
+				await runtime.link(from, to)
+			})
+		},
+		async symlink(targetValue, linkValue) {
+			const target = pathArg(targetValue)
+			const link = pathArg(linkValue)
+			assertMutable(link)
+			await withPathLock(link, async () => {
+				if (await lstatOrNull(link)) throw pathExistsError(link)
+				await runtime.symlink(target, link)
+			})
+		},
+		async chmod(pathValue, mode) {
+			const path = pathArg(pathValue)
+			assertMutable(path)
+			await runtime.chmod(path, mode)
+		},
+		async chown(pathValue, owner) {
+			const path = pathArg(pathValue)
+			assertMutable(path)
+			if (typeof runtime.chown !== "function") throw new Error("chown is not available in this runtime")
+			const { uid, gid } = await resolveOwnerIds(runtime, owner)
+			await runtime.chown(path, uid, gid)
+		},
+		async unlink(pathValue) {
+			const path = pathArg(pathValue)
+			assertMutable(path)
+			const stats = await lstatOrNull(path)
+			if (!stats?.isSymbolicLink) throw new Error(`not a symbolic link: ${path}`)
+			await runtime.remove(path)
+		},
 		async mkdir(pathValue) {
 			const path = pathArg(pathValue)
 			assertMutable(path)

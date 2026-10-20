@@ -9,10 +9,8 @@ function makeData(overrides = {}) {
 			active: "left",
 			bookmarkIndex: 0,
 			bookmarkItems: [],
-			bookmarkMode: "list",
 			bookmarkOpen: false,
 			bookmarkQuery: "",
-			bookmarkTarget: null,
 			confirm: null,
 			dispatch: (id, payload) => calls.push({ id, payload }),
 			filtering: null,
@@ -59,10 +57,8 @@ describe("App", () => {
 			activePath: "ap",
 			bookmarkIndex: "bi",
 			bookmarkItems: "bits",
-			bookmarkMode: "bm",
 			bookmarkOpen: "bo",
 			bookmarkQuery: "bq",
-			bookmarkTarget: "bt",
 			commandBarItems: "barItems",
 			confirm: "confirm",
 			dispatch: "dispatch",
@@ -93,7 +89,6 @@ describe("App", () => {
 			appHost: "test-host",
 			appPath: "ap",
 			bookmarkItems: "bits",
-			bookmarkMode: "bm",
 			commandBarItems: "barItems",
 			confirm: "confirm",
 			dispatch: "dispatch",
@@ -273,54 +268,53 @@ describe("App", () => {
 		expect(calls.map((call) => call.id)).toEqual(["list.cursor", "list.cursor", "list.cursor"])
 	})
 
-	test("bookmark events route to select, save and jump", () => {
+	test("bookmark events select by item key and confirm activates", () => {
 		const events = createEvents()
 		const { calls, data } = makeData({
-			bookmarkItems: [{ name: "notes", path: "/home/notes.txt" }],
+			bookmarkItems: [
+				{ key: "+ add current path", add: true, name: "", path: "/home/notes.txt" },
+				{ key: "notes", name: "notes", path: "/home/notes.txt" },
+			],
 			bookmarkOpen: true,
 		})
-		events["bookmark:select"](null, data, { data: "notes" })
+		events["bookmark:select"](null, data, { data: "+ add current path" })
 		expect(calls).toEqual([
 			{ id: "bookmark.setIndex", payload: { index: 0 } },
 			{ id: "bookmark.select", payload: undefined },
 		])
 
-		const naming = makeData({ bookmarkOpen: true, bookmarkMode: "name" })
-		events["bookmark:confirm"](null, naming.data, {})
-		expect(naming.calls).toEqual([{ id: "bookmark.save", payload: undefined }])
-
-		const listing = makeData({
-			bookmarkOpen: true,
-			bookmarkMode: "list",
-			bookmarkItems: [{ name: "notes", path: "/home/notes.txt" }],
-		})
+		const listing = makeData({ bookmarkOpen: true })
 		events["bookmark:confirm"](null, listing.data, {})
 		expect(listing.calls).toEqual([{ id: "bookmark.select", payload: undefined }])
 	})
 
-	test("bookmark mode routes navigation, save and cancel", () => {
+	test("the bookmark panel routes navigation, removal and activation", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
-		// Name mode: Enter publishes confirm, Esc cancels.
-		const naming = makeData({ bookmarkOpen: true, bookmarkMode: "name" })
-		behaviors.keys({ pub: () => {} }, naming.data, { name: "escape" })
-		expect(naming.calls).toEqual([{ id: "bookmark.cancel", payload: undefined }])
-		const namingSelf = { pub: (name) => naming.calls.push({ id: name }) }
-		behaviors.keys(namingSelf, naming.data, { name: "return" })
-		expect(naming.calls).toContainEqual({ id: "bookmark:confirm" })
-
-		// List mode: arrows move, Enter jumps.
-		const listing = makeData({ bookmarkOpen: true, bookmarkMode: "list" })
+		const listing = makeData({ bookmarkOpen: true, bookmarkQuery: "" })
 		behaviors.keys({ pub: () => {} }, listing.data, { name: "down" })
 		behaviors.keys({ pub: () => {} }, listing.data, { name: "up" })
 		behaviors.keys({ pub: () => {} }, listing.data, { name: "backspace" })
+		behaviors.keys({ pub: () => {} }, listing.data, { name: "delete" })
 		expect(listing.calls).toEqual([
 			{ id: "bookmark.down", payload: undefined },
 			{ id: "bookmark.up", payload: undefined },
 			{ id: "bookmark.remove", payload: undefined },
+			{ id: "bookmark.remove", payload: undefined },
 		])
-		// In name mode Backspace remains owned by the text input.
-		behaviors.keys({ pub: () => {} }, naming.data, { name: "backspace" })
-		expect(naming.calls).toEqual([{ id: "bookmark.cancel", payload: undefined }, { id: "bookmark:confirm" }])
+
+		// With text in the filter, Backspace belongs to the input; Delete still
+		// removes, and Enter publishing confirm is left to the input/keys.
+		const editing = makeData({ bookmarkOpen: true, bookmarkQuery: "note" })
+		behaviors.keys({ pub: () => {} }, editing.data, { name: "backspace" })
+		expect(editing.calls).toEqual([])
+		behaviors.keys({ pub: () => {} }, editing.data, { name: "delete" })
+		expect(editing.calls).toEqual([{ id: "bookmark.remove", payload: undefined }])
+		behaviors.keys({ pub: (name) => editing.calls.push({ id: name }) }, editing.data, { name: "return" })
+		expect(editing.calls).toContainEqual({ id: "bookmark:confirm" })
+
+		const closing = makeData({ bookmarkOpen: true })
+		behaviors.keys({ pub: () => {} }, closing.data, { name: "escape" })
+		expect(closing.calls).toEqual([{ id: "bookmark.cancel", payload: undefined }])
 	})
 
 	test("the list overlay owns the keyboard while open", () => {
@@ -438,8 +432,8 @@ describe("App", () => {
 		const { calls, data } = makeData({
 			panelOpen: true,
 			panelItems: [
-				{ type: "group", id: "group:file", name: "File", group: "File" },
-				{ type: "op", id: "op:copy", entryIndex: 0, name: "copy" },
+				{ type: "group", key: "group:file", name: "File", group: "File" },
+				{ type: "op", key: "op:copy", entryIndex: 0, name: "copy" },
 			],
 			panelRows: [
 				{ key: "arg:0", type: "arg" },

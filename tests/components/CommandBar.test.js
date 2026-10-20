@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import {
+	commandBarFit,
 	commandBarMarks,
 	commandBarMarksItem,
-	commandBarRowCount,
 	commandBarStatus,
 	createBehaviors,
 } from "../../src/js/tcmd/components/CommandBar.js"
@@ -65,25 +65,30 @@ describe("CommandBar", () => {
 		expect(commandBarMarksItem({ active: "left", leftMarked: new Set(), rightMarked: new Set() })).toBeNull()
 	})
 
-	test("counts the rows the wrapped entries occupy", () => {
+	test("fits entries on one line, appending an ellipsis when they do not", () => {
 		const items = [
 			{ id: "a", title: "Open", keys: "Enter" },
 			{ id: "b", title: "Parent", keys: "←" },
 			{ id: "c", title: "Bookmark", keys: "b" },
 		]
-		// Everything fits on one row when the width allows it.
-		expect(commandBarRowCount(items, 80)).toBe(1)
+		// Everything fits when the width allows it: no marker.
+		expect(commandBarFit(items, 80)).toEqual(items)
 		// "[Open ⏎] " is 9 columns, "[Parent ←] " 11, "[Bookmark b] " 13:
-		// a 30-column bar holds the first two only.
-		expect(commandBarRowCount(items, 30)).toBe(2)
-		// At 22 columns Open and Parent still share the first row.
-		expect(commandBarRowCount(items, 22)).toBe(2)
-		// At 20 Open and Parent exactly fill the row; Bookmark wraps.
-		expect(commandBarRowCount(items, 20)).toBe(2)
-		// At 12 every entry needs its own row.
-		expect(commandBarRowCount(items, 12)).toBe(3)
-		// Unknown width assumes a single row.
-		expect(commandBarRowCount(items, 0)).toBe(1)
-		expect(commandBarRowCount(null, 40)).toBe(1)
+		// 33 columns hold all three exactly.
+		expect(commandBarFit(items, 33)).toEqual(items)
+		// 32 columns still hold Open and Parent, with room for the marker.
+		expect(commandBarFit(items, 32)).toEqual([
+			...items.slice(0, 2),
+			{ id: null, title: "…", dim: true },
+		])
+		// At 21 columns the marker's two columns push Parent off the line.
+		expect(commandBarFit(items, 21)).toEqual([items[0], { id: null, title: "…", dim: true }])
+		// At 12 columns the first entry still fits, so only the marker remains.
+		expect(commandBarFit(items, 12)).toEqual([items[0], { id: null, title: "…", dim: true }])
+		// Too narrow for even the first entry: the marker alone.
+		expect(commandBarFit(items, 8)).toEqual([{ id: null, title: "…", dim: true }])
+		// Unknown width keeps everything for the renderer to clip.
+		expect(commandBarFit(items, 0)).toEqual(items)
+		expect(commandBarFit(null, 40)).toEqual([])
 	})
 })

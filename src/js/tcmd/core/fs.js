@@ -21,6 +21,15 @@
 // - `copy(from, to)`, `move(from, to)`: Promise<void> - files or directories;
 //   copy can merge directories but never replaces an existing entry, and move
 //   requires an absent destination
+// - `hardlink(from, to)`: Promise<void> - create a hard link, refusing an
+//   existing destination
+// - `symlink(target, link)`: Promise<void> - create a symbolic link, refusing
+//   an existing destination
+// - `chmod(path, mode)`: Promise<void> - set the permission bits (numeric)
+// - `chown(path, owner)`: Promise<void> - set the owner from `USER[:GROUP]`
+//   (names or numeric ids)
+// - `unlink(path)`: Promise<void> - remove one symbolic link, leaving its
+//   target (and regular files) alone
 // - `mkdir(path)`: Promise<void> - create a directory (parents included)
 // - `trash(paths)`: Promise<TrashedEntry[]> - move to the freedesktop trash,
 //   returning `{ from, to, name }` per path (`to` is the trash copy)
@@ -100,6 +109,29 @@ async function parseColonFile(path, nameColumn) {
 		// No passwd/group file: numeric ids only.
 	}
 	return map
+}
+
+// Function: idForName
+// Resolves a user or group name to its numeric id (numeric ids pass through).
+function idForName(names, value, kind) {
+	const text = `${value ?? ""}`.trim()
+	if (/^\d+$/.test(text)) return Number(text)
+	for (const [id, name] of names ?? []) if (name === text) return id
+	throw new Error(`chown: unknown ${kind}: ${text}`)
+}
+
+// Function: resolveOwnerIds
+// Splits `USER[:GROUP]` into `{ uid, gid }`; an omitted part is -1, which
+// `chown` leaves unchanged.
+async function resolveOwnerIds(owner) {
+	const text = `${owner ?? ""}`.trim()
+	if (!text) throw new Error("chown: OWNER must be USER[:GROUP]")
+	const [user, group] = text.split(":")
+	await loadOwners()
+	return {
+		uid: user ? idForName(passwdNames, user, "user") : -1,
+		gid: group ? idForName(groupNames, group, "group") : -1,
+	}
 }
 
 // Function: toEntry
@@ -231,6 +263,30 @@ function createNodeFs() {
 		},
 		async move(from, to) {
 			await moveSafe(from, to)
+		},
+		async hardlink(from, to) {
+			await withPathLock(to, async () => {
+				if (await pathExists(to)) throw pathExistsError(to)
+				await fs.link(from, to)
+			})
+		},
+		async symlink(target, link) {
+			await withPathLock(link, async () => {
+				if (await pathExists(link)) throw pathExistsError(link)
+				await fs.symlink(target, link)
+			})
+		},
+		async chmod(path, mode) {
+			await fs.chmod(path, mode)
+		},
+		async chown(path, owner) {
+			const { uid, gid } = await resolveOwnerIds(owner)
+			await fs.chown(path, uid, gid)
+		},
+		async unlink(path) {
+			const stats = await fs.lstat(path)
+			if (!stats.isSymbolicLink()) throw new Error(`not a symbolic link: ${path}`)
+			await fs.unlink(path)
 		},
 		async mkdir(path) {
 			await fs.mkdir(path, { recursive: true })

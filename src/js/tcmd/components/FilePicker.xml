@@ -1,0 +1,13 @@
+<box when="open" flexDirection="column" flexGrow="1" flexShrink="1" minHeight="0" paddingLeft="1" paddingRight="1" paddingBottom="1">
+	<box flexDirection="column" flexGrow="1" flexShrink="1" minHeight="0" border borderStyle="single" out:borderColor="borderFg">
+		<box flexDirection="row" height="1" paddingLeft="1" paddingRight="1" overflow="hidden">
+			<text out="pathSign" out:fg="pathSignFg" wrapMode="none"></text>
+			<input ref="path" inout="path" flexGrow="1" minWidth="0" height="1" out:focused="pathFocused"></input>
+		</box>
+		<box height="1" out:border="rule" out:borderColor="ruleFg"></box>
+		<scrollbox ref="list" flexGrow="1" flexShrink="1" minHeight="0" out:scrollTop="scrollTop">
+			<box out="rows" flexDirection="column"></box>
+		</scrollbox>
+		<text when="empty" out="emptyText" out:fg="emptyFg" paddingLeft="1" wrapMode="none"></text>
+	</box>
+</box>

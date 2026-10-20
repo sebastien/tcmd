@@ -43,7 +43,7 @@ describe("web effects", () => {
 		expect(event.defaultPrevented).toBe(false)
 	})
 
-	test("Backspace in the bookmark picker removes instead of editing the query", async () => {
+	test("Backspace in the bookmark panel removes only with an empty filter", async () => {
 		const { Window } = await import("happy-dom")
 		const window = new Window()
 		const root = window.document.createElement("div")
@@ -54,7 +54,7 @@ describe("web effects", () => {
 			confirm: cell(null),
 			panelOpen: cell(false),
 			bookmarkOpen: cell(true),
-			bookmarkMode: cell("list"),
+			bookmarkQuery: cell(""),
 			filtering: cell(null),
 		}
 		const effects = connectEffects(session, root, {
@@ -63,14 +63,21 @@ describe("web effects", () => {
 			viewer: cell(false),
 		})
 		try {
+			// An empty filter: Backspace removes the selected bookmark.
 			const remove = new window.KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
 			input.dispatchEvent(remove)
 			expect(remove.defaultPrevented).toBe(true)
 
-			session.bookmarkMode.set("name")
+			// Text in the filter: Backspace edits the query.
+			session.bookmarkQuery.set("note")
 			const edit = new window.KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
 			input.dispatchEvent(edit)
 			expect(edit.defaultPrevented).toBe(false)
+
+			// Delete removes whatever the filter contains.
+			const del = new window.KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true })
+			input.dispatchEvent(del)
+			expect(del.defaultPrevented).toBe(true)
 		} finally {
 			effects.dispose()
 			window.close()

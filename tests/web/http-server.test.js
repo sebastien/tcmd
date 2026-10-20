@@ -2,9 +2,9 @@
 // filesystem endpoints, exercised over real HTTP on an ephemeral port.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises"
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { basename, join } from "node:path"
+import { basename, dirname, join, relative } from "node:path"
 import { createNodeFs } from "../../src/js/tcmd/core/fs.js"
 import { createHttpFs } from "../../src/js/tcmd/web/http.js"
 import { createWebServer } from "../../src/js/tcmd/web/server.js"
@@ -101,6 +101,32 @@ describe("web server", () => {
 		expect((await api("mkdir", { method: "POST", body: { path: dir } })).status).toBe(200)
 		expect((await api("stat", { params: { path: dir } })).json()).resolves.toMatchObject({ isDir: true })
 		expect((await api("readDir", { params: { path: join(root, "nope") } })).status).toBe(404)
+	})
+
+	test("creates links, changes modes and unlinks links through the API", async () => {
+		const notes = join(root, "home", "tester", "notes.txt")
+		const hard = join(root, "home", "tester", "hard.txt")
+		const symbolic = join(root, "home", "tester", "symbolic.txt")
+		expect((await api("hardlink", { method: "POST", body: { from: notes, to: hard } })).status).toBe(200)
+		expect(await readFile(hard, "utf8")).toBe("hello\nworld\n")
+		expect((await api("symlink", { method: "POST", body: { target: notes, link: symbolic } })).status).toBe(200)
+		expect(await readFile(symbolic, "utf8")).toBe("hello\nworld\n")
+		// A relative target resolves against the link's directory and is kept
+		// relative; a target escaping the configured root is refused.
+		const relativeLink = join(root, "home", "tester", "relative.txt")
+		expect((await api("symlink", { method: "POST", body: { target: "notes.txt", link: relativeLink } })).status).toBe(200)
+		expect(await readFile(relativeLink, "utf8")).toBe("hello\nworld\n")
+		const escapeTarget = relative(dirname(relativeLink), join(root, "..", `${basename(root)}-symlink-target.txt`))
+		expect((await api("symlink", { method: "POST", body: { target: escapeTarget, link: join(root, "escape-relative.txt") } })).status).toBe(403)
+
+		expect((await api("chmod", { method: "POST", body: { path: notes, mode: 0o600 } })).status).toBe(200)
+		expect((await lstat(notes)).mode & 0o777).toBe(0o600)
+
+		// Unlink refuses a regular file and removes only the link.
+		expect((await api("unlink", { method: "POST", body: { path: notes } })).status).toBe(500)
+		expect(await readFile(notes, "utf8")).toBe("hello\nworld\n")
+		expect((await api("unlink", { method: "POST", body: { path: symbolic } })).status).toBe(200)
+		await expect(readFile(symbolic, "utf8")).rejects.toThrow()
 	})
 
 	test("lists the trash and restores an entry", async () => {

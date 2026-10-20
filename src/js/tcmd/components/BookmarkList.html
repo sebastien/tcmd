@@ -3,11 +3,10 @@
 		<h2 out="title"></h2>
 		<header>
 			<span class="bookmark-sign" out="sign"></span>
-			<input class="bookmark-query" type="text" inout="query" aria-label="Bookmark name or query" on:enter="confirm">
+			<input class="bookmark-query" type="text" inout="query" aria-label="Filter bookmarks" on:enter="confirm">
 		</header>
-		<p class="bookmark-target" when="inputVisible" out="target"></p>
 		<p class="bookmark-empty" when="emptyList" out="empty"></p>
-		<ul class="bookmark-rows" when="listVisible" out="rows"></ul>
+		<ul class="bookmark-rows" out="rows"></ul>
 		<footer out="footer"></footer>
 	</div>
 </div>

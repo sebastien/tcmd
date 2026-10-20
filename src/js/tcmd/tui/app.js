@@ -106,7 +106,7 @@ function createAppComponent(session, options = {}) {
 
 	const baseKeys = appBehaviors({ quit }).keys
 	const frame = createFrameBehaviors({ theme: tuiTheme })
-	const appSubs = appEvents({ quit })
+	const appSubs = appEvents()
 
 	// The active pane's border and head rule take the view mode's own accent:
 	// the Tiny blue in explorer, the gold accent in commander. An inactive
@@ -119,16 +119,20 @@ function createAppComponent(session, options = {}) {
 
 	return ui
 		.component("App")
-		.init(() => ({
-			...appInit(session)(),
-			uiSize: size,
-			helpOpen: help,
-			viewerOpen: viewer,
-			leftSegments: leftCrumbs,
-			parentSegments: parentCrumbs,
-			rightSegments: rightCrumbs,
-			previewSegments: previewCrumbs,
-		}))
+		.init((self) => {
+			// The panel's Quit command reaches the renderer through this hook.
+			session.quit = () => quit(self)
+			return {
+				...appInit(session)(),
+				uiSize: size,
+				helpOpen: help,
+				viewerOpen: viewer,
+				leftSegments: leftCrumbs,
+				parentSegments: parentCrumbs,
+				rightSegments: rightCrumbs,
+				previewSegments: previewCrumbs,
+			}
+		})
 		.does({
 			...frame,
 			keys: (self, data, event) => {

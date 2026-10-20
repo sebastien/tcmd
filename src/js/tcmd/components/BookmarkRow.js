@@ -4,11 +4,12 @@
 // Created: 2026-10-09
 
 // Module: tcmd/components/BookmarkRow
-// One row of the bookmark picker. Reads `{ item: { name, path }, index,
-// selected }`, the same bag shape in both engines. Selection is snapshotted by
-// the row builder into a plain `selectedRow` boolean and read through the
-// shared `isSelected` predicate, with the `selected` cell as fallback for
-// hand-built bags.
+// One row of the bookmarks panel. Reads `{ item: { name, path, add? }, index,
+// selected }`, the same bag shape in both engines. The synthetic add row reads
+// as an action; stored rows read as `name/` for directories. Selection is
+// snapshotted by the row builder into a plain `selectedRow` boolean and read
+// through the shared `isSelected` predicate, with the `selected` cell as
+// fallback for hand-built bags.
 //
 // Environment: `accentFg`, `textFg`, `textSecondaryFg`, `selectionBg` (TUI row
 // background), `selectedClass` (web), `icons` (show Nerd Font icons).
@@ -30,9 +31,12 @@ function createBehaviors(env) {
 		rowIconHref: (_self, data) => (env.lucideIcons ? `#lucide-${lucideIconFor(data.item)}` : ""),
 		rowIconFg: () => env.textSecondaryFg,
 		rowMarker: (_self, data) => (isSelected(data) ? ">" : " "),
-		// A directory bookmark reads as `name/`, mirroring the listing.
+		// The add row names its action; a directory bookmark reads as
+		// `name/`, mirroring the listing.
 		rowName: (_self, data) =>
-			`${data.item?.name ?? ""}${data.item?.isDir === true ? "/" : ""}`,
+			data.item?.add
+				? data.item.name ?? ""
+				: `${data.item?.name ?? ""}${data.item?.isDir === true ? "/" : ""}`,
 		rowPath: (_self, data) => `${data.item?.path ?? ""}`,
 		rowPathFg: () => env.textSecondaryFg,
 	}

@@ -129,6 +129,7 @@ function createMockFs(tree) {
 	async function stat(path) {
 		const normalized = normalize(path)
 		if (dirs.has(normalized)) {
+			const directory = findEntry(normalized)
 			return {
 				isDir: true,
 				isSymlink: false,
@@ -136,10 +137,10 @@ function createMockFs(tree) {
 				size: 0,
 				mtimeMs: 0,
 				ctimeMs: 0,
-				mode: 0o040755,
-				uid: null,
-				gid: null,
-				owner: "",
+				mode: directory?.mode ?? 0o040755,
+				uid: directory?.uid ?? null,
+				gid: directory?.gid ?? null,
+				owner: directory?.owner ?? "",
 			}
 		}
 		const entry = findEntry(normalized)
@@ -258,7 +259,7 @@ function createMockFs(tree) {
 					size: resolved.isDir ? 0 : resolved.size,
 					mtimeMs: entry.mtimeMs ?? 0,
 					ctimeMs: entry.ctimeMs ?? 0,
-					mode: resolved.isDir ? 0o040755 : entry.mode ?? 0o100644,
+					mode: entry.mode ?? (resolved.isDir ? 0o040755 : 0o100644),
 					uid: entry.uid ?? null,
 					gid: entry.gid ?? null,
 					owner: entry.owner ?? "",
@@ -300,6 +301,48 @@ function createMockFs(tree) {
 			}
 			await copy(from, to)
 			await eraseOne(from)
+		},
+		async hardlink(from, to) {
+			if (hasPath(to)) {
+				const error = new Error(`destination already exists: ${to}`)
+				error.code = "EEXIST"
+				throw error
+			}
+			const entry = findEntry(from)
+			if (!entry) throw new Error(`ENOENT: ${from}`)
+			upsert(to, { ...cloneEntry(entry), name: basename(to) })
+		},
+		async symlink(target, link) {
+			if (hasPath(link)) {
+				const error = new Error(`destination already exists: ${link}`)
+				error.code = "EEXIST"
+				throw error
+			}
+			upsert(link, { name: basename(link), isSymlink: true, target: `${target}` })
+		},
+		async chmod(path, mode) {
+			const entry = findEntry(path)
+			if (!entry && !dirs.has(path)) throw new Error(`ENOENT: ${path}`)
+			const target = entry ?? { name: basename(path), isDir: true }
+			target.mode = mode
+			if (!entry) upsert(path, target)
+		},
+		async chown(path, owner) {
+			const entry = findEntry(path)
+			if (!entry && !dirs.has(path)) throw new Error(`ENOENT: ${path}`)
+			const [user, group] = `${owner}`.split(":")
+			const target = entry ?? { name: basename(path), isDir: true }
+			target.owner = `${owner}`
+			if (/^\d+$/.test(user ?? "")) target.uid = Number(user)
+			if (/^\d+$/.test(group ?? "")) target.gid = Number(group)
+			if (!entry) upsert(path, target)
+		},
+		async unlink(path) {
+			const normalized = normalize(path)
+			const entry = findEntry(normalized)
+			if (!entry?.isSymlink) throw new Error(`not a symbolic link: ${path}`)
+			const parentDir = dirs.get(parent(normalized) ?? "/")
+			parentDir.splice(parentDir.indexOf(entry), 1)
 		},
 		mkdir: mkdirp,
 		trash: async (paths) => {

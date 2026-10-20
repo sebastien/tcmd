@@ -38,6 +38,11 @@ describe("keymap", () => {
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "m" })).toBeNull()
 	})
 
+	test("b opens the bookmarks panel and g is unbound", () => {
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "b" })).toBe("bookmark.open")
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "g" })).toBeNull()
+	})
+
 	test("t toggles view modes, shift-t opens the trash", () => {
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "t" })).toBe("view.toggleMode")
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "t", shift: true })).toBe("trash.open")

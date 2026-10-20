@@ -61,6 +61,18 @@ function createWebServer({
 		return resolved
 	}
 
+	// Function: confineSymlinkTarget
+	// Validates a symlink target without rewriting it: an absolute target is
+	// resolved as-is, a relative one against the link's directory, and either
+	// must stay inside the configured root. The original target text is passed
+	// to `fs.symlink`, so relative links keep working if the tree moves.
+	function confineSymlinkTarget(target, link) {
+		if (typeof target !== "string" || !target) throw httpError(400, "missing target")
+		const resolved = isAbsolute(target) ? resolvePath(target) : resolvePath(dirname(link), target)
+		if (!isWithin(base, resolved)) throw httpError(403, `target outside ${base}`)
+		return target
+	}
+
 	// Function: checkSymlinks
 	// Resolves each existing symlink component and ensures its target stays in
 	// root. Dangling links are checked too, so a later write cannot follow one
@@ -133,6 +145,31 @@ function createWebServer({
 			const body = await jsonBody(request)
 			const [from, to] = await Promise.all([confine(body.from), confine(body.to)])
 			return fs.move(from, to)
+		},
+		"POST /api/hardlink": async (request) => {
+			const body = await jsonBody(request)
+			const [from, to] = await Promise.all([confine(body.from), confine(body.to)])
+			return fs.hardlink(from, to)
+		},
+		"POST /api/symlink": async (request) => {
+			const body = await jsonBody(request)
+			const link = await confine(body.link)
+			return fs.symlink(confineSymlinkTarget(body.target, link), link)
+		},
+		"POST /api/chmod": async (request) => {
+			const body = await jsonBody(request)
+			const mode = Number(body.mode)
+			if (!Number.isInteger(mode) || mode < 0 || mode > 0o7777) throw httpError(400, "invalid mode")
+			return fs.chmod(await confine(body.path), mode)
+		},
+		"POST /api/chown": async (request) => {
+			const body = await jsonBody(request)
+			if (typeof body.owner !== "string" || !body.owner) throw httpError(400, "missing owner")
+			return fs.chown(await confine(body.path), body.owner)
+		},
+		"POST /api/unlink": async (request) => {
+			const body = await jsonBody(request)
+			return fs.unlink(await confine(body.path))
 		},
 		"POST /api/mkdir": async (request) => {
 			const body = await jsonBody(request)

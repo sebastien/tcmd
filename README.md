@@ -15,39 +15,55 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   the two-pane commander (the left is the source, the right the destination),
   with `t` toggling between the two views. Clicking any column, preview
   included, gives it the focus.
-- Named bookmarks: `b` records the cursor entry (or the pane directory) under
-  a name defaulting to its basename, remembering whether it is a file or a
-  directory; `g` opens a fzf-style picker over bookmark names and paths. A
-  directory bookmark opens to show its contents, a file bookmark is selected
-  and previewed in its directory.
+- Named bookmarks: `b` opens one bookmarks panel. Type to filter the stored
+  bookmarks by name or path; when the filter is empty and the cursor entry (or
+  the pane directory) is not bookmarked yet, a first row adds it under a
+  basename-derived name. `Enter` opens the selected bookmark, `⌫`/`Delete`
+  removes it. A directory bookmark opens to show its contents, a file bookmark
+  is selected and previewed in its directory.
 - Undo/redo (`⌃Z` / `⌃⇧Z` or `⌃Y`) over recorded filesystem changes (mkdir,
   copies to new destinations, move, rename, trashed delete), with a history list
   (`u`); a delete reports the trash directory it used and can be undone or
   restored from the trash browser
   (`⇧T`), which lists trashed entries by their original path. A double click on
   a row opens it like `Enter`.
-- Operations over the current panes: copy, move, mkdir, delete/erase,
-  stat, touch, selection buffers, edit/view/open and shell commands; `abspath`
-  and `realpath` show copy-pasteable absolute paths, with the latter following symlinks
+- Operations over the current panes: copy, move, mkdir/new, hardlink/symlink,
+  chmod/chown, delete/erase/unlink, stat, touch, selection buffers,
+  edit/view/open and shell commands; `abspath` and `realpath` show
+  copy-pasteable absolute paths and copy them to the clipboard, with the latter
+  following symlinks. `unlink` removes links only, never their targets.
 - Command panel (`:`), the one entry point, a two-pane palette: the left pane
-  filters (`:xxx`) over CLI operations grouped by purpose: **Command** and
-  **File**, **Edit** (amber), and **Delete** (red). The Command group also has
-  the workspace-view toggle; File's `view` previews the selected path. Bold section
+  filters (`:xxx`) over CLI operations grouped by purpose: **Command**,
+  **File**, **Create**, **Edit** (amber), and **Delete** (red). The Command group
+  also has the workspace-view toggle and Quit; File's `view` previews the selected path;
+  amber Edit also holds `copy` and the metadata changes. Bold section
   titles head indented command names, alphabetized within each category. The right
   pane lists the selected command's arguments under its name — editable values
-  use filled fields, while read-only values are plain and muted; selections use
+  use filled fields, while read-only values are plain and muted; `new`/`mkdir`
+  show the current `PATH` above a `NAME`, and `chmod`/`chown` list `PATH`
+  first. Selections use
   a checkbox (multiple) / radio (single)
   list of the selected paths wrapped in its own border, with a lone path shown
-  read-only. `[Run]` follows the arguments after a blank line, aligned right in
-  the command category's color; a failed run shows its error and `[Retry]`, while a
+  read-only. `chmod`'s `MODE` is a compact u/g/o grid of clickable R/W/X cells
+  (arrow keys move between cells, Space toggles), seeded from the selected
+  file's current mode. Labels and values sit one space in from the pane border
+  (` PATH`, ` [value]`), and `[Run]` follows the last field after a
+  blank line, aligned left in the command category's color. Amber (Edit) and
+  red (Delete) actions take two steps: the first Run turns the action into
+  `[Confirm]` and prints the command below it in the risk colour, the second
+  executes. A failed run shows `[Retry]` with a framed error block below it,
+  while a
   successful result briefly replaces the command bar at the bottom. A selection
   argument draws from the *focused* column, so in the explorer focusing the parent mirror
   selects the directory under its cursor. `Tab` cycles the filter, arguments and
   Run button; `Enter` runs a complete command or jumps to the next missing
-  argument. `!` lands straight on the shell
+  argument, and a `[Close Esc]` close button sits in the dialog's top border,
+  upper right. `!` lands straight on the shell
   command. A destination/path argument browses the filesystem in a file picker
-  (`⌃O`): explorer mode has no destination pane, so a move or copy there asks
-  where to. A `replace` operation replaces a literal `FIND` with `REPLACE`
+  (`⌃O`): its path is editable as a string, the matching entries sit below and
+  render like a file panel (icons, aligned sizes, scrollbar), with `..` pinned
+  at the top. Explorer mode has no destination pane, so a move or copy there
+  asks where to. A `replace` operation replaces a literal `FIND` with `REPLACE`
   across the selection — one file replaces its whole name — previewing each
   `old → new` mapping before it runs. Exact `rename FROM TO PATH` renames one named
   child inside `PATH`.
@@ -95,8 +111,8 @@ anything that cannot be edited — an image, media, a binary, or any file on a
 host with no editor — opens the fullscreen viewer), `←/Bksp` parent (the cursor
 lands on the directory you left), `Esc`/`⇧Esc` history back/forward, `Tab`/`⇧Tab` switch panes
 (`⇧Tab` goes back), `t` toggle the commander/explorer view, `Space` mark, `b`
-bookmark the cursor entry (or the pane
-directory) under a basename-defaulted name, `g` jump to a bookmark, `:` open the
+open the bookmarks panel (filter, add the current path, `Enter` open,
+`⌫`/`Del` remove), `:` open the
 command panel (the one entry point for CLI operations, grouped by risk with
 editable arguments, an explicit Run button and the inline file picker on `⌃O`),
 `v` preview (fullscreen viewer when
@@ -131,10 +147,11 @@ context-aware inspector sits
 on the right when the terminal is at least 100 columns wide, and becomes a
 fullscreen viewer below that; `⇧V` expands it over the whole pane row —
 parent and current included — and brings the previous layout back on the next
-press. The status bar lists every binding as a bracket shorthand
-(`[Open ⏎]`, `[Help ?]`) wrapping over as many rows as the width demands — the
-marked count trails the list, and a notice or error swaps the keys for a
-one-line status. Below 64×16
+press. The status bar keeps its fixed bracket shorthands on one line
+(`[Commands :]`, `[Mark Spc]`, `[Filter /]`, `[Switch ⇥]`, `[Bookmarks b]`,
+`[Toggle Mode t]`, `[Help ?]`) and elides entries behind `…` when the width
+runs out — the marked count trails the list, and a notice or error swaps the
+keys for a one-line status. Below 64×16
 the app shows a resize hint instead of the workspace.
 
 ### View modes
@@ -393,7 +410,8 @@ tests run the shared logic through select.js on a happy-dom document.
 - [x] Grouped command panel (`:`): white / amber / red risk sections, editable
       arguments, an explicit Run action and an inline picker; `!` lands on shell
 - [x] Pane fuzzy filtering (`/` to filter, `Enter` to keep, `Esc` to clear)
-- [x] Named bookmarks (`b` records, `g` jumps, persisted to a JSON file)
+- [x] Named bookmarks (`b` opens the panel to add, filter, open or remove them,
+      persisted to a JSON file)
 - [ ] Quick find, grep
 - [x] Image previews (terminal graphics protocol) and tree-sitter source
       highlighting in the inspector

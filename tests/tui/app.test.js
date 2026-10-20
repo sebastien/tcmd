@@ -31,8 +31,8 @@ describe("tui app", () => {
 			expect(frame).toContain("notes.txt")
 			expect(frame).toContain("home")
 			expect(frame).toContain("etc")
-			// Command bar key hints from the command registry.
-			expect(frame).toContain("[Open ⏎]")
+			// Command bar key hints from the fixed bar set.
+			expect(frame).toContain("[Commands :]")
 			expect(frame).toContain("[Switch ⇥]")
 			expect(session.panes.left.entries.value.length).toBe(3)
 		} finally {
@@ -178,8 +178,14 @@ describe("tui app", () => {
 
 			await setup.mockInput.typeText("touch")
 			await settle(setup)
-			expect(session.panelItems.value.map((item) => item.id)).toEqual(["group:edit", "op:touch"])
+			expect(session.panelItems.value.map((item) => item.key)).toEqual(["group:edit", "op:touch"])
 
+			// touch is amber: the first Enter arms Confirm, the second runs.
+			setup.mockInput.pressKey("\r")
+			await settle(setup)
+			expect(session.panelOpen.value).toBe(true)
+			expect(session.panelArmed.value).toBe(true)
+			expect(setup.captureCharFrame()).toContain("[Confirm]")
 			setup.mockInput.pressKey("\r")
 			await settle(setup)
 			await new Promise((resolve) => setTimeout(resolve, 20))
@@ -246,7 +252,7 @@ describe("tui app", () => {
 		}
 	})
 
-	test("the header shows the pane path and b/g manage bookmarks", async () => {
+	test("the header shows the pane path and b opens the bookmarks panel", async () => {
 		const { setup, session } = await makeSetup()
 		try {
 			// The pane header (the path breadcrumb) sits below the pane's top
@@ -257,32 +263,40 @@ describe("tui app", () => {
 			expect(first).not.toContain("DST")
 			expect(first).not.toContain("+")
 
-			// b records the cursor entry: the name prompt opens, pre-filled
-			// with the basename.
+			// b opens the panel on the cursor entry, offering to add it.
 			setup.mockInput.pressArrow("down")
 			await settle(setup)
 			setup.mockInput.pressKey("b")
 			await settle(setup)
 			expect(session.bookmarkOpen.value).toBe(true)
-			expect(session.bookmarkMode.value).toBe("name")
-			expect(session.bookmarkQuery.value).toBe("notes.txt")
+			expect(session.bookmarkQuery.value).toBe("")
 			expect(session.bookmarkTarget.value).toEqual({ path: "/home/notes.txt", isDir: false })
+			expect(session.bookmarkItems.value[0].add).toBe(true)
 			setup.mockInput.pressKey("\r")
 			await new Promise((resolve) => setTimeout(resolve, 0))
 			await setup.renderOnce()
 			expect(session.bookmarks.entries.value["notes.txt"].path).toBe("/home/notes.txt")
 			expect(session.bookmarks.entries.value["notes.txt"].isDir).toBe(false)
+			expect(session.bookmarkOpen.value).toBe(false)
 
-			// g opens the fuzzy picker and jumping selects+previews the file.
-			setup.mockInput.pressKey("g")
+			// Reopening lists the stored bookmark; Enter selects and previews it.
+			setup.mockInput.pressKey("b")
 			await settle(setup)
-			expect(session.bookmarkMode.value).toBe("list")
 			expect(session.bookmarkItems.value.map((row) => row.name)).toContain("notes.txt")
+			expect(session.bookmarkItems.value.some((row) => row.add)).toBe(false)
 			setup.mockInput.pressKey("\r")
 			await new Promise((resolve) => setTimeout(resolve, 0))
 			await setup.renderOnce()
 			expect(session.bookmarkOpen.value).toBe(false)
 			expect(session.panes.left.currentEntry().path).toBe("/home/notes.txt")
+
+			// With an empty filter, Backspace removes the selected bookmark.
+			setup.mockInput.pressKey("b")
+			await settle(setup)
+			setup.mockInput.pressKey("\u007f")
+			await new Promise((resolve) => setTimeout(resolve, 0))
+			await setup.renderOnce()
+			expect(session.bookmarks.entries.value).toEqual({})
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -448,7 +462,7 @@ describe("tui app", () => {
 			const frame = setup.captureCharFrame()
 			// The identity and command bars stay; the pane row is the preview.
 			expect(frame.split("\n")[0]).toContain("TinyCmd")
-			expect(frame).toContain("[Open ⏎]")
+			expect(frame).toContain("[Commands :]")
 			expect(frame).toContain("notes.txt")
 			// The destination pane's listing is covered by the preview.
 			expect(frame).not.toContain("etc")

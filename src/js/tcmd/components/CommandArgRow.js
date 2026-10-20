@@ -6,13 +6,15 @@
 // Module: tcmd/components/CommandArgRow
 // CommandArgRow: one row shared by the command panel's two panes. The left pane
 // passes `{ type: "op" }` name-only rows (`risk` tints caution/destructive
-// categories) and `{ type: "group" }` headers (Command / File / Edit / Delete). The
-// right pane passes `{ type: "arg" | "item" | "frame" | "entry" | "parent" | "run" }`
-// rows: an argument header stacks its label over its value — a bracketed field
-// with a distinct background for textual arguments, a summary otherwise; an
-// item shows a `[x]`/`[ ]` (or radio) marker with its basename and parent; a
-// `frame` draws a selection list's border; and `parent` is the picker's `..`
-// navigation row. Reads the row bag `{ item, index, row, cursor, focus, value }`
+// categories) and `{ type: "group" }` headers (Command / File / Create / Edit / Delete). The
+// right pane passes `{ type: "arg" | "item" | "perm" | "frame" | "entry" |
+// "parent" | "run" }` rows: an argument header stacks its label over its value
+// — a bracketed field with a distinct background for textual arguments, a
+// summary otherwise; an item shows a `[x]`/`[ ]` (or radio) marker with its
+// basename and parent; `perm` is a `u/g/o` permission class with three r/w/x
+// cells; a `frame` draws a selection list's border; and `parent` is the
+// picker's `..` navigation row. Reads the row bag
+// `{ item, index, row, cursor, focus, permBit, value }`
 // built by `rows.js`.
 //
 // Environment: `accentFg` (focused row), `textFg`, `textSecondaryFg` (summary),
@@ -23,6 +25,7 @@
 // (web), `icons` (namespace marker).
 
 import { unwrap } from "select/state/cells"
+import { PERMISSION_BITS } from "../core/permissions.js"
 
 // Function: riskFg
 // The colour a row's category maps to: red for Delete, amber for Edit, null
@@ -47,8 +50,9 @@ function groupFg(group, env) {
 function rowName(row) {
 	if (!row) return ""
 	if (row.type === "group") return row.name ?? ""
-	if (row.type === "run") return "[Run]"
+	if (row.type === "run") return row.error ? "[Retry]" : row.armed ? "[Confirm]" : "[Run]"
 	if (row.type === "item") return `${row.marker ?? "[ ]"} ${row.name ?? ""}`
+	if (row.type === "perm") return row.label ?? ""
 	if (row.type === "parent") return ".."
 	if (row.type === "entry") return `${row.name ?? ""}${row.isDir ? "/" : ""}`
 	return row.name ?? ""
@@ -90,6 +94,11 @@ function createBehaviors(env) {
 	const focused = (data) => isFocused(data.row, data.index, unwrap(data.cursor), unwrap(data.focus))
 	const type = (data) => data.row?.type
 	const isList = (data) => type(data) === "item" || type(data) === "frame"
+	// A permission row has three bit cells; the bit cursor marks the one Space
+	// toggles, and a click toggles the cell it lands on.
+	const bits = (data) => data.row?.bits ?? []
+	const bitAt = (data, index) => bits(data)[index]
+	const bitFocused = (data, index) => focused(data) && (unwrap(data.permBit) ?? 0) === index
 	// The web classes that draw a selection's list box: the item rows carry the
 	// sides, the frame rows the top/bottom.
 	const listClass = (data) => {
@@ -100,13 +109,16 @@ function createBehaviors(env) {
 	// A textual argument header edits in place while it owns the cursor: its
 	// summary yields to a value input bound to the panel's edit cell.
 	const editing = (_self, data) => focused(data) && type(data) === "arg" && data.row?.textual === true
-	return {
+	const behaviors = {
 		editing,
 		// --- shared row content ---
 		marker: (_self, data) => (focused(data) ? ">" : " "),
 		markerFg: () => env.accentFg,
 		// An argument's label sits on its own line, above the value.
 		name: (_self, data) => rowName(data.row),
+		// A permission row: its class label and three bit cells.
+		permClass: (_self, data) => data.row?.label ?? data.row?.classId ?? "",
+		isPerm: (_self, data) => type(data) === "perm",
 		rowBg: (_self, data) => (focused(data) ? env.selectionBg : undefined),
 		rowClass: (_self, data) =>
 			[focused(data) ? env.focusedClass : null, listClass(data)].filter(Boolean).join(" ") || null,
@@ -142,8 +154,9 @@ function createBehaviors(env) {
 		// line tall.
 		rowHeight: (_self, data) => (type(data) === "arg" ? 2 : 1),
 		runMarginTop: (_self, data) => (type(data) === "run" ? 1 : 0),
-		runLabel: (_self, data) => (data?.row?.error ? "[Retry]" : "[Run]"),
-		runAriaLabel: (_self, data) => (data?.row?.error ? "Retry command" : "Run command"),
+		runLabel: (_self, data) => (data?.row?.error ? "[Retry]" : data?.row?.armed ? "[Confirm]" : "[Run]"),
+		runAriaLabel: (_self, data) =>
+			data?.row?.error ? "Retry command" : data?.row?.armed ? "Confirm command" : "Run command",
 		runError: (_self, data) => data.row?.error ?? "",
 		runErrorFg: () => env.errorFg,
 		runFg: (_self, data) => riskFg(data.row, env) ?? env.textFg,
@@ -154,20 +167,40 @@ function createBehaviors(env) {
 		fieldBg: (_self, data) => (data.row?.textual ? env.fieldBg : undefined),
 		fieldFg: (_self, data) =>
 			data.row?.textual ? (env.fieldFg ?? env.textFg) : (env.readonlyFg ?? env.textSecondaryFg),
+		textual: (_self, data) => data.row?.textual === true,
 		fieldOpen: (_self, data) => (data.row?.textual ? "[" : ""),
 		fieldClose: (_self, data) => (data.row?.textual ? "]" : ""),
-		// The list indents under the value line: the marker column (2) plus the
-		// gap (1). The spacer is NBSP so the renderers do not collapse the
-		// leading run.
-		rowIndent: (_self, data) => (isList(data) ? 3 : 0),
-		listIndent: (_self, data) => 3,
-		listSpacer: (_self, data) => "\u00a0".repeat(3),
+		// Selection lists share the argument pane's one-cell inset; the spacer
+		// is NBSP so the renderers do not collapse the leading run.
+		rowIndent: (_self, data) => (isList(data) ? 1 : 0),
+		listIndent: (_self, data) => 1,
+		listSpacer: (_self, data) => "\u00a0",
 		listBorder: (_self, data) => {
 			if (type(data) !== "frame") return ["left", "right"]
 			return data.row?.variant === "top" ? ["top", "left", "right"] : ["bottom", "left", "right"]
 		},
 		borderFg: () => env.borderSecondaryFg,
 	}
+	// r/w/x cells of a permission row, in the shared permission order so the
+	// templates can bind each cell without looping.
+	for (let i = 0; i < PERMISSION_BITS.length; i++) {
+		const bit = PERMISSION_BITS[i]
+		const name = bit.id.toUpperCase()
+		behaviors[`perm${name}`] = (_self, data) => (bitAt(data, i)?.selected ? bit.id : "-")
+		behaviors[`perm${name}On`] = (_self, data) => `${bitAt(data, i)?.selected === true}`
+		behaviors[`perm${name}Fg`] = (_self, data) =>
+			bitAt(data, i)?.selected ? env.accentSecondaryFg : env.textSecondaryFg
+		behaviors[`perm${name}Bg`] = (_self, data) =>
+			bitFocused(data, i) ? env.accentSecondaryBg : undefined
+		behaviors[`perm${name}Class`] = (_self, data) =>
+			[
+				bitAt(data, i)?.selected ? "is-on" : "is-off",
+				bitFocused(data, i) ? "is-bit-focused" : null,
+			]
+				.filter(Boolean)
+				.join(" ")
+	}
+	return behaviors
 }
 
 export { createBehaviors, isFocused, riskFg, rowName, rowSummary, wantsFocus }

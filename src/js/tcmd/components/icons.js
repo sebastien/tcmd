@@ -179,6 +179,7 @@ function extensionOf(name) {
 // file icon.
 function iconFor(entry) {
 	if (!entry) return ""
+	if (entry.add) return entry.isDir ? DIR_ICON : FILE_ICON
 	if (entry.isSymlink) return SYMLINK_ICON
 	if (entry.isDevice) return DEVICE_ICON
 	if (entry.isDir) return DIR_ICON
@@ -309,6 +310,7 @@ const LUCIDE_EXTENSION_ICONS = {
 
 function lucideIconFor(entry) {
 	if (!entry) return ""
+	if (entry.add) return "folder-plus"
 	if (entry.isSymlink) return "link-2"
 	if (entry.isDevice) return "cpu"
 	if (entry.isDir) return "folder"

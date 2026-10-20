@@ -49,6 +49,39 @@ describe("node fs adapter", () => {
 		}
 	})
 
+	test("creates hard and symbolic links, changes modes and unlinks links", async () => {
+		const fs = createNodeFs()
+		const root = await mkdtemp(join(tmpdir(), "tcmd-fs-link-"))
+		try {
+			const source = join(root, "source.txt")
+			const hard = join(root, "hard.txt")
+			const symbolic = join(root, "symbolic.txt")
+			await writeFile(source, "content")
+			await fs.hardlink(source, hard)
+			expect(await readFile(hard, "utf8")).toBe("content")
+			await expect(fs.hardlink(source, hard)).rejects.toMatchObject({ code: "EEXIST" })
+
+			await fs.symlink(source, symbolic)
+			const entry = (await fs.readDir(root)).find((candidate) => candidate.name === "symbolic.txt")
+			expect(entry).toMatchObject({ isSymlink: true, target: source })
+			expect(await readFile(symbolic, "utf8")).toBe("content")
+			await expect(fs.symlink(source, symbolic)).rejects.toMatchObject({ code: "EEXIST" })
+
+			await fs.chmod(source, 0o600)
+			expect((await fs.stat(source)).mode & 0o777).toBe(0o600)
+
+			await fs.unlink(symbolic)
+			await expect(lstat(symbolic)).rejects.toMatchObject({ code: "ENOENT" })
+			expect(await readFile(source, "utf8")).toBe("content")
+			// A hard link is a regular file entry: `unlink` refuses it.
+			await expect(fs.unlink(hard)).rejects.toThrow("not a symbolic link")
+			await fs.erase([hard])
+			expect(await readFile(source, "utf8")).toBe("content")
+		} finally {
+			await rm(root, { recursive: true, force: true })
+		}
+	})
+
 	test("stat of a missing path is null", async () => {
 		const fs = createNodeFs()
 		expect(await fs.stat("/definitely/not/here")).toBeNull()

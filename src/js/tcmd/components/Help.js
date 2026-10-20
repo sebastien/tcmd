@@ -66,8 +66,7 @@ const HELP_ICONS = {
 	"pane.toggle": "columns-2",
 	"pane.reload": "refresh-cw",
 	"list.mark": "check",
-	"bookmark.record": "bookmark",
-	"bookmark.jump": "bookmark",
+	"bookmark.open": "bookmark",
 	"view.togglePreview": "panel-right",
 	"view.maximize": "maximize",
 	"view.toggleMode": "columns-2",
@@ -154,7 +153,10 @@ function helpBlocks() {
 		columns[at].push({ type: "section", key: `section:${group.title}`, label: group.title.toUpperCase() })
 		for (const row of group.rows) {
 			const command = commands.get(row.id)
-			const shortcut = command?.bar ? keyLabelGlyph(command.keys) : keyLabelGlyph(row.keys)
+			// The compact web badge shows the command's canonical key when the
+			// registry has one (lowercase `b`, `Spc`, `⇥`); otherwise fall back
+			// to the keymap chords, which may list several alternatives.
+			const shortcut = command?.keys ? keyLabelGlyph(command.keys) : keyLabelGlyph(row.keys)
 			columns[at].push({
 				type: "entry",
 				key: `entry:${row.id}`,

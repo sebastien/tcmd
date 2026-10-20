@@ -29,6 +29,8 @@ import confirmXml from "../components/Confirm.xml" with { type: "text" }
 import crumbXml from "../components/Crumb.xml" with { type: "text" }
 import entryDetailXml from "../components/EntryDetail.xml" with { type: "text" }
 import fileListXml from "../components/FileList.xml" with { type: "text" }
+import filePickerXml from "../components/FilePicker.xml" with { type: "text" }
+import filePickerRowXml from "../components/FilePickerRow.xml" with { type: "text" }
 import filePreviewXml from "../components/FilePreview.xml" with { type: "text" }
 import fileRowXml from "../components/FileRow.xml" with { type: "text" }
 import filterBarXml from "../components/FilterBar.xml" with { type: "text" }
@@ -46,16 +48,20 @@ import {
 	bookmarkRows,
 	breadcrumbsBehaviors,
 	commandBarBehaviors,
+	commandBarFit,
+	commandBarMarksItem,
 	commandArgRowBehaviors,
 	commandItemBehaviors,
 	commandItemRows,
-	commandBarMarksItem,
 	commandPanelBehaviors,
 	confirmBehaviors,
 	crumbBehaviors,
 	crumbRows,
 	entryDetailBehaviors,
 	fileListBehaviors,
+	filePickerBehaviors,
+	filePickerRowBehaviors,
+	filePickerRows,
 	filePreviewBehaviors,
 	fileRowBehaviors,
 	fileRows,
@@ -205,6 +211,15 @@ function fileListScrollTop(self, data) {
 	return keepVisible(self.ref.list, local, len)
 }
 
+// Keep the file picker's cursor row inside its viewport, using the same
+// bounded window as the row builder.
+function filePickerScrollTop(self, data) {
+	const rows = unwrap(data.rows) ?? []
+	const cursor = unwrap(data.cursor) ?? 0
+	const { local, len } = listingWindow({ entries: rows, cursor }, 0)
+	return keepVisible(self.ref.list, local, len)
+}
+
 // Keep the bookmark picker selection inside its viewport.
 function bookmarkScrollTop(self, data) {
 	return keepVisible(self.ref.list, unwrap(data.selected) ?? 0, unwrap(data.items)?.length ?? 0)
@@ -242,15 +257,22 @@ function panelDialogHeight(self) {
 // each end, so the offset is measured in rendered lines rather than row
 // indices.
 function panelArgScrollTop(self, data) {
-	const rows = (unwrap(data.rows) ?? []).filter((row) => row.type !== "run")
-	const box = unwrap(data.picking) ? self.ref.pickerList : self.ref.args
+	// Arguments, the preflight preview and Run share the argument scroller;
+	// the mapping must count the preview and Run's leading blank line so the
+	// cursor can still be kept in view at the bottom.
+	const rows = unwrap(data.rows) ?? []
+	const box = self.ref.args
 	if (!rows.length) return box?.scrollTop ?? 0
 	const cursor = Math.min(unwrap(data.argCursor) ?? 0, rows.length - 1)
+	const previewHeight = unwrap(data.preview) ? (self.ref.previewBox?.height ?? 0) : 0
 	let offset = 0
 	let cursorTop = 0
 	let cursorHeight = 1
 	for (let i = 0; i < rows.length; i++) {
 		const row = rows[i]
+		// Run is preceded by the preview (when there is one) and by its own
+		// one-line separation from the last field.
+		if (row.type === "run") offset += 1 + previewHeight
 		const firstItem = row.type === "item" && (i === 0 || rows[i - 1].type !== "item")
 		const lastItem = row.type === "item" && (i === rows.length - 1 || rows[i + 1].type !== "item")
 		if (firstItem) offset += 1
@@ -282,15 +304,22 @@ function keepRangeVisible(box, top, height, total) {
 }
 
 // Function: commandBarRows
-// Appends the active pane's marked count as a trailing dimmed entry, then
-// maps the items to rows. The entries wrap onto as many rows as the width
-// demands; nothing is trimmed.
+// Appends the active pane's marked count as a trailing dimmed entry, fits the
+// entries on one line (dropping what does not fit behind an ellipsis), then
+// maps them to rows.
 function commandBarRows(commandItem) {
 	const base = commandItemRows(commandItem)
 	return (self, data) => {
+		const viewport = unwrap(data.uiSize)
+		const viewportWidth = Math.floor(viewport?.width ?? 0)
+		// Prefer the injected viewport: the box geometry still reports the
+		// previous width on the frame a resize arrives.
+		const own = Math.floor(self.ref.box?.width ?? 0)
+		const width = viewportWidth > 0 ? viewportWidth - 1 : own
 		const items = unwrap(data.items) ?? []
 		const marks = commandBarMarksItem(data)
-		return base(self, { ...data, items: marks ? [...items, marks] : items })
+		const entries = marks ? [...items, marks] : items
+		return base(self, { ...data, items: commandBarFit(entries, width) })
 	}
 }
 
@@ -302,6 +331,7 @@ function createComponents() {
 	const commandArgRow = bind(ui, "CommandArgRow", commandArgRowXml, commandArgRowBehaviors(env))
 	const crumb = bind(ui, "Crumb", crumbXml, crumbBehaviors(env))
 	const fileRow = bind(ui, "FileRow", fileRowXml, fileRowBehaviors(env))
+	const filePickerRow = bind(ui, "FilePickerRow", filePickerRowXml, filePickerRowBehaviors(env))
 	const filterBar = bind(ui, "FilterBar", filterBarXml, filterBarBehaviors(env))
 	const bookmarkRow = bind(ui, "BookmarkRow", bookmarkRowXml, bookmarkRowBehaviors(env))
 	const overlayRow = bind(ui, "OverlayRow", overlayRowXml, overlayRowBehaviors(env))
@@ -345,6 +375,11 @@ function createComponents() {
 			...env,
 			rows: fileRows(fileRow),
 			scrollTop: fileListScrollTop,
+		})),
+		FilePicker: bind(ui, "FilePicker", filePickerXml, filePickerBehaviors({
+			...env,
+			rows: filePickerRows(filePickerRow),
+			scrollTop: filePickerScrollTop,
 		})),
 		FilePreview: bind(ui, "FilePreview", filePreviewXml, filePreviewBehaviors(env)),
 		FilterBar: filterBar,
@@ -413,6 +448,7 @@ function registerComponents() {
 		confirm: components.Confirm,
 		entrydetail: components.EntryDetail,
 		filelist: components.FileList,
+		filepicker: components.FilePicker,
 		filepreview: components.FilePreview,
 		filterbar: components.FilterBar,
 		help: components.Help,

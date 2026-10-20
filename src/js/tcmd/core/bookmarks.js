@@ -4,16 +4,18 @@
 // Created: 2026-10-09
 
 // Module: tcmd/core/bookmarks
-// Named bookmarks: a `{ name -> { path, isDir } }` map the user records with
-// `b` and jumps to with `g`. A bookmark remembers whether its path is a file
-// or a directory (or `null` when only a legacy path is known), so a jump can
-// open a directory but select-and-preview a file. Bookmarks are pure model
-// state (a reactive cell) plus a persistence layer: a `BookmarkStore`
-// interface with an in-memory default (tests, web) and a Node/JSON-file
-// implementation (the TUI). The session only ever sees the store interface, so
-// the browser bundle stays free of Node builtins.
+// Named bookmarks: a `{ name -> { path, isDir } }` map shown by the `b`
+// bookmarks panel, which filters them and records the current path under an
+// automatic name. A bookmark remembers whether its path is a file or a
+// directory (or `null` when only a legacy path is known), so a jump can open a
+// directory but select-and-preview a file. Bookmarks are pure model state (a
+// reactive cell) plus a persistence layer: a `BookmarkStore` interface with an
+// in-memory default (tests, web) and a Node/JSON-file implementation (the TUI).
+// The session only ever sees the store interface, so the browser bundle stays
+// free of Node builtins.
 
 import { cell } from "select/state/cells"
+import { basename } from "./path.js"
 
 // Function: normalizeName
 // Trims a bookmark name; empty names are rejected by the callers.
@@ -27,6 +29,27 @@ function normalizeName(name) {
 function isValidName(name) {
 	const text = normalizeName(name)
 	return text.length > 0 && !/[\s/]/.test(text)
+}
+
+// Function: suggestName
+// The automatic name for a path: its basename with whitespace (and the root
+// separator) turned into dashes. Paths without a usable segment fall back to
+// `bookmark`, so the add action always has a valid name.
+function suggestName(path) {
+	const text = basename(path).replace(/[\s/]+/g, "-").replace(/^-+|-+$/g, "")
+	return isValidName(text) ? text : "bookmark"
+}
+
+// Function: uniqueName
+// `base`, suffixed with `-2`, `-3`, … until the map has no entry under it.
+function uniqueName(map, base) {
+	let name = base
+	let suffix = 2
+	while (Object.hasOwn(map ?? {}, name)) {
+		name = `${base}-${suffix}`
+		suffix += 1
+	}
+	return name
 }
 
 // Function: normalizeEntry
@@ -89,6 +112,18 @@ function createBookmarks({ store = createMemoryBookmarkStore(), entries = {} } =
 		})
 		await store.save?.(bookmarks.entries.value)
 		return clean
+	}
+
+	// Function: add
+	// Records `path` under an automatic name (`suggestName`, disambiguated on
+	// collision) and persists. Returns `{ name, added }`; an already-bookmarked
+	// path keeps its existing name and reports `added: false`.
+	bookmarks.add = async (path, isDir = null) => {
+		const existing = bookmarks.find(path)
+		if (existing) return { name: existing.name, added: false }
+		const name = uniqueName(bookmarks.entries.value, suggestName(path))
+		await bookmarks.record(name, path, isDir)
+		return { name, added: true }
 	}
 
 	// Function: remove
@@ -172,4 +207,6 @@ export {
 	normalizeEntry,
 	normalizeMap,
 	normalizeName,
+	suggestName,
+	uniqueName,
 }

@@ -5,16 +5,18 @@
 
 // Module: tcmd/core/panel
 // The command panel (Commando): the one entry point for the CLI operations
-// (`copy`, `move`, `rename`, `replace`, `delete`, `run` — the `core/operations` registry).
-// They are grouped by purpose (Command, File, Edit, Delete) and alphabetized
-// within each group (see `filterPanelEntries`). The workspace-view toggle is
-// listed alongside the CLI operations; other TinyCmd actions keep their keys.
+// (`copy`, `move`, `mkdir`, `new`, `chmod`, `hardlink`, `symlink`, `delete`,
+// `run` — the `core/operations` registry). They are grouped by purpose
+// (Command, File, Create, Edit, Delete) and alphabetized within each group (see
+// `filterPanelEntries`). The workspace-view toggle and Quit are listed
+// alongside the CLI operations; other TinyCmd actions keep their keys.
 //
 // For the selected operation, the panel binds its arguments from the live
 // context — a selection argument shows the SRC/DST pane's marked paths (falling
 // back to the cursor entry) and lets the user toggle individual items; a
 // destination argument resolves to the DST pane's directory; textual arguments
-// (a name, a buffer label, a shell command) are typed in place.
+// (a name, a buffer label, a shell command) are typed in place. `chmod` binds
+// its MODE to the permission grid from `core/permissions`.
 //
 // The selection the user tweaks is *transient*: it lives in the draft bindings
 // (`session.panelDraft`), never in the real pane marks. When the draft runs,
@@ -23,12 +25,14 @@
 // also be rendered as a shell-quoted command (`panelCommand`), while the panel
 // itself presents the arguments and an explicit Run action.
 // Everything here is pure: the caller owns the cells; the panel commands in
-// `core/commands` assemble and run.
+// `core/commands` assemble and run. Picker path resolution and row shaping live
+// in `core/picker`.
 
 import { hasMatch } from "../vendor/fzy.js"
 import { currentPaneId, PANE_BUFFERS, PANE_LABELS } from "./pane.js"
 import { basename, parent } from "./path.js"
 import { getOperations, pathToken, shellQuote } from "./operations.js"
+import { PERMISSION_BITS, PERMISSION_CLASSES, permissionItems, permissionOctal, permissionText } from "./permissions.js"
 
 // Constant: PANEL_FOCUS
 // The two regions the panel's focus ring moves through: "ops" (the filter and
@@ -36,29 +40,36 @@ import { getOperations, pathToken, shellQuote } from "./operations.js"
 // right pane, where a textual argument owns the keyboard and Space toggles a
 // selection item).
 const PANEL_FOCUS = { OPS: "ops", ARGS: "args" }
-const PANEL_GROUPS = ["Command", "File", "Edit", "Delete"]
+const PANEL_GROUPS = ["Command", "File", "Create", "Edit", "Delete"]
 const OPERATION_GROUPS = {
 	bookmark: "Command",
-	copy: "File",
-	mkdir: "File",
+	abspath: "File",
 	open: "File",
+	realpath: "File",
 	run: "File",
 	stat: "File",
 	view: "File",
-	abspath: "File",
-	realpath: "File",
+	mkdir: "Create",
+	new: "Create",
+	chmod: "Edit",
+	chown: "Edit",
+	copy: "Edit",
 	edit: "Edit",
+	hardlink: "Edit",
 	move: "Edit",
 	rename: "Edit",
 	replace: "Edit",
+	symlink: "Edit",
 	touch: "Edit",
 	delete: "Delete",
 	erase: "Delete",
+	unlink: "Delete",
 }
 
 // Function: panelEntries
-// The entries the panel lists: the categorized CLI operations and the
-// workspace-view toggle (whose name is distinct from File's preview `view`).
+// The entries the panel lists: the categorized CLI operations, the
+// workspace-view toggle (named `view` like File's preview operation, but in the
+// Command group) and Quit.
 function panelEntries() {
 	const entries = getOperations()
 		.filter((op) => !op.hidden && OPERATION_GROUPS[op.name])
@@ -68,7 +79,7 @@ function panelEntries() {
 				id: `op:${op.name}`,
 				name: op.name,
 				group,
-				risk: group === "Edit" ? "caution" : group === "Delete" ? "destructive" : null,
+				risk: op.risk ?? null,
 				matchNames: [op.name, ...(op.aliases ?? [])],
 				op,
 			}
@@ -80,6 +91,16 @@ function panelEntries() {
 		risk: null,
 		matchNames: ["view"],
 		commandId: "view.toggleMode",
+		// A no-argument command still shows where it acts.
+		showPath: true,
+	})
+	entries.push({
+		id: "command:quit",
+		name: "quit",
+		group: "Command",
+		risk: null,
+		matchNames: ["quit", "q"],
+		commandId: "app.quit",
 	})
 	return entries
 }
@@ -117,12 +138,12 @@ function panelEntryRows(entries) {
 		const entry = entries[index]
 		const group = entry.group ?? "File"
 		if (group !== previousGroup) {
-			rows.push({ type: "group", id: `group:${group.toLowerCase()}`, name: group, group })
+			rows.push({ type: "group", key: `group:${group.toLowerCase()}`, name: group, group })
 			previousGroup = group
 		}
 		rows.push({
 			type: "op",
-			id: entry.id,
+			key: entry.id,
 			entryIndex: index,
 			name: entry.name,
 			group,
@@ -206,6 +227,9 @@ function bindArg(session, arg, index) {
 	const role = arg.role ?? "active"
 	const common = {
 		index,
+		// Display order in the argument pane; the argv order stays the
+		// operation's own (see `panelRowList` and `argTokens`).
+		panelOrder: arg.panelOrder ?? index,
 		name: arg.name,
 		kind: arg.kind,
 		role,
@@ -228,6 +252,21 @@ function bindArg(session, arg, index) {
 			value: "",
 		}
 	}
+	if (arg.kind === "permissions") {
+		// Seed the checkboxes from the first selected path's current mode, so
+		// opening chmod starts on the file's real permissions rather than a
+		// generic 644. A path outside the listing falls back by kind.
+		const pane = session.panes[resolvePaneId(session, role)]
+		const entries = entryIndex(pane)
+		const path = paneSelectionPaths(pane)[0]
+		const entry = path ? entries.get(path) : null
+		const mode = Number.isInteger(entry?.mode)
+			? entry.mode & 0o777
+			: entry?.isDir
+				? 0o755
+				: 0o644
+		return { ...common, multi: true, items: permissionItems(mode) }
+	}
 	if (arg.kind === "dest" || arg.kind === "path") {
 		// A destination or a path argument is typeable in place, like a
 		// literal, and additionally browsable through the panel's file picker
@@ -237,7 +276,12 @@ function bindArg(session, arg, index) {
 		// empty for the picker (or the user) to fill.
 		const mode = arg.kind === "dest" ? "dir" : arg.mode ?? "any"
 		const commander = (session.viewMode?.value ?? "commander") !== "explorer"
-		const value = mode === "dir" && commander ? session.panes?.right?.path?.value ?? "" : ""
+		const value =
+			arg.prefill === "current"
+				? (session.activePath?.value ?? "")
+				: mode === "dir" && commander
+					? (session.panes?.right?.path?.value ?? "")
+					: ""
 		return { ...common, textual: true, picker: true, mode, items: [], value }
 	}
 	if (arg.kind === "buffer") {
@@ -271,6 +315,7 @@ function argTokens(bindings) {
 			const paths = selectedPaths(binding)
 			return paths.length ? pathToken(paths) : ""
 		}
+		if (binding.kind === "permissions") return permissionOctal(binding)
 		if (binding.kind === "dest") return binding.value ?? ""
 		return `${binding.value ?? ""}`.trim()
 	})
@@ -328,6 +373,10 @@ function panelCommand(bindings) {
 			else if (binding.optional !== true) parts.push(`«${binding.name}»`)
 			continue
 		}
+		if (binding.kind === "permissions") {
+			parts.push(permissionOctal(binding))
+			continue
+		}
 		const value = `${binding.value ?? ""}`.trim()
 		if (value) parts.push(shellQuote(value))
 		else if (binding.optional !== true) parts.push(`«${binding.name}»`)
@@ -353,6 +402,7 @@ function panelSummary(binding) {
 		const count = selectedPaths(binding).length
 		return `${pane} · ${count} selected`
 	}
+	if (binding.kind === "permissions") return permissionText(binding)
 	if (binding.kind === "dest" || binding.kind === "path") return binding.value || "(none)"
 	if (binding.kind === "buffer") return binding.value || "(active)"
 	return binding.value ? binding.value : "(empty)"
@@ -368,7 +418,12 @@ function panelSummary(binding) {
 // list rows are; this stays pure and index-stable.
 function panelRowList(bindings) {
 	const rows = []
-	for (const binding of bindings ?? []) {
+	// The pane may show arguments in a different order from the argv (PATH
+	// before MODE/OWNER); the binding `index` still keys the draft.
+	const ordered = [...(bindings ?? [])].sort(
+		(a, b) => (a.panelOrder ?? a.index) - (b.panelOrder ?? b.index),
+	)
+	for (const binding of ordered) {
 		const multi = binding.multi === true
 		const items = binding.items ?? []
 		// A selection that resolves to a single path is not a list: it renders
@@ -396,6 +451,37 @@ function panelRowList(bindings) {
 			count: items.length,
 		})
 		if (single) continue
+		// A permission argument renders as one row per class (u/g/o) with its
+		// three bits as clickable cells, rather than nine checkbox rows. The
+		// bit cursor (`panelPermBit`) selects the cell Space toggles.
+		if (binding.kind === "permissions") {
+			for (let c = 0; c < PERMISSION_CLASSES.length; c++) {
+				const permissionClass = PERMISSION_CLASSES[c]
+				const rowIndex = rows.length
+				const bits = PERMISSION_BITS.map((bit, i) => {
+					const itemIndex = c * PERMISSION_BITS.length + i
+					return {
+						id: bit.id,
+						selected: items[itemIndex]?.selected === true,
+						itemIndex,
+					}
+				})
+				rows.push({
+					type: "perm",
+					key: `perm:${binding.index}:${permissionClass.id}`,
+					rowIndex,
+					argIndex: binding.index,
+					classId: permissionClass.id,
+					label: permissionClass.label,
+					bits,
+					// Click payloads: arg index, item index, row index.
+					keyR: `${binding.index}:${bits[0].itemIndex}:${rowIndex}`,
+					keyW: `${binding.index}:${bits[1].itemIndex}:${rowIndex}`,
+					keyX: `${binding.index}:${bits[2].itemIndex}:${rowIndex}`,
+				})
+			}
+			continue
+		}
 		for (let i = 0; i < items.length; i++) {
 			const item = items[i]
 			const selected = item.selected
@@ -423,37 +509,6 @@ function panelRowList(bindings) {
 // The argument row at the cursor `index`, or null.
 function rowAt(rows, index) {
 	return (rows ?? [])[index] ?? null
-}
-
-// Function: pickerRowList
-// Flattens the picker's visible listing into the rows the panel's argument
-// column renders while a path is being picked. The parent navigation row stays
-// visible when filtering and is omitted at the filesystem root; entry rows
-// retain their path and symlink target for the shared row component.
-function pickerRowList(entries, path) {
-	const rows = []
-	const parentPath = parent(path)
-	if (parentPath) {
-		rows.push({
-			type: "parent",
-			key: `parent:${path}`,
-			name: "..",
-			path: parentPath,
-			isDir: true,
-		})
-	}
-	for (const entry of entries ?? []) {
-		rows.push({
-			type: "entry",
-			key: entry.path,
-			name: entry.name,
-			path: entry.path,
-			isDir: entry.isDir === true,
-			isSymlink: entry.isSymlink === true,
-			target: entry.target ?? null,
-		})
-	}
-	return rows
 }
 
 // Function: isTextualRow
@@ -512,7 +567,6 @@ export {
 	panelRunnable,
 	panelSummary,
 	paneSelectionPaths,
-	pickerRowList,
 	rowAt,
 	selectedPaths,
 	withArgValue,

@@ -129,9 +129,9 @@ describe("rows", () => {
 	test("panelOpRows preserves category headings and maps name-only rows", () => {
 		const Row = fakeRow()
 		const items = [
-			{ type: "group", id: "group:edit", name: "Edit", group: "Edit" },
-			{ type: "op", id: "op:copy", entryIndex: 0, name: "copy", risk: null },
-			{ type: "op", id: "op:erase", entryIndex: 1, name: "erase", risk: "destructive" },
+			{ type: "group", key: "group:edit", name: "Edit", group: "Edit" },
+			{ type: "op", key: "op:copy", entryIndex: 0, name: "copy", risk: null },
+			{ type: "op", key: "op:erase", entryIndex: 1, name: "erase", risk: "destructive" },
 		]
 		expect(panelOpRows(Row)(null, { items, opCursor: 1, focus: "ops" })).toBe("MAPPED")
 		const [call] = Row.calls
@@ -190,15 +190,20 @@ describe("rows", () => {
 		expect(call.key(run)).toBe("panel:run")
 	})
 
-	test("bookmarkRows snapshots selection into a plain per-row flag", () => {
+	test("bookmarkRows snapshots selection and keys the add row apart", () => {
 		const Row = fakeRow()
 		const selected = cell(0)
-		const bookmark = { name: "home", path: "/home" }
+		const bookmark = { key: "home", name: "home", path: "/home" }
 		expect(bookmarkRows(Row)(null, { items: [bookmark], selected })).toBe("MAPPED")
 		const [call] = Row.calls
 		expect(call.processor(bookmark, 0)).toEqual({ item: bookmark, index: 0, selectedRow: true })
 		expect(call.processor(bookmark, 1)).toEqual({ item: bookmark, index: 1, selectedRow: false })
 		expect(call.key(bookmark)).toBe("home")
+		// The synthetic add row carries its own, non-name key.
+		const add = { key: "+ add current path", add: true, path: "/home" }
+		expect(call.key(add)).toBe("+ add current path")
+		// Hand-built bags without a key still fall back to the name.
+		expect(call.key({ name: "notes" })).toBe("notes")
 	})
 
 	test("commandItemRows keys by command id and defaults missing collections", () => {

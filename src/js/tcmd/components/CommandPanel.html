@@ -1,6 +1,7 @@
 <section class="command-panel" when="open" role="dialog" aria-modal="true" aria-label="Command panel" tabindex="-1" on:click="!dialog:panel-cancel">
 	<div class="command-dialog" on:click="dialogStop">
-		<header out="title"></header>
+		<header class="panel-title" out="title"></header>
+		<button class="panel-close" type="button" tabindex="-1" aria-label="Close command panel" on:click="!panel:close." out="closeHint"></button>
 		<div class="panel-columns">
 			<div class="panel-command-column">
 				<label class="panel-query-line">
@@ -11,21 +12,16 @@
 			</div>
 			<div class="panel-args-column">
 				<p class="panel-command-name" out="commandName"></p>
-				<div class="panel-picker-pane" when="picking">
-					<div class="panel-picker">
-						<p class="panel-picker-path" out="pickerPath"></p>
-						<label class="panel-picker-line">
-							<svg class="panel-picker-icon ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-search"></use></svg>
-							<input class="panel-picker-query" type="text" inout="pickerQuery" aria-label="Filter entries" />
-						</label>
+				<div when="picking" out="pickerView|FilePicker"></div>
+				<div class="panel-args-scroll" when="!picking">
+					<ul class="panel-args" aria-label="Arguments" out="argRows"></ul>
+					<pre class="panel-preview" when="hasPreview" out="preview"></pre>
+					<ul class="panel-run-action" aria-label="Run command" out="runRows"></ul>
+					<div class="panel-run-error-block" when="hasRunError">
+						<p out="runError"></p>
 					</div>
-					<ul class="panel-args panel-picker-rows" aria-label="Picker entries" out="argRows"></ul>
-					<p class="panel-args-empty" when="pickerEmpty" out="pickerEmptyText"></p>
+					<p class="panel-confirm-command" when="hasConfirmCommand" out="confirmCommand" out:data-risk="confirmRisk"></p>
 				</div>
-				<p class="panel-args-empty" when="argsEmpty" out="argsEmptyText"></p>
-				<ul class="panel-args" when="!picking" aria-label="Arguments" out="argRows"></ul>
-				<pre class="panel-preview" when="hasPreview" out="preview"></pre>
-				<ul class="panel-run-action" when="!picking" aria-label="Run command" out="runRows"></ul>
 			</div>
 		</div>
 		<footer out="footer"></footer>

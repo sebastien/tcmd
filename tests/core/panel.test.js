@@ -74,10 +74,16 @@ describe("panel", () => {
 
 	test("filterPanelEntries groups by purpose and alphabetizes within each category", () => {
 		const entries = panelEntries()
-		// Groups use the fixed Command / File / Edit / Delete order; names are
-		// sorted alphabetically within each category.
+		// Groups use the fixed Command / File / Create / Edit / Delete order;
+		// names are sorted alphabetically within each category.
 		expect(filterPanelEntries(entries, "").map((entry) => entry.name)).toEqual(
-			["bookmark", "view", "abspath", "copy", "mkdir", "open", "realpath", "run", "stat", "view", "edit", "move", "rename", "replace", "touch", "delete", "erase"],
+			[
+				"bookmark", "quit", "view",
+				"abspath", "open", "realpath", "run", "stat", "view",
+				"mkdir", "new",
+				"chmod", "chown", "copy", "edit", "hardlink", "move", "rename", "replace", "symlink", "touch",
+				"delete", "erase", "unlink",
+			],
 		)
 		// The duplicate `view` names stay in their Command and File categories.
 		expect(filterPanelEntries(entries, "view").map((entry) => [entry.group, entry.id])).toEqual([
@@ -85,7 +91,7 @@ describe("panel", () => {
 			["File", "op:view"],
 		])
 		// Matches retain category order rather than relevance-ranking.
-		expect(filterPanelEntries(entries, "op").map((entry) => entry.name)).toEqual(["copy", "open"])
+		expect(filterPanelEntries(entries, "op").map((entry) => entry.name)).toEqual(["open", "copy"])
 		expect(filterPanelEntries(entries, "edit").map((entry) => entry.name)).toEqual(["edit"])
 		// An alias matches (`!` -> run).
 		expect(filterPanelEntries(entries, "!").map((entry) => entry.name)).toEqual(["run"])
@@ -220,6 +226,100 @@ describe("panel", () => {
 		expect(single[0].summary).toBe("/home/docs")
 	})
 
+	test("chmod binds nine permission checkboxes seeded from the file mode", async () => {
+		const { session } = await makeSession()
+		// notes.txt is a regular file, so the mock seeds 644.
+		session.panes.left.cursor.set(1)
+		const draft = bindArgs(session, entryFor("chmod"))
+		const mode = draft[0]
+		expect(mode.kind).toBe("permissions")
+		expect(mode.items.map((item) => item.key)).toEqual([
+			"u:r", "u:w", "u:x", "g:r", "g:w", "g:x", "o:r", "o:w", "o:x",
+		])
+		expect(mode.items.filter((item) => item.selected).map((item) => item.key)).toEqual([
+			"u:r", "u:w", "g:r", "o:r",
+		])
+		expect(argvFor(draft)[0]).toBe("644")
+		expect(panelSummary(mode)).toBe("644 · rw-r--r--")
+		// Toggling the user's execute bit rebuilds the mode token.
+		expect(argvFor(withToggledItem(draft, 0, 2))[0]).toBe("744")
+		// PATH comes first, then MODE and one row per permission class.
+		const rows = panelRowList(draft)
+		expect(rows[0]).toMatchObject({ type: "arg", name: "PATH", summary: "/home/notes.txt" })
+		expect(rows[1]).toMatchObject({ type: "arg", name: "MODE", summary: "644 · rw-r--r--" })
+		const permRows = rows.filter((row) => row.type === "perm")
+		expect(permRows.map((row) => row.label)).toEqual(["user", "group", "other"])
+		expect(permRows[0].bits.map((bit) => [bit.id, bit.selected])).toEqual([
+			["r", true],
+			["w", true],
+			["x", false],
+		])
+	})
+
+	test("new and mkdir show the current PATH above NAME and compose them", async () => {
+		const { fs, session } = await makeSession()
+		for (const [operation, name] of [["mkdir", "created-dir"], ["new", "created.txt"]]) {
+			session.dispatch("panel.open")
+			const index = session.panelFiltered.value.findIndex((entry) => entry.name === operation)
+			session.dispatch("panel.setOp", { index })
+			const draft = session.panelDraft.value
+			expect(draft.map((binding) => binding.name)).toEqual(["PATH", "NAME"])
+			expect(draft[0].value).toBe("/home")
+			expect(session.panelRows.value.slice(0, 2).map((row) => row.name)).toEqual(["PATH", "NAME"])
+			session.panelDraft.set(
+				draft.map((binding) => (binding.name === "NAME" ? { ...binding, value: name } : binding)),
+			)
+			await session.dispatch("panel.run")
+			const stats = await fs.stat(`/home/${name}`)
+			expect(stats?.isDir ?? false).toBe(operation === "mkdir")
+			expect(stats).not.toBeNull()
+		}
+	})
+
+	test("chmod and chown display PATH before their mode/owner argument", async () => {
+		const { session } = await makeSession()
+		for (const operation of ["chmod", "chown"]) {
+			const names = panelRowList(bindArgs(session, entryFor(operation))).map((row) => row.name)
+			expect(names.slice(0, 2)).toEqual(["PATH", operation === "chmod" ? "MODE" : "OWNER"])
+		}
+	})
+
+	test("chmod runs the mode assembled from the permission cells", async () => {
+		const { fs, session } = await makeSession()
+		session.panes.left.cursor.set(1)
+		session.dispatch("panel.open")
+		const index = session.panelFiltered.value.findIndex((entry) => entry.name === "chmod")
+		session.dispatch("panel.setOp", { index })
+		// Focus the user row (PATH header, MODE header, then user), put the
+		// bit cursor on x, and toggle it: 744.
+		session.dispatch("panel.focusArg")
+		session.panelRowIndex.set(2)
+		session.panelPermBit.set(2)
+		session.dispatch("panel.toggleItem")
+		expect(session.panelDraft.value[0].items[2].selected).toBe(true)
+		// chmod is amber: the first press prints and arms, the second executes.
+		await session.dispatch("panel.run")
+		expect(session.panelArmed.value).toBe(true)
+		expect(session.panelRows.value.at(-1).command).toBe("chmod 744 /home/notes.txt")
+		await session.dispatch("panel.run")
+		expect((await fs.stat("/home/notes.txt")).mode & 0o777).toBe(0o744)
+	})
+
+	test("editing the draft disarms a pending Confirm", async () => {
+		const { session } = await makeSession()
+		session.dispatch("panel.open")
+		const index = session.panelFiltered.value.findIndex((entry) => entry.name === "chmod")
+		session.dispatch("panel.setOp", { index })
+		await session.dispatch("panel.run")
+		expect(session.panelArmed.value).toBe(true)
+		// Changing a bit invalidates what was confirmed.
+		session.dispatch("panel.focusArg")
+		session.panelRowIndex.set(2)
+		session.dispatch("panel.toggleItem")
+		expect(session.panelArmed.value).toBe(false)
+		expect(session.panelRows.value.at(-1)).toMatchObject({ type: "run", name: "Run" })
+	})
+
 	test("panelSummary names the pane and the selected count", () => {
 		expect(
 			panelSummary({ kind: "selection", role: "source", items: [{ path: "/a", selected: true }] }),
@@ -274,13 +374,16 @@ describe("panel", () => {
 		expect(copy.type).toBe("op")
 		expect(copy.summary).toBeUndefined()
 		expect(session.panelItems.value.filter((item) => item.type === "group").map((item) => item.name)).toEqual([
-			"Command", "File", "Edit", "Delete",
+			"Command", "File", "Create", "Edit", "Delete",
+		])
+		expect(session.panelItems.value.filter((item) => item.type === "op" && item.group === "Create").map((item) => item.name)).toEqual([
+			"mkdir", "new",
 		])
 		expect(session.panelItems.value.filter((item) => item.type === "op" && item.group === "Edit").map((item) => item.name)).toEqual([
-			"edit", "move", "rename", "replace", "touch",
+			"chmod", "chown", "copy", "edit", "hardlink", "move", "rename", "replace", "symlink", "touch",
 		])
 		expect(session.panelItems.value.filter((item) => item.type === "op" && item.group === "Delete").map((item) => item.name)).toEqual([
-			"delete", "erase",
+			"delete", "erase", "unlink",
 		])
 		expect(session.panelRows.value.at(-1)).toMatchObject({ type: "run", name: "Run" })
 	})
@@ -296,7 +399,19 @@ describe("panel", () => {
 		expect(session.viewMode.value).toBe("explorer")
 	})
 
-	test("run via panel dispatch executes and stays transient", async () => {
+	test("the panel Quit command calls the host hook", async () => {
+		const { session } = await makeSession()
+		let quits = 0
+		session.quit = () => quits++
+		session.dispatch("panel.open")
+		const index = session.panelFiltered.value.findIndex((entry) => entry.id === "command:quit")
+		session.dispatch("panel.setOp", { index })
+		await session.dispatch("panel.run")
+		expect(quits).toBe(1)
+		expect(session.panelOpen.value).toBe(false)
+	})
+
+	test("a red run prints the command, arms Confirm, then executes", async () => {
 		const { fs, session } = await makeSession()
 		session.dispatch("panel.open")
 		expect(session.panelOpen.value).toBe(true)
@@ -305,6 +420,16 @@ describe("panel", () => {
 		// Toggle the destination op to `delete` and run against the cursor.
 		const deleteIndex = session.panelFiltered.value.findIndex((op) => op.name === "delete")
 		session.dispatch("panel.setOp", { index: deleteIndex })
+		await session.dispatch("panel.run")
+		// First press only arms: the command is printed and the button reads
+		// Confirm; nothing has been deleted yet.
+		expect(session.panelOpen.value).toBe(true)
+		expect(session.panelArmed.value).toBe(true)
+		expect(session.panelRows.value.at(-1).command).toBe("delete /home/docs")
+		expect(session.panelRows.value.at(-1)).toMatchObject({ type: "run", name: "Confirm", armed: true })
+		expect(session.commandBarItems.value.some((item) => item.title === "Confirm")).toBe(true)
+		expect(await fs.readDir("/home")).toHaveLength(2)
+		// Second press executes.
 		await session.dispatch("panel.run")
 		expect(session.panelOpen.value).toBe(false)
 		expect(await fs.readDir("/home")).toHaveLength(1)
@@ -344,9 +469,11 @@ describe("panel", () => {
 		const index = session.panelFiltered.value.findIndex((entry) => entry.name === "mkdir")
 		session.dispatch("panel.setOp", { index })
 		session.panelDraft.set(
-			session.panelDraft.value.map((binding) =>
-				binding.name === "PATH" ? { ...binding, value: "/home/docs" } : binding,
-			),
+			session.panelDraft.value.map((binding) => {
+				if (binding.name === "PATH") return { ...binding, value: "/home" }
+				if (binding.name === "NAME") return { ...binding, value: "docs" }
+				return binding
+			}),
 		)
 		await session.dispatch("panel.run")
 		expect(session.panelOpen.value).toBe(true)
@@ -376,15 +503,18 @@ describe("panel", () => {
 		expect(session.panelEntry.value).toBe(null)
 	})
 
-	test("erase through the panel routes the confirm back to the draft", async () => {
+	test("erase uses the panel Confirm instead of the confirm overlay", async () => {
 		const { fs, session } = await makeSession()
 		session.dispatch("panel.open")
 		const eraseIndex = session.panelFiltered.value.findIndex((op) => op.name === "erase")
 		session.dispatch("panel.setOp", { index: eraseIndex })
 		await session.dispatch("panel.run")
 		expect(session.panelOpen.value).toBe(true)
-		expect(session.confirm.value.text).toContain("erase")
-		await session.dispatch("confirm.yes")
+		expect(session.confirm.value).toBeNull()
+		expect(session.panelArmed.value).toBe(true)
+		expect(session.panelRows.value.at(-1).command).toContain("erase /home/docs")
+		await session.dispatch("panel.run")
+		expect(session.panelOpen.value).toBe(false)
 		expect(await fs.readDir("/home")).toHaveLength(1)
 	})
 

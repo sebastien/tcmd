@@ -28,10 +28,10 @@ function panelTitle(entry) {
 }
 
 // Function: panelFooter
-const PANEL_FOOTER = "type to filter   ⇥ args   ⌃O browse   Spc toggle   ↵ run   Esc close"
+const PANEL_FOOTER = "type to filter   ⇥ args   ⌃O browse   Spc toggle   ↵ run"
 
 // Function: pickerFooter
-const PICKER_FOOTER = "type to filter   ↑↓ row   → open   ↵ choose   ⌃↵ this dir   ⌫ up   Esc back"
+const PICKER_FOOTER = "type path   ↑↓ rows   → open   ↵ go   ⌃↵ here   ⇥ focus   Esc back"
 
 // Function: panelSign
 // The filter prompt (`:`) before the command filter input.
@@ -46,32 +46,54 @@ function createBehaviors(env) {
 	const behaviors = {
 		bg: () => env.overlayBg,
 		borderFg: () => env.borderPrimaryActiveFg,
-		// The right pane's header: the selected command's name.
+		// The right pane's header: the selected command's name. The close
+		// shorthand lives in the dialog's top border.
 		commandName: (_self, data) => unwrap(data.entry)?.name ?? "",
 		commandNameFg: () => env.textHeadingFg,
+		closeHint: () => "[Close Esc]",
+		closeHintFg: () => env.textSecondaryFg,
 		confirm: (self) => self.pub("panel:confirm"),
-		// The argument pane's empty state: an operation with no bound rows has
-		// nothing to fill. While picking the picker's own empty state stands in.
-		argsEmpty: (_self, data) =>
-			!unwrap(data.picking) && !(unwrap(data.rows) ?? []).some((row) => row.type !== "run"),
-		argsEmptyText: () => "no arguments",
-		// The file picker sub-mode: a nested pane with its path, filter input and
-		// entry rows (rendered through the shared arg-row map).
+		// The armed action prints the command it will execute below `[Confirm]`,
+		// tinted with the action's risk colour.
+		confirmCommand: (_self, data) =>
+			(unwrap(data?.rows) ?? []).find((row) => row.type === "run")?.command ?? "",
+		hasConfirmCommand: (_self, data) =>
+			Boolean((unwrap(data?.rows) ?? []).find((row) => row.type === "run")?.command),
+		confirmCommandFg: (_self, data) =>
+			unwrap(data?.entry)?.risk === "destructive" ? env.errorFg : env.warningFg,
+		confirmRisk: (_self, data) => unwrap(data?.entry)?.risk ?? null,
+		// A failed run moves its error out of the action row into a framed
+		// block below the button.
+		hasRunError: (_self, data) =>
+			Boolean((unwrap(data?.rows) ?? []).find((row) => row.type === "run" && row.error)?.error),
+		runError: (_self, data) =>
+			(unwrap(data?.rows) ?? []).find((row) => row.type === "run" && row.error)?.error ?? "",
+		runErrorFg: () => env.errorFg,
+		// The file picker sub-mode: the nested FilePicker owns its editable path,
+		// file-panel rows and scrollbar.
 		picking: (_self, data) => Boolean(unwrap(data.picking)),
-		pickerPath: (_self, data) => unwrap(data.pickerPath) ?? "",
-		pickerSign: () => "⌕ ",
-		pickerFocused: (self, data) => panelOpen(self, data) && Boolean(unwrap(data.picking)),
-		pickerEmpty: (_self, data) =>
-			Boolean(unwrap(data.picking)) && !(unwrap(data.rows) ?? []).some((row) => row.type === "entry"),
-		pickerEmptyText: () => "  empty",
-		footer: (_self, data) => (unwrap(data?.picking) ? PICKER_FOOTER : PANEL_FOOTER),
+		pickerView: (_self, data) => ({
+			open: data.picking,
+			path: data.pickerPathText,
+			focus: data.pickerFocus,
+			rows: data.pickerRows,
+			cursor: data.argCursor,
+		}),
+		footer: (_self, data) => {
+			if (unwrap(data?.picking)) return PICKER_FOOTER
+			// An armed risky action turns Enter into the confirmation step. The
+			// run row carries the flag (the rows input is already reactive).
+			const armed = (unwrap(data?.rows) ?? []).some((row) => row.type === "run" && row.armed)
+			const base = armed ? PANEL_FOOTER.replace("↵ run", "↵ confirm") : PANEL_FOOTER
+			// The permission grid adds a bit cursor to the usual keys.
+			return unwrap(data?.entry)?.name === "chmod" ? `${base}   ←→ bits` : base
+		},
 		footerFg: () => env.textSecondaryFg,
 		// Dividers: a vertical rule between the panes and a horizontal rule under
 		// the filter, in the secondary border colour.
 		ruleFg: () => env.borderSecondaryFg,
 		sideRule: () => ["left"],
 		headRule: () => ["top"],
-		pickerBottomRule: () => ["bottom"],
 		labelFg: () => env.textSecondaryFg,
 		focusArgs: (_self, data) => unwrap(data.focus) === PANEL_FOCUS.ARGS,
 		focusOps: (_self, data) => unwrap(data.focus) === PANEL_FOCUS.OPS,

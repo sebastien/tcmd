@@ -486,6 +486,23 @@ function createOpfsFs({ root, home = "/home/tester" } = {}) {
 				await eraseOne(from)
 			})
 		},
+		// OPFS has no links, ownership or permission modes. The operations
+		// report a clear error instead of silently doing nothing.
+		hardlink: async () => {
+			throw new Error("hard links are not available in the browser filesystem")
+		},
+		symlink: async () => {
+			throw new Error("symbolic links are not available in the browser filesystem")
+		},
+		chmod: async () => {
+			throw new Error("permission modes are not available in the browser filesystem")
+		},
+		chown: async () => {
+			throw new Error("ownership is not available in the browser filesystem")
+		},
+		unlink: async (path) => {
+			throw new Error(`not a symbolic link: ${path}`)
+		},
 		mkdir,
 		trash,
 		trashList,

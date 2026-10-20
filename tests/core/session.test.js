@@ -117,19 +117,37 @@ describe("session", () => {
 		expect(session.preview.value.innerExt).toBe("tar")
 	})
 
-	test("command bar shows bar commands, then panel hints while open", () => {
+	test("command bar shows the fixed bar commands, then panel hints while open", () => {
 		const session = makeSession()
 		const ids = session.commandBarItems.value.map((item) => item.id)
-		expect(ids).toContain("pane.toggle")
+		expect(ids).toEqual([
+			"panel.open",
+			"list.mark",
+			"filter.start",
+			"pane.toggle",
+			"bookmark.open",
+			"view.toggleMode",
+			"app.help",
+		])
+		expect(session.commandBarItems.value.map((item) => item.title)).toEqual([
+			"Commands",
+			"Mark",
+			"Filter",
+			"Switch",
+			"Bookmarks",
+			"Toggle Mode",
+			"Help",
+		])
 		expect(ids).not.toContain("nav.up")
+		expect(ids).not.toContain("pane.enter")
 
 		session.panelOpen.set(true)
 		const hints = session.commandBarItems.value.map((item) => item.title)
 		expect(hints).toEqual(["Command", "Arg", "Browse", "Toggle", "Run", "Close"])
 		// The picker sub-mode swaps in its own hints.
-		session.panelPicking.set(true)
+		session.pickerOpen.set(true)
 		const picker = session.commandBarItems.value.map((item) => item.title)
-		expect(picker).toContain("Choose")
+		expect(picker).toContain("Go")
 	})
 
 	test("the panel lists categorized name-only operations and the view command", () => {
@@ -137,21 +155,24 @@ describe("session", () => {
 		const items = session.panelItems.value
 		const entries = items.filter((item) => item.type === "op")
 		expect(entries.map((item) => item.name)).toEqual([
-			"bookmark", "view", "abspath", "copy", "mkdir", "open", "realpath", "run", "stat", "view",
-			"edit", "move", "rename", "replace", "touch", "delete", "erase",
+			"bookmark", "quit", "view",
+			"abspath", "open", "realpath", "run", "stat", "view",
+			"mkdir", "new",
+			"chmod", "chown", "copy", "edit", "hardlink", "move", "rename", "replace", "symlink", "touch",
+			"delete", "erase", "unlink",
 		])
 		expect(items.filter((item) => item.type === "group").map((item) => item.name)).toEqual([
-			"Command", "File", "Edit", "Delete",
+			"Command", "File", "Create", "Edit", "Delete",
 		])
 		expect(entries.every((item) => item.summary === undefined)).toBe(true)
-		expect(entries.some((item) => item.id === "command:view")).toBe(true)
+		expect(entries.some((item) => item.key === "command:view")).toBe(true)
 	})
 
 	test("the panel filters the operations by query and resets its cursor", () => {
 		const session = makeSession()
 		session.panelQuery.set("copy")
-		const ids = session.panelItems.value.map((item) => item.id)
-		expect(ids).toEqual(["group:file", "op:copy"])
+		const ids = session.panelItems.value.map((item) => item.key)
+		expect(ids).toEqual(["group:edit", "op:copy"])
 
 		session.panelOpIndex.set(3)
 		session.panelQuery.set("touch")
@@ -162,7 +183,7 @@ describe("session", () => {
 		const session = makeSession()
 		session.panelQuery.set("op")
 		const items = session.panelItems.value
-		expect(items.map((item) => item.id)).toEqual(["group:file", "op:copy", "op:open"])
+		expect(items.map((item) => item.key)).toEqual(["group:file", "op:open", "group:edit", "op:copy"])
 	})
 
 	test("`!` lands on the shell operation with its CMD field focused", () => {
@@ -196,63 +217,62 @@ describe("session", () => {
 		expect(session.filesets.value.map((set) => set.id)).toEqual(["$A", "$B"])
 	})
 
-	test("record defaults the name to the basename and tracks the kind", async () => {
+	test("b opens the panel with an add row for the cursor entry", async () => {
 		const session = makeSession()
 		await load(session)
 		session.panes.left.cursor.set(1) // notes.txt
-		session.dispatch("bookmark.record")
+		session.dispatch("bookmark.open")
 		expect(session.bookmarkOpen.value).toBe(true)
-		expect(session.bookmarkMode.value).toBe("name")
+		expect(session.bookmarkQuery.value).toBe("")
 		expect(session.bookmarkTarget.value).toEqual({ path: "/home/notes.txt", isDir: false })
-		// The name is pre-filled with the basename.
-		expect(session.bookmarkQuery.value).toBe("notes.txt")
+		expect(session.bookmarkItems.value).toEqual([
+			{ key: "+ add current path", add: true, name: "+ add current path", path: "/home/notes.txt", isDir: false },
+		])
+	})
 
-		session.dispatch("bookmark.save")
+	test("the add row tracks the directory kind for a directory entry", async () => {
+		const session = makeSession()
+		await load(session)
+		session.panes.left.cursor.set(0) // tester/ directory
+		session.dispatch("bookmark.open")
+		expect(session.bookmarkTarget.value).toEqual({ path: "/home/tester", isDir: true })
+		expect(session.bookmarkItems.value[0]).toMatchObject({ add: true, path: "/home/tester", isDir: true })
+	})
+
+	test("activating the add row records the path under its basename", async () => {
+		const session = makeSession()
+		await load(session)
+		session.panes.left.cursor.set(1) // notes.txt
+		session.dispatch("bookmark.open")
+		await session.dispatch("bookmark.select")
 		await new Promise((resolve) => setTimeout(resolve, 0))
 		expect(session.bookmarks.entries.value).toEqual({
 			"notes.txt": { path: "/home/notes.txt", isDir: false },
 		})
 		expect(session.bookmarkOpen.value).toBe(false)
+		expect(session.notice.value.text).toBe("bookmarked notes.txt")
 	})
 
-	test("record tracks the directory kind for a directory entry", async () => {
-		const session = makeSession()
-		await load(session)
-		session.panes.left.cursor.set(0) // tester/ directory
-		session.dispatch("bookmark.record")
-		expect(session.bookmarkTarget.value).toEqual({ path: "/home/tester", isDir: true })
-		expect(session.bookmarkQuery.value).toBe("tester")
-	})
-
-	test("record skips a path that is already bookmarked", async () => {
+	test("a path that is already bookmarked gets no add row", async () => {
 		const session = makeSession()
 		await load(session)
 		await session.bookmarks.record("notes", "/home/notes.txt", false)
 		session.panes.left.cursor.set(1) // notes.txt
-		session.dispatch("bookmark.record")
-		// Already bookmarked: no name prompt, just a notice.
-		expect(session.bookmarkOpen.value).toBe(false)
-		expect(session.notice.value.text).toContain("notes")
+		session.dispatch("bookmark.open")
+		expect(session.bookmarkOpen.value).toBe(true)
+		expect(session.bookmarkItems.value).toEqual([
+			{ key: "notes", name: "notes", path: "/home/notes.txt", isDir: false },
+		])
 	})
 
-	test("save refuses an empty name", async () => {
-		const session = makeSession()
-		await load(session)
-		session.dispatch("bookmark.record")
-		session.bookmarkQuery.set("   ")
-		session.dispatch("bookmark.save")
-		expect(session.notice.value.kind).toBe("warning")
-		expect(session.bookmarks.entries.value).toEqual({})
-	})
-
-	test("jump to a directory bookmark opens it", async () => {
+	test("opening a directory bookmark opens it", async () => {
 		const session = makeSession()
 		await load(session)
 		await session.bookmarks.record("tester", "/home/tester", true)
-		session.dispatch("bookmark.jump")
+		session.dispatch("bookmark.open")
 		expect(session.bookmarkOpen.value).toBe(true)
 		expect(session.bookmarkItems.value).toEqual([
-			{ name: "tester", path: "/home/tester", isDir: true },
+			{ key: "tester", name: "tester", path: "/home/tester", isDir: true },
 		])
 		await session.dispatch("bookmark.select")
 		await new Promise((resolve) => setTimeout(resolve, 0))
@@ -260,11 +280,13 @@ describe("session", () => {
 		expect(session.bookmarkOpen.value).toBe(false)
 	})
 
-	test("jump to a file bookmark selects and previews it", async () => {
+	test("opening a file bookmark selects and previews it", async () => {
 		const session = makeSession()
 		await load(session)
 		await session.bookmarks.record("notes", "/home/notes.txt", false)
-		session.dispatch("bookmark.jump")
+		session.dispatch("bookmark.open")
+		// The filter hides the add row so the first row is the bookmark.
+		session.bookmarkQuery.set("notes")
 		await session.dispatch("bookmark.select")
 		await new Promise((resolve) => setTimeout(resolve, 0))
 		expect(session.panes.left.path.value).toBe("/home")
@@ -274,17 +296,20 @@ describe("session", () => {
 		expect(session.preview.value?.title).toBe("notes.txt")
 	})
 
-	test("the picker fuzzy-matches bookmarks by name and path", async () => {
+	test("the filter fuzzy-matches bookmarks by name and path", async () => {
 		const session = makeSession()
 		await load(session)
 		await session.bookmarks.record("home", "/home", true)
 		await session.bookmarks.record("notes", "/home/notes.txt", false)
-		session.dispatch("bookmark.jump")
+		session.dispatch("bookmark.open")
 		session.bookmarkQuery.set("notes")
 		expect(session.bookmarkItems.value.map((row) => row.name)).toEqual(["notes"])
 		// A path-only match still finds the bookmark.
 		session.bookmarkQuery.set("notes.txt")
 		expect(session.bookmarkItems.value.map((row) => row.name)).toEqual(["notes"])
+		// With no query the add row leads the list.
+		session.bookmarkQuery.set("")
+		expect(session.bookmarkItems.value[0].add).toBe(true)
 	})
 
 	test("the preview column mirrors the previewed directory", async () => {

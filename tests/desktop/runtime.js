@@ -79,6 +79,8 @@ function createNodeRuntime({ home, cwd = home, env = {} } = {}) {
 		makeDir: (path, options) => fs.mkdir(path, { recursive: Boolean(options?.recursive), mode: options?.mode }),
 		rename: (from, to) => fs.rename(from, to),
 		symlink: (target, path) => fs.symlink(target, path),
+		link: (from, to) => fs.link(from, to),
+		chown: (path, uid, gid) => fs.chown(path, uid, gid),
 		utime: (path, atime, mtime) => fs.utimes(path, atime, mtime),
 		async statFs(path) {
 			const stat = await fs.statfs(path)
