@@ -46,6 +46,39 @@ describe("session", () => {
 		expect(commander.viewMode.value).toBe("commander")
 	})
 
+	test("auto-refresh only follows the columns the view shows", () => {
+		const fs = createMockFs(TREE)
+		const session = createSession({
+			fs,
+			left: createPane({ fs, path: "/home" }),
+			right: createPane({ fs, path: "/" }),
+		})
+		// Explorer: parent, the current source/destination pane, and the
+		// inspector. The other pane is not rendered, so it does not watch.
+		expect(session.panes.parent.autoRefresh.value).toBe(true)
+		expect(session.panes.left.autoRefresh.value).toBe(true)
+		expect(session.panes.right.autoRefresh.value).toBe(false)
+		expect(session.panes.preview.autoRefresh.value).toBe(true)
+		expect(session.pickerPane.autoRefresh.value).toBe(false)
+
+		session.active.set("right")
+		expect(session.panes.right.autoRefresh.value).toBe(true)
+		expect(session.panes.left.autoRefresh.value).toBe(false)
+
+		session.viewMode.set("commander")
+		expect(session.panes.left.autoRefresh.value).toBe(true)
+		expect(session.panes.right.autoRefresh.value).toBe(true)
+		expect(session.panes.parent.autoRefresh.value).toBe(false)
+
+		session.showPreview.set(false)
+		expect(session.panes.preview.autoRefresh.value).toBe(false)
+
+		session.pickerOpen.set(true)
+		expect(session.pickerPane.autoRefresh.value).toBe(true)
+		session.pickerOpen.set(false)
+		expect(session.pickerPane.autoRefresh.value).toBe(false)
+	})
+
 	test("tracks the host and the active pane's directory for the header", async () => {
 		const session = makeSession()
 		await load(session)
@@ -155,17 +188,19 @@ describe("session", () => {
 		const items = session.panelItems.value
 		const entries = items.filter((item) => item.type === "op")
 		expect(entries.map((item) => item.name)).toEqual([
-			"bookmark", "quit", "view",
-			"abspath", "open", "realpath", "run", "stat", "view",
+			"bookmark", "quit", "reload", "view",
+			"abspath", "open", "realpath", "run", "view",
+			"df", "du", "stat",
 			"mkdir", "new",
 			"chmod", "chown", "copy", "edit", "hardlink", "move", "rename", "replace", "symlink", "touch",
 			"delete", "erase", "unlink",
 		])
 		expect(items.filter((item) => item.type === "group").map((item) => item.name)).toEqual([
-			"Command", "File", "Create", "Edit", "Delete",
+			"Command", "File", "Info", "Create", "Edit", "Delete",
 		])
 		expect(entries.every((item) => item.summary === undefined)).toBe(true)
 		expect(entries.some((item) => item.key === "command:view")).toBe(true)
+		expect(entries.some((item) => item.key === "command:reload")).toBe(true)
 	})
 
 	test("the panel filters the operations by query and resets its cursor", () => {

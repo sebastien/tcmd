@@ -305,4 +305,39 @@ describe("exact rename", () => {
 		await session.dispatch("history.undo")
 		expect(await session.fs.stat("/home/notes.txt")).not.toBeNull()
 	})
+
+	test("the confirm line prints the resolved source and target paths", async () => {
+		const { fs, session } = await makeSession()
+		// Relativize against this working directory rather than the mock's
+		// `/home/tester`, so the pane's own paths read cleanly.
+		fs.cwd = () => "/home"
+		selectEntry(session, "notes.txt")
+		await openOp(session, "rename")
+		session.panelDraft.set(
+			session.panelDraft.value.map((item) =>
+				item.name === "TO" ? { ...item, value: "memo.txt" } : item,
+			),
+		)
+		await session.dispatch("panel.run")
+		expect(session.panelArmed.value).toBe(true)
+		expect(session.panelRows.value.at(-1).command).toBe("rename notes.txt memo.txt")
+	})
+
+	test("the confirm line keeps the directory segment under the cwd", async () => {
+		const { fs, session } = await makeSession()
+		fs.cwd = () => "/home"
+		await openOp(session, "rename")
+		session.panelDraft.set(
+			session.panelDraft.value.map((item) => {
+				if (item.name === "FROM") return { ...item, value: "readme.md" }
+				if (item.name === "TO") return { ...item, value: "guide.md" }
+				if (item.name === "PATH") return { ...item, value: "/home/docs" }
+				return item
+			}),
+		)
+		await session.dispatch("panel.run")
+		expect(session.panelRows.value.at(-1).command).toBe(
+			"rename docs/readme.md docs/guide.md",
+		)
+	})
 })

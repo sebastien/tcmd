@@ -345,4 +345,128 @@ describe("directory", () => {
 		expect(active).toBe("left")
 		dir.dispose()
 	})
+
+	test("a refresh keeps the selected entry when one is inserted above it", async () => {
+		const fs = createMockFs(TREE)
+		const dir = createDirectory({ fs, path: "/home", watch: false })
+		await dir.refresh()
+		dir.cursor.set(1) // notes.txt
+		expect(dir.currentEntry().name).toBe("notes.txt")
+
+		const readDir = fs.readDir
+		fs.readDir = (path) =>
+			path === "/home"
+				? readDir(path).then((entries) => [
+						{ name: "aaa.txt", path: "/home/aaa.txt", isDir: false },
+						...entries,
+					])
+				: readDir(path)
+		await dir.refresh()
+		// The index shifted, but the same file stays under the cursor.
+		expect(dir.currentEntry().name).toBe("notes.txt")
+		expect(dir.cursor.value).toBe(2)
+		dir.dispose()
+	})
+
+	// A watched directory with a controllable native watcher: `watchers`
+	// captures the callback and stop state of each armed path.
+	function createWatchedFs() {
+		const fs = createMockFs(TREE)
+		const watchers = []
+		fs.watch = (path, onChange) => {
+			const watcher = { path, onChange, stopped: false }
+			watchers.push(watcher)
+			return () => {
+				watcher.stopped = true
+			}
+		}
+		return { fs, watchers }
+	}
+
+	test("a watched directory refreshes itself when the listing changes", async () => {
+		const { fs, watchers } = createWatchedFs()
+		const dir = createDirectory({ fs, path: "/home", watch: { delay: 5 } })
+		await dir.refresh()
+		expect(watchers.map((watcher) => watcher.path)).toEqual(["/home"])
+
+		const readDir = fs.readDir
+		fs.readDir = (path) =>
+			path === "/home"
+				? readDir(path).then((entries) => [
+						...entries,
+						{ name: "new.txt", path: "/home/new.txt", isDir: false },
+					])
+				: readDir(path)
+		watchers[0].onChange()
+		await new Promise((resolve) => setTimeout(resolve, 50))
+		expect(dir.entries.value.map((entry) => entry.name)).toEqual(["tester", "new.txt", "notes.txt"])
+		dir.dispose()
+		expect(watchers[0].stopped).toBe(true)
+	})
+
+	test("a move re-arms the watcher and late old-path events are inert", async () => {
+		const { fs, watchers } = createWatchedFs()
+		const dir = createDirectory({ fs, path: "/home", watch: { delay: 5 } })
+		await dir.refresh()
+		const first = watchers[0]
+		await dir.navigate("/home/tester")
+		expect(first.stopped).toBe(true)
+		expect(watchers[watchers.length - 1].path).toBe("/home/tester")
+
+		let reads = 0
+		const readDir = fs.readDir
+		fs.readDir = (path) => {
+			reads += 1
+			return readDir(path)
+		}
+		first.onChange()
+		await new Promise((resolve) => setTimeout(resolve, 50))
+		expect(reads).toBe(0)
+		dir.dispose()
+	})
+
+	test("auto-refresh pauses with the column and resumes with a fresh read", async () => {
+		const { fs, watchers } = createWatchedFs()
+		const dir = createDirectory({ fs, path: "/home", watch: { delay: 5 } })
+		await dir.refresh()
+		expect(watchers.length).toBe(1)
+
+		dir.setAutoRefresh(false)
+		expect(dir.autoRefresh.value).toBe(false)
+		expect(watchers[0].stopped).toBe(true)
+
+		let reads = 0
+		const readDir = fs.readDir
+		fs.readDir = (path) => {
+			reads += 1
+			return readDir(path)
+		}
+		dir.setAutoRefresh(true)
+		await new Promise((resolve) => setTimeout(resolve, 20))
+		expect(dir.autoRefresh.value).toBe(true)
+		expect(reads).toBe(1)
+		expect(watchers[watchers.length - 1].path).toBe("/home")
+		expect(watchers[watchers.length - 1].stopped).toBe(false)
+		dir.dispose()
+	})
+
+	test("a change during navigation cannot supersede it", async () => {
+		const { fs, watchers } = createWatchedFs()
+		const dir = createDirectory({ fs, path: "/home", watch: { delay: 5 } })
+		await dir.refresh()
+
+		const pending = deferred()
+		const readDir = fs.readDir
+		fs.readDir = (path) => (path === "/home/tester" ? pending.promise : readDir(path))
+		const navigation = dir.navigate("/home/tester")
+		// The move is in flight: a debounced event must not start a read of
+		// the path being left and win the token race.
+		watchers[0].onChange()
+		await new Promise((resolve) => setTimeout(resolve, 50))
+		pending.resolve([{ name: "inner.txt", path: "/home/tester/inner.txt", isDir: false }])
+		await navigation
+		expect(dir.path.value).toBe("/home/tester")
+		expect(dir.error.value).toBeNull()
+		dir.dispose()
+	})
 })

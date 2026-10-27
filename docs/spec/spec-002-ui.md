@@ -153,9 +153,10 @@ events, with the renderer dimensions as a fallback):
 - Command panel (`:`/`m`): a Commando-style structured view over the commands.
   A filter input at the top narrows the operation list as you type — the
   matching command takes the cursor (`edit` highlights `edit`) — and the left
-  column groups entries by purpose: Command, File, Create, Edit (amber), and
-  Delete (red). Command includes the workspace-view toggle and Quit; File's `view`
-  previews the selected path; Create holds `mkdir`/`new`; Edit (amber) holds
+  column groups entries by purpose: Command, File, Info, Create, Edit (amber),
+  and Delete (red). Command includes the workspace-view toggle and Quit; File's
+  `view` previews the selected path; Info holds `stat`, `du` and `df`; Create
+  holds `mkdir`/`new`; Edit (amber) holds
   `copy`, the link operations, and the permission and ownership changes;
   Delete holds `unlink` alongside `delete`/`erase`. Bold section titles head indented, alphabetized command names.
   A vertical rule divides the left column from
@@ -257,7 +258,9 @@ events, with the renderer dimensions as a fallback):
 - delete PATH (moves to trash)
 - erase PATH (does not move to trash)
 - unlink PATH... (removes symbolic links only, never their targets)
-- stat PATH (info, including du)
+- stat PATH... (info, including du)
+- du PATH... (recursive disk usage; alias `usage`)
+- df PATH... (filesystem free and total space; alias `free`)
 - abspath PATH... (normalized absolute paths, shell-quoted for copy/paste, copied to the clipboard)
 - realpath PATH... (absolute paths with symlinks resolved, copied to the clipboard)
 - touch PATH

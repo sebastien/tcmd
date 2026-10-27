@@ -44,12 +44,21 @@ function bookmarkFile() {
 	return nodePath.join(configHome, "tcmd", "bookmarks.json")
 }
 
+// Function: startupPath
+// Resolves a CLI path argument against the working directory. Relative paths
+// (`../src`, `.`) would otherwise reach the panes verbatim and be rewritten
+// from the filesystem root by the POSIX path helpers, corrupting breadcrumbs,
+// history and the explorer's parent column.
+function startupPath(value, fallback) {
+	return value ? nodePath.resolve(value) : fallback
+}
+
 // Function: main
 // Runs the TUI. `paths` are optional initial directories [left, right].
 async function main(paths = []) {
 	const fs = createNodeFs()
-	const left = createPane({ fs, path: paths[0] || fs.cwd() })
-	const right = createPane({ fs, path: paths[1] || fs.home() })
+	const left = createPane({ fs, path: startupPath(paths[0], fs.cwd()) })
+	const right = createPane({ fs, path: startupPath(paths[1], fs.home()) })
 	let instance = null
 	const os = createNodeOs({
 		suspend: () => instance?._ownedRenderer?.suspend?.(),
@@ -89,6 +98,6 @@ async function main(paths = []) {
 	return session
 }
 
-export { main, readSize }
+export { main, readSize, startupPath }
 
 // EOF

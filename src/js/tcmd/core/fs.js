@@ -13,6 +13,9 @@
 //   gid } | null>
 // - `realpath(path)`: Promise<string> - absolute path with symlinks resolved
 // - `isDir(path)`: Promise<boolean>
+// - `watch(path, onChange)`: stop() | null, or a promise of either - optional
+//   change notification for `path` (async for RPC adapters); unsupported
+//   paths are polled by `core/watch`
 // - `readTextHead(path, maxBytes)`: Promise<string> - leading bytes as text
 // - `readBytes(path, maxBytes)`: Promise<Uint8Array> - leading raw bytes (the
 //   compressed previews decompress these)
@@ -223,6 +226,20 @@ function createNodeFs() {
 		async isDir(path) {
 			const stats = await statSafe(path)
 			return Boolean(stats?.isDir)
+		},
+		// Function: watch (adapter method)
+		// Reports changes inside `path` through Node's directory watcher. The
+		// callback is coalesced by `core/watch`; the returned stop closes the
+		// watcher. A path this process cannot watch (watch limit, permissions,
+		// a deleted directory) yields null so the caller falls back to polling.
+		watch(path, onChange) {
+			try {
+				const watcher = nodeFs.watch(path, { persistent: false }, () => onChange?.())
+				watcher.on?.("error", () => watcher.close())
+				return () => watcher.close()
+			} catch (error) {
+				return null
+			}
 		},
 		async readTextHead(path, maxBytes = PREVIEW_BYTES) {
 			const file = nodeFs.openSync(path, "r")

@@ -94,7 +94,7 @@ async function startApp({ host, doc, tiny }) {
 	}
 
 	try {
-		fs = await createDesktopFs({ call })
+		fs = await createDesktopFs({ call, on: (event, handler) => tiny.api.on(event, handler) })
 		const saved = await tiny.store.get(WORKSPACE_KEY).catch(() => null)
 		const validDirectory = async (value) => {
 			if (typeof value !== "string") return null

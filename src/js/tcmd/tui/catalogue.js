@@ -18,7 +18,7 @@
 // binds the same modules to `.html`.
 
 import { extend, getTags, ui } from "select.tui"
-import { unwrap } from "select/state/cells"
+import { effect, unwrap } from "select/state/cells"
 import bookmarkListXml from "../components/BookmarkList.xml" with { type: "text" }
 import bookmarkRowXml from "../components/BookmarkRow.xml" with { type: "text" }
 import commandBarXml from "../components/CommandBar.xml" with { type: "text" }
@@ -93,7 +93,10 @@ let registered = false
 // and `filetype` still arrive through the node's own `out:` bindings.
 class CodeView extends CodeRenderable {
 	constructor(ctx, options) {
-		super(ctx, { ...options, syntaxStyle: options.syntaxStyle ?? syntaxStyle() })
+		super(ctx, {
+			...options,
+			syntaxStyle: options.syntaxStyle ?? syntaxStyle(ctx.nativeScene),
+		})
 	}
 }
 
@@ -381,7 +384,25 @@ function createComponents() {
 			rows: filePickerRows(filePickerRow),
 			scrollTop: filePickerScrollTop,
 		})),
-		FilePreview: bind(ui, "FilePreview", filePreviewXml, filePreviewBehaviors(env)),
+		FilePreview: bind(ui, "FilePreview", filePreviewXml, filePreviewBehaviors(env)).init((self, data) => {
+			// A new preview target starts at the top of the body. `entry` is the
+			// reactive cell the App threads down; the effect fires after mount,
+			// when `ref.body` exists, and the following render swaps the text.
+			if (data?.entry?.isReactive) {
+				self.effect(() => effect([data.entry], () => {
+					if (self.ref.body) self.ref.body.scrollTop = 0
+				}))
+			}
+			// A full-preview scroll request (App key routing) moves the body by
+			// one line; OpenTUI clamps the range, so the edges need no guard.
+			if (data?.scroll?.isReactive) {
+				self.effect(() => effect([data.scroll], ([request]) => {
+					const body = self.ref.body
+					if (!body || !request?.delta) return
+					body.scrollTop = Math.max(0, body.scrollTop + request.delta)
+				}))
+			}
+		}),
 		FilterBar: filterBar,
 		Help: bind(ui, "Help", helpXml, helpBehaviors({ theme: tuiTheme, rows: helpRows(helpRow) })),
 		OverlayList: bind(ui, "OverlayList", overlayListXml, overlayListBehaviors({
@@ -417,13 +438,25 @@ function showScrollBar(node) {
 	queueMicrotask(fix)
 	const bar = node.verticalScrollBar
 	if (bar) {
+		// Override select.tui's hidden default and let overflow drive the bar
+		// again. OpenTUI 0.8 pins `visible = false`, so the reset is required.
+		bar.resetVisibilityControl?.()
 		bar.width = 1
 		bar.flexShrink = 0
-		// The slider's default track/thumb are greys; the theme keeps the
-		// scrollbar part of the night-blue surfaces (mono leaves the defaults).
-		if (bar.slider && tuiTheme.scrollbarThumbBg) {
-			bar.slider.backgroundColor = tuiTheme.scrollbarTrackBg
-			bar.slider.foregroundColor = tuiTheme.scrollbarThumbBg
+		// The default track/thumb are greys; the theme keeps the scrollbar part
+		// of the night-blue surfaces (mono leaves the defaults). OpenTUI 0.8
+		// paints the bar natively from `trackOptions`; older versions expose a
+		// child slider renderable.
+		if (bar.slider) {
+			if (tuiTheme.scrollbarThumbBg) {
+				bar.slider.backgroundColor = tuiTheme.scrollbarTrackBg
+				bar.slider.foregroundColor = tuiTheme.scrollbarThumbBg
+			}
+		} else if (tuiTheme.scrollbarThumbBg) {
+			bar.trackOptions = {
+				foregroundColor: tuiTheme.scrollbarThumbBg,
+				backgroundColor: tuiTheme.scrollbarTrackBg,
+			}
 		}
 	}
 }

@@ -99,7 +99,7 @@
 					<entrydetail in:entry="rightEntry" in:marked="rightMarked" height="2"></entrydetail>
 				</box>
 				<filepreview when="showInspectorInline" in:preview="preview" in:show="showInspectorInline"
-				             in:entry="appEntry" in:paneId="previewId"
+				             in:entry="appEntry" in:paneId="previewId" in:scroll="previewScroll"
 				             in:dirSegments="previewSegments" in:dirEntries="previewEntries"
 				             in:dirCursor="previewCursor" in:dirMarked="previewMarked"
 				             in:dirActive="previewActive" in:dirLoading="previewLoading"
@@ -108,7 +108,7 @@
 			<!-- Maximized inspector (`⇧V`): the preview takes the whole pane
 			     row, the identity and command bars staying in place. -->
 			<filepreview when="showPreviewFull" in:preview="preview" in:show="showPreviewFull"
-			             in:entry="appEntry" in:paneId="previewId"
+			             in:entry="appEntry" in:paneId="previewId" in:scroll="previewScroll"
 			             in:dirSegments="previewSegments" in:dirEntries="previewEntries"
 			             in:dirCursor="previewCursor" in:dirMarked="previewMarked"
 			             in:dirActive="previewActive" in:dirLoading="previewLoading"
@@ -125,6 +125,7 @@
 	     alignItems="center" justifyContent="center">
 		<box width="80%" height="90%">
 			<filepreview in:preview="preview" in:show="showViewer" in:entry="appEntry" in:paneId="previewId"
+			             in:scroll="previewScroll"
 			             in:dirSegments="previewSegments" in:dirEntries="previewEntries"
 			             in:dirCursor="previewCursor" in:dirMarked="previewMarked"
 			             in:dirActive="previewActive" in:dirLoading="previewLoading"></filepreview>

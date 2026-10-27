@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { basename, extname, join, normalize, parent, prefix, split } from "../../src/js/tcmd/core/path.js"
+import { basename, extname, join, normalize, parent, prefix, relative, split } from "../../src/js/tcmd/core/path.js"
 
 describe("path", () => {
 	test("normalize collapses duplicate separators", () => {
@@ -38,5 +38,17 @@ describe("path", () => {
 		expect(extname("/a/b/c.TXT")).toBe("txt")
 		expect(extname("")).toBeNull()
 		expect(extname(null)).toBeNull()
+	})
+
+	test("relative walks down, across siblings and from the root", () => {
+		expect(relative("/a", "/a/b/c")).toBe("b/c")
+		expect(relative("/a/b", "/a/b/c")).toBe("c")
+		expect(relative("/a/b", "/a/c")).toBe("../c")
+		expect(relative("/a/b/c", "/a")).toBe("../..")
+		expect(relative("/", "/a/b")).toBe("a/b")
+		expect(relative("/a", "/")).toBe("..")
+		expect(relative("/a/b", "/a/b")).toBe(".")
+		// A non-absolute input has no meaningful base: it comes back as is.
+		expect(relative("/a", "b/c")).toBe("b/c")
 	})
 })

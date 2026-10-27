@@ -54,6 +54,31 @@ function prefix(p, count) {
 	return SEP + parts.slice(0, Math.max(0, count)).join(SEP)
 }
 
-export { SEP, basename, extname, join, normalize, parent, prefix, split }
+// Function: relative
+// Expresses `target` relative to the absolute directory `base`, using `..`
+// segments when it sits outside: `relative("/a", "/a/b/c")` is `"b/c"` and
+// `relative("/a/b", "/a/c")` is `"../c"`. Equal paths collapse to `"."`. A
+// non-absolute input comes back unchanged, since there is nothing meaningful
+// to relativize against.
+function relative(base, target) {
+	const from = `${base ?? ""}`
+	const to = `${target ?? ""}`
+	if (!from.startsWith(SEP) || !to.startsWith(SEP)) return to
+	const baseParts = split(from)
+	const targetParts = split(to)
+	let common = 0
+	while (
+		common < baseParts.length &&
+		common < targetParts.length &&
+		baseParts[common] === targetParts[common]
+	) {
+		common += 1
+	}
+	const up = Array.from({ length: baseParts.length - common }, () => "..")
+	const down = targetParts.slice(common)
+	return [...up, ...down].join(SEP) || "."
+}
+
+export { SEP, basename, extname, join, normalize, parent, prefix, relative, split }
 
 // EOF

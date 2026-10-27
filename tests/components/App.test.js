@@ -191,6 +191,63 @@ describe("App", () => {
 		])
 	})
 
+	test("the viewer overlay routes arrows on a file preview to scroll and neighbours", () => {
+		const behaviors = createBehaviors({ quit: () => {} })
+		const { calls, data } = makeData({
+			viewerOpen: true,
+			appEntry: { isDir: false, name: "notes.txt", path: "/notes.txt" },
+		})
+		behaviors.keys(null, data, { name: "down" })
+		behaviors.keys(null, data, { name: "up" })
+		behaviors.keys(null, data, { name: "left" })
+		behaviors.keys(null, data, { name: "right" })
+		expect(calls).toEqual([
+			{ id: "preview.scroll", payload: { delta: 1 } },
+			{ id: "preview.scroll", payload: { delta: -1 } },
+			{ id: "nav.up", payload: undefined },
+			{ id: "nav.down", payload: undefined },
+		])
+	})
+
+	test("the viewer overlay keeps swallowing arrows on a directory preview", () => {
+		const behaviors = createBehaviors({ quit: () => {} })
+		const { calls, data } = makeData({
+			viewerOpen: true,
+			appEntry: { isDir: true, name: "docs", path: "/docs" },
+		})
+		behaviors.keys(null, data, { name: "down" })
+		behaviors.keys(null, data, { name: "left" })
+		expect(calls).toEqual([])
+	})
+
+	test("the maximized preview routes file arrows but leaves directories to the keymap", () => {
+		const behaviors = createBehaviors({ quit: () => {} })
+		const file = makeData({
+			previewFull: true,
+			appEntry: { isDir: false, name: "notes.txt", path: "/notes.txt" },
+		})
+		behaviors.keys(null, file.data, { name: "down" })
+		behaviors.keys(null, file.data, { name: "up" })
+		behaviors.keys(null, file.data, { name: "left" })
+		behaviors.keys(null, file.data, { name: "right" })
+		expect(file.calls).toEqual([
+			{ id: "preview.scroll", payload: { delta: 1 } },
+			{ id: "preview.scroll", payload: { delta: -1 } },
+			{ id: "nav.up", payload: undefined },
+			{ id: "nav.down", payload: undefined },
+		])
+		const directory = makeData({
+			previewFull: true,
+			appEntry: { isDir: true, name: "docs", path: "/docs" },
+		})
+		behaviors.keys(null, directory.data, { name: "down" })
+		behaviors.keys(null, directory.data, { name: "left" })
+		expect(directory.calls).toEqual([
+			{ id: "nav.down", payload: { paneId: "left" } },
+			{ id: "pane.up", payload: { paneId: "left" } },
+		])
+	})
+
 	test("below the inline breakpoint v opens the viewer overlay", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
 		const narrow = makeData({ uiSize: { width: 80, height: 20 } })

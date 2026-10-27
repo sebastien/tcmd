@@ -4,6 +4,7 @@ import { createPane } from "../../src/js/tcmd/core/pane.js"
 import { createSession } from "../../src/js/tcmd/core/session.js"
 import {
 	PANEL_FOCUS,
+	PANEL_GROUPS,
 	argvFor,
 	bindArgs,
 	decodePathToken,
@@ -65,7 +66,9 @@ describe("panel", () => {
 		expect(names).not.toContain("sel")
 		expect(names).toContain("run")
 		expect(entries.some((entry) => entry.id === "command:view" && entry.commandId === "view.toggleMode")).toBe(true)
-		// CLI entries carry an operation and an args signature.
+		// Every entry names a known group, and CLI entries carry an operation
+		// and an args signature.
+		for (const entry of entries) expect(PANEL_GROUPS).toContain(entry.group)
 		for (const entry of entries.filter((entry) => entry.op)) {
 			expect(entry.op.args.length).toBeGreaterThan(0)
 			expect(entry.id).toBe(`op:${entry.name}`)
@@ -74,12 +77,13 @@ describe("panel", () => {
 
 	test("filterPanelEntries groups by purpose and alphabetizes within each category", () => {
 		const entries = panelEntries()
-		// Groups use the fixed Command / File / Create / Edit / Delete order;
-		// names are sorted alphabetically within each category.
+		// Groups use the fixed Command / File / Info / Create / Edit / Delete
+		// order; names are sorted alphabetically within each category.
 		expect(filterPanelEntries(entries, "").map((entry) => entry.name)).toEqual(
 			[
-				"bookmark", "quit", "view",
-				"abspath", "open", "realpath", "run", "stat", "view",
+				"bookmark", "quit", "reload", "view",
+				"abspath", "open", "realpath", "run", "view",
+				"df", "du", "stat",
 				"mkdir", "new",
 				"chmod", "chown", "copy", "edit", "hardlink", "move", "rename", "replace", "symlink", "touch",
 				"delete", "erase", "unlink",
@@ -374,7 +378,7 @@ describe("panel", () => {
 		expect(copy.type).toBe("op")
 		expect(copy.summary).toBeUndefined()
 		expect(session.panelItems.value.filter((item) => item.type === "group").map((item) => item.name)).toEqual([
-			"Command", "File", "Create", "Edit", "Delete",
+			"Command", "File", "Info", "Create", "Edit", "Delete",
 		])
 		expect(session.panelItems.value.filter((item) => item.type === "op" && item.group === "Create").map((item) => item.name)).toEqual([
 			"mkdir", "new",

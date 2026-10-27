@@ -5,9 +5,12 @@
 
 // Module: tcmd/tui/syntax
 // The TUI's syntax-highlighting palette: one `SyntaxStyle` (OpenTUI's
-// tree-sitter style table) built from the active `tuiTheme`, so code previews
-// read in the same colours as the rest of the workspace. The TUI-only half of
-// the preview — the web renders plain text and never imports OpenTUI.
+// tree-sitter style table) per native scene, built from the active `tuiTheme`,
+// so code previews read in the same colours as the rest of the workspace.
+// Since OpenTUI 0.6, every style is tied to the scene that owns its native
+// handle, so a renderer cannot share a style with another renderer. The
+// TUI-only half of the preview — the web renders plain text and never imports
+// OpenTUI.
 //
 // The scope names are the standard tree-sitter captures the bundled queries
 // emit (`keyword.return`, `function.method`, `punctuation.bracket`…).
@@ -63,20 +66,24 @@ function scopeStyles(theme) {
 }
 
 // Function: createSyntaxStyle
-// Builds a `SyntaxStyle` for `theme`.
-function createSyntaxStyle(theme = tuiTheme) {
-	return SyntaxStyle.fromStyles(scopeStyles(theme))
+// Builds a `SyntaxStyle` for `theme`, owned by `scene`.
+function createSyntaxStyle(scene, theme = tuiTheme) {
+	return SyntaxStyle.fromStyles(scopeStyles(theme), scene)
 }
 
-// The style is a singleton: the theme resolves once per process, and every
-// `code` renderable shares one native handle.
-let sharedStyle = null
+// The style is shared per scene: the theme resolves once per process, and the
+// code renderables of one renderer share one native handle.
+const sharedStyles = new WeakMap()
 
 // Function: syntaxStyle
-// The shared `SyntaxStyle` for the active theme, built on first use.
-function syntaxStyle(theme = tuiTheme) {
-	sharedStyle ??= createSyntaxStyle(theme)
-	return sharedStyle
+// The shared `SyntaxStyle` for `scene` and the active theme, built on first use.
+function syntaxStyle(scene, theme = tuiTheme) {
+	let style = sharedStyles.get(scene)
+	if (!style) {
+		style = createSyntaxStyle(scene, theme)
+		sharedStyles.set(scene, style)
+	}
+	return style
 }
 
 export { syntaxStyle }

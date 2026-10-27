@@ -65,6 +65,50 @@ describe("tinyjs desktop bridge", () => {
 		}
 	})
 
+	test("bridges native directory watchers and resets them per window", async () => {
+		const watched = []
+		const closed = []
+		const runtime = {
+			cwd: "/work",
+			homeDir: "/work",
+			env: { OS: "Linux" },
+			watch(path, handler) {
+				const watcher = {
+					path,
+					handler,
+					close: () => closed.push(path),
+				}
+				watched.push(watcher)
+				return watcher
+			},
+		}
+		const desktop = createDesktopBackend({ runtime })
+		const events = []
+		const app = { push: (event, data) => events.push([event, data]) }
+		const meta = { window: "main" }
+
+		await desktop.api.fsWatch({ path: "/work/a", id: "w1" }, app, meta)
+		expect(watched[0].path).toBe("/work/a")
+		watched[0].handler("a.txt", "change")
+		expect(events).toEqual([["fs-change", { id: "w1" }]])
+
+		// Re-using an id closes its predecessor instead of leaking it.
+		await desktop.api.fsWatch({ path: "/work/b", id: "w1" }, app, meta)
+		expect(closed).toEqual(["/work/a"])
+		await desktop.api.fsUnwatch({ id: "w1" }, app, meta)
+		expect(closed).toEqual(["/work/a", "/work/b"])
+
+		// A reset closes every watcher the calling window owns.
+		await desktop.api.fsWatch({ path: "/work/a", id: "w1" }, app, meta)
+		await desktop.api.fsWatch({ path: "/work/b", id: "w2" }, app, meta)
+		await desktop.api.fsWatchReset(undefined, app, { window: "other" })
+		expect(closed.length).toBe(2)
+		await desktop.api.fsWatchReset(undefined, app, meta)
+		expect(closed.length).toBe(4)
+
+		expect(() => desktop.api.fsWatch({ path: "/work/a", id: "" }, app, meta)).toThrow("watch id")
+	})
+
 	test("limits returned process output while continuing to drain the stream", async () => {
 		const stream = new ReadableStream({
 			start(controller) {
@@ -97,6 +141,53 @@ describe("tinyjs desktop bridge", () => {
 			["fsRealpath", { path: "/work/a" }],
 			["fsMove", { from: "/work/a", to: "/work/b" }],
 		])
+	})
+
+	test("frontend adapter exposes native watchers over the push channel", async () => {
+		const requests = []
+		let push = null
+		const call = async (method, params) => {
+			requests.push([method, params])
+			if (method === "fsInfo") return { home: "/home/test", cwd: "/work", root: "/", host: "test" }
+			return true
+		}
+		const fs = await createDesktopFs({
+			call,
+			on: (event, handler) => {
+				if (event === "fs-change") push = handler
+			},
+		})
+		// A page reload drops the watchers the previous page left behind.
+		expect(requests.slice(0, 2)).toEqual([
+			["fsInfo", undefined],
+			["fsWatchReset", undefined],
+		])
+
+		const changes = []
+		const stop = await fs.watch("/work", () => changes.push(1))
+		const [method, params] = requests.at(-1)
+		expect(method).toBe("fsWatch")
+		expect(params.path).toBe("/work")
+		expect(params.id).toEndWith("-1")
+		push({ id: params.id })
+		expect(changes.length).toBe(1)
+		push({ id: "unknown" })
+		expect(changes.length).toBe(1)
+
+		stop()
+		expect(requests.at(-1)).toEqual(["fsUnwatch", { id: params.id }])
+		stop()
+		expect(requests.filter(([name]) => name === "fsUnwatch").length).toBe(1)
+		push({ id: params.id })
+		expect(changes.length).toBe(1)
+	})
+
+	test("frontend adapter without a push channel reports no watcher", async () => {
+		const fs = await createDesktopFs({
+			call: async (method) =>
+				method === "fsInfo" ? { home: "/home/test", cwd: "/work", root: "/", host: "test" } : true,
+		})
+		expect(await fs.watch("/work", () => {})).toBeNull()
 	})
 
 	test("frontend adapter decodes base64 byte reads", async () => {

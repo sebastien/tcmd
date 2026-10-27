@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { cell } from "select/state/cells"
 import { components, fileListScrollTop, keepVisible, panelDialogHeight, panelOpScrollTop, registerComponents } from "../../src/js/tcmd/tui/catalogue.js"
 import { tuiTheme } from "../../src/js/tcmd/tui/theme.js"
 
@@ -162,6 +163,62 @@ describe("preview host tags", () => {
 			// SVG has no decoder in the image renderable, so the metadata card
 			// stays in the body.
 			expect(setup.captureCharFrame()).toContain("image: a.svg")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+})
+
+describe("preview scrolling", () => {
+	test("a new preview target sends the preview body back to the top", async () => {
+		registerComponents()
+		const { testRender } = await import("select.tui")
+		const lines = Array.from({ length: 60 }, (_, index) => `line ${index}`).join("\n")
+		const entry = cell({ ext: "txt", isDir: false, name: "long.txt", path: "/long.txt", size: lines.length })
+		const preview = cell({ ext: "txt", kind: "text", size: lines.length, text: lines, title: "long.txt" })
+		const setup = await testRender(components.FilePreview, {
+			data: { entry, paneId: "preview", preview, show: true },
+			height: 10,
+			width: 40,
+		})
+		try {
+			await setup.renderOnce()
+			await setup.renderOnce()
+			const body = setup.instance.ref.body
+			expect(body).toBeDefined()
+			body.scrollTop = 12
+			expect(body.scrollTop).toBeGreaterThan(0)
+			entry.set({ ext: "txt", isDir: false, name: "next.txt", path: "/next.txt", size: 6 })
+			preview.set({ ext: "txt", kind: "text", size: 6, text: "next", title: "next.txt" })
+			await setup.renderOnce()
+			expect(body.scrollTop).toBe(0)
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+	test("a scroll request moves the preview body by its delta", async () => {
+		registerComponents()
+		const { testRender } = await import("select.tui")
+		const lines = Array.from({ length: 60 }, (_, index) => `line ${index}`).join("\n")
+		const entry = cell({ ext: "txt", isDir: false, name: "long.txt", path: "/long.txt", size: lines.length })
+		const preview = cell({ ext: "txt", kind: "text", size: lines.length, text: lines, title: "long.txt" })
+		const scroll = cell({ delta: 0, token: 0 })
+		const setup = await testRender(components.FilePreview, {
+			data: { entry, paneId: "preview", preview, scroll, show: true },
+			height: 10,
+			width: 40,
+		})
+		try {
+			await setup.renderOnce()
+			await setup.renderOnce()
+			const body = setup.instance.ref.body
+			scroll.set({ delta: 3, token: 1 })
+			await setup.renderOnce()
+			expect(body.scrollTop).toBe(3)
+			// The top edge clamps instead of going negative.
+			scroll.set({ delta: -10, token: 2 })
+			await setup.renderOnce()
+			expect(body.scrollTop).toBe(0)
 		} finally {
 			setup.renderer.destroy()
 		}

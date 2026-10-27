@@ -30,6 +30,8 @@ const DEFAULT_KEYMAP = [
 	{ key: ":", command: "panel.open" },
 	{ key: "!", command: "panel.shell" },
 	{ key: "/", command: "filter.start" },
+	{ key: "f5", command: "pane.reload" },
+	{ key: "r", command: "pane.reload" },
 	{ key: "r", ctrl: true, command: "pane.reload" },
 	{ key: "v", command: "view.togglePreview" },
 	{ key: "v", shift: true, command: "view.maximize" },
@@ -80,6 +82,7 @@ function keyGlyph(chord) {
 		backspace: "Bksp",
 		home: "Home",
 		end: "End",
+		f5: "F5",
 	}
 	let base = named[name] ?? (name.length === 1 ? name.toUpperCase() : `${name}`)
 	if (chord.ctrl) base = `^${base}`

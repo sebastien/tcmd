@@ -5,7 +5,10 @@
 
 // Module: tcmd/components/format
 // Presentation-only formatting helpers (sizes, counts, header title) shared by
-// every component for every renderer.
+// every component for every renderer. Size and disk formatting come from
+// `core/format` because operations report the same values.
+
+import { formatDisk, formatSize } from "../core/format.js"
 
 // Function: formatTitle
 // Header line `TinyCmd - HOST DIR/BASE` for the given directory. When it
@@ -76,28 +79,6 @@ function elideCrumbs(segments, width) {
 		rest = rest.slice(1)
 	}
 	return [marker, ...rest]
-}
-
-// Function: formatSize
-// Human-readable byte size; directories pass through their own label.
-function formatSize(bytes) {
-	const value = Number(bytes ?? 0)
-	if (value < 1024) return `${value}B`
-	const units = ["K", "M", "G", "T"]
-	let size = value / 1024
-	let unit = 0
-	while (size >= 1024 && unit < units.length - 1) {
-		size /= 1024
-		unit++
-	}
-	return `${size >= 100 ? Math.round(size) : size.toFixed(1)}${units[unit]}`
-}
-
-// Function: formatDisk
-// Compact free/total disk line, e.g. "12G free of 256G".
-function formatDisk(disk) {
-	if (!disk) return ""
-	return `${formatSize(disk.free)} free of ${formatSize(disk.total)}`
 }
 
 // Function: formatTime

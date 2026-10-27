@@ -205,13 +205,18 @@ describe("golden frames", () => {
 			expect(frame).toContain(" Command · bookmark ")
 			expect(frame).toContain("Command")
 			expect(frame).toContain("File")
-			expect(frame).toContain("Edit")
+			expect(frame).toContain("Info")
 			const groupSpans = setup.captureSpans().lines
 				.flatMap((line) => line.spans)
-				.filter((span) => ["Command", "File", "Edit"].includes(span.text))
+				.filter((span) => ["Command", "File", "Info"].includes(span.text))
 			expect(groupSpans.map((span) => span.attributes)).toEqual([1, 1, 1])
 			expect(frame).toContain("quit")
-			expect(frame).toContain("mkdir")
+			expect(frame).toContain("stat")
+			expect(frame).toContain("du")
+			expect(frame).toContain("df")
+			expect(frame).toContain("reload")
+			// Create/Edit/Delete sit below the fold at this height.
+			expect(frame).not.toContain("mkdir")
 			expect(frame).not.toContain("mkdir PATH")
 			// bookmark's PATH is a single path: it renders as a pre-filled,
 			// read-only path, not a list.
@@ -242,6 +247,13 @@ describe("golden frames", () => {
 			expect(frame).toContain("type to filter")
 			// The command bar underneath switches to the panel hints.
 			expect(frame).toContain("Toggle")
+			// The Info group fits, but Create/Edit/Delete sit below the fold;
+			// the list scrolls to keep the selected command visible.
+			session.dispatch("panel.setOp", { index: session.panelFiltered.value.length - 1 })
+			await settle(setup)
+			const scrolled = setup.captureCharFrame()
+			expect(scrolled).toContain("Edit")
+			expect(scrolled).toContain("Delete")
 		} finally {
 			setup.renderer.destroy()
 		}

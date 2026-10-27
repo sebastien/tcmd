@@ -230,6 +230,30 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// `core/picker#createPickerPathQueue`).
 	session.pickerPaths = createPickerPathQueue(session)
 
+	// Auto-refresh follows the columns the view actually shows. A hidden pane
+	// stops watching — and, on adapters without a native watcher, stops
+	// polling the filesystem — until it is shown again; resuming re-reads it
+	// once so the column never comes back stale. The picker's private pane
+	// only watches while the picker is open.
+	effect(
+		[session.viewMode, session.showPreview, session.currentId, session.pickerOpen],
+		([mode, showPreview, current, pickerOpen]) => {
+			const visible = new Set()
+			if (mode === "explorer") {
+				visible.add("parent")
+				visible.add(current)
+			} else {
+				visible.add("left")
+				visible.add("right")
+			}
+			if (showPreview) visible.add("preview")
+			for (const [id, pane] of Object.entries(session.panes)) {
+				pane.setAutoRefresh?.(visible.has(id))
+			}
+			session.pickerPane?.setAutoRefresh?.(Boolean(pickerOpen))
+		},
+	)
+
 	// The bookmark panel keeps its cursor on the first match whenever the query
 	// changes.
 	effect([session.bookmarkQuery], () => session.bookmarkIndex.set(0))
@@ -280,6 +304,11 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// Preview payload: text head for files, metadata for the rest; `stat`
 	// targets carry `details` and render as a card even for directories.
 	session.preview = cell(null)
+	// Preview body scroll requests: a monotonic `{ delta, token }` event the
+	// renderers apply to their own body. Keeping it a signal rather than an
+	// offset lets each renderer clamp against its own measured viewport; the
+	// token makes two identical key presses distinct writes.
+	session.previewScroll = cell({ delta: 0, token: 0 })
 	session._stopPreviewWatch = effect([session.previewEntry, session.showPreview], async ([entry, show]) => {
 		if (!show || !entry) {
 			session.preview.set(null)
@@ -455,7 +484,6 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 					count: 0,
 				})
 			}
-			const args = armed ? panelCommand(draft) : ""
 			rows.push({
 				type: "run",
 				key: "panel:run",
@@ -466,7 +494,7 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 				error: runError,
 				armed,
 				// The command printed below `[Confirm]`.
-				command: armed ? (args ? `${entry.name} ${args}` : entry.name) : null,
+				command: armed ? panelCommandLine(session, entry, draft) : null,
 			})
 			return rows
 		},
@@ -489,9 +517,7 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 		[session.panelDraft, session.panelEntry, session.panelPreview],
 		([draft, entry, preview]) => {
 			if (typeof preview === "string") return preview
-			const args = panelCommand(draft)
-			const name = entry?.name ?? ""
-			return args ? `${name} ${args}` : name
+			return panelCommandLine(session, entry, draft)
 		},
 	)
 	session.panelRunnable = derived([session.panelDraft], ([draft]) => panelRunnable(draft))
@@ -638,6 +664,18 @@ function prefillPanelDraft(session, entry, draft) {
 	} else if (path) {
 		path.value = pane.path.value ?? ""
 	}
+}
+
+// Function: panelCommandLine
+// The command the panel prints below `[Confirm]`: an operation's own
+// `displayCommand` when it has one (rename spells out the two resolved paths),
+// otherwise the operation name followed by its assembled argument tokens.
+function panelCommandLine(session, entry, draft) {
+	const display = entry?.op?.displayCommand?.(session, argvFor(draft), draft)
+	if (display) return display
+	const name = entry?.name ?? ""
+	const args = panelCommand(draft)
+	return args ? `${name} ${args}` : name
 }
 
 function entrySummary(entry) {

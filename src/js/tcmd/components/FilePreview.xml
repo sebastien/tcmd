@@ -15,7 +15,7 @@
 	<filelist when="isDirPane" in:entries="dirEntries" in:cursor="dirCursor" in:marked="dirMarked"
 	          in:active="dirActive" in:paneId="paneId" in:loading="dirLoading"></filelist>
 	<box when="showBody" flexGrow="1" position="relative" overflow="hidden">
-		<scrollbox when="showTextOrCard" flexGrow="1">
+		<scrollbox when="showTextOrCard" ref="body" flexGrow="1">
 			<code when="showText" out="previewText" out:fg="textFg" out:filetype="codeFiletype"></code>
 			<text when="showCard" out="cardText" out:fg="dimFg"></text>
 			<text when="showEntryCard" out="entryText" out:fg="dimFg"></text>

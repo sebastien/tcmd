@@ -494,6 +494,8 @@ describe("web app", () => {
 			// cannot fire while the app has focus; `^P` belonged to the
 			// palette, so the browser gets that key back.
 			expect(press(host, "r", { ctrlKey: true }).defaultPrevented).toBe(true)
+			// F5 refreshes the listing, never the browser page.
+			expect(press(host, "F5").defaultPrevented).toBe(true)
 			expect(press(host, "p", { ctrlKey: true }).defaultPrevented).toBe(false)
 			await settle()
 			expect(session.panelOpen.value).toBe(false)

@@ -20,9 +20,15 @@ import { viewEntries } from "./entries.js"
 import { createHistory } from "./history.js"
 import { clampCursor, currentEntry, indexOfPath, toggleMark } from "./selection.js"
 import { SEP, parent as parentPath, split, prefix } from "./path.js"
+import { createPathWatcher } from "./watch.js"
 
 // Function: createDirectory
 // Creates the directory state for one pane, bound to a filesystem adapter.
+//
+// Options:
+// - `watch`: true (default) auto-refreshes when the displayed directory
+//   changes; false disables it; an object forwards `{ delay, interval }` to
+//   `core/watch` (tests use a short delay).
 //
 // Example:
 // ```javascript
@@ -30,7 +36,7 @@ import { SEP, parent as parentPath, split, prefix } from "./path.js"
 // await dir.refresh()
 // dir.entries.value // sorted, filtered FileEntry[]
 // ```
-function createDirectory({ fs, path: initialPath, context: initialContext }) {
+function createDirectory({ fs, path: initialPath, context: initialContext, watch = true }) {
 	const dir = { fs }
 	dir.path = cell(initialPath)
 	dir.rawEntries = cell([])
@@ -70,6 +76,40 @@ function createDirectory({ fs, path: initialPath, context: initialContext }) {
 	// was last selected there.
 	const cursorMemory = new Map()
 	let readToken = 0
+	// Auto-refresh: one watcher on the displayed path. It is re-armed after a
+	// move commits and released on dispose. A change notification during a
+	// *move* is ignored — the read in flight is already producing the next
+	// listing, and refreshing the path being left would race its token. During
+	// a plain refresh a notification may supersede it: the newer read carries
+	// the newest change, so no event is ever lost to a slow listing.
+	const watchOptions = watch === false ? null : watch === true || watch == null ? {} : watch
+	// Whether this directory currently watches its path. The session pauses
+	// columns the view does not show, so a hidden pane does not keep polling
+	// the filesystem (or hold a desktop RPC watcher) for nothing.
+	dir.autoRefresh = cell(Boolean(watchOptions))
+	let watchedPath = null
+	let stopWatcher = null
+	let moving = false
+	const stopWatching = () => {
+		stopWatcher?.()
+		stopWatcher = null
+		watchedPath = null
+	}
+	const watchCurrentPath = () => {
+		if (!watchOptions || !dir.autoRefresh.value || watchedPath === dir.path.value) return
+		stopWatching()
+		const path = dir.path.value
+		watchedPath = path
+		stopWatcher = createPathWatcher(
+			fs,
+			path,
+			() => {
+				if (moving || watchedPath !== dir.path.value) return
+				void dir.refresh()
+			},
+			watchOptions,
+		)
+	}
 
 	// Function: setContext
 	// Replaces the owner context captured into history entries.
@@ -95,6 +135,12 @@ function createDirectory({ fs, path: initialPath, context: initialContext }) {
 		{ move = false, record = false, cursorPath = null, restore = null } = {},
 	) => {
 		const token = ++readToken
+		const isMove = move || Boolean(restore)
+		// A refresh keeps the same entry selected when entries are inserted or
+		// removed above it; the raw cursor index alone would drift, which
+		// matters once refreshes happen behind the user's back.
+		const keepPath = !isMove ? (dir.currentEntry()?.path ?? null) : null
+		if (isMove) moving = true
 		batch(() => {
 			dir.loading.set(true)
 			dir.error.set(null)
@@ -102,7 +148,6 @@ function createDirectory({ fs, path: initialPath, context: initialContext }) {
 		try {
 			const raw = await fs.readDir(path)
 			if (token !== readToken) return
-			const isMove = move || Boolean(restore)
 			const filter = restore ? restore.filter : isMove ? "" : dir.filter.value
 			const entries = viewEntries(raw, filter, dir.sort.value)
 			let cursor
@@ -112,8 +157,9 @@ function createDirectory({ fs, path: initialPath, context: initialContext }) {
 				const remembered = isMove && path !== dir.path.value
 					? (cursorMemory.get(path) ?? 0)
 					: dir.cursor.value
+				const kept = keepPath ? indexOfPath(entries, keepPath) : -1
 				const selected = cursorPath ? indexOfPath(entries, cursorPath) : -1
-				cursor = clampCursor(selected >= 0 ? selected : remembered, entries.length)
+				cursor = clampCursor(kept >= 0 ? kept : selected >= 0 ? selected : remembered, entries.length)
 			}
 			// A move that rewrites the filter sets the cursor it computed; no
 			// watcher intervenes (the filter cell is written directly, not
@@ -139,6 +185,7 @@ function createDirectory({ fs, path: initialPath, context: initialContext }) {
 				dir.cursor.set(cursor)
 				dir.loading.set(false)
 			})
+			watchCurrentPath()
 			if (record) {
 				const entry = { path, filter: "", cursor, marks: new Set(), context: contextGet() }
 				// Re-navigating to the current path updates the entry instead of
@@ -151,13 +198,36 @@ function createDirectory({ fs, path: initialPath, context: initialContext }) {
 		} catch (error) {
 			if (token === readToken) dir.error.set(`${error?.message ?? error}`)
 		} finally {
-			if (token === readToken) dir.loading.set(false)
+			if (token === readToken) {
+				moving = false
+				dir.loading.set(false)
+			}
 		}
 	}
 
 	// Function: refresh
 	// Re-reads the displayed directory, preserving filter, marks and cursor.
 	dir.refresh = () => read(dir.path.value)
+
+	// Function: setAutoRefresh
+	// Pauses or resumes the path watcher. Resuming re-reads the listing: it
+	// may have changed while the column was hidden and unwatched. A no-op for
+	// a directory created with `watch: false`, and while a move is in flight
+	// (that read already produces the next listing and re-arms the watcher).
+	dir.setAutoRefresh = (enabled) => {
+		if (!watchOptions) return
+		const next = enabled !== false
+		if (dir.autoRefresh.value === next) return
+		dir.autoRefresh.set(next)
+		if (!next) {
+			stopWatching()
+			return
+		}
+		if (!moving) {
+			watchCurrentPath()
+			void dir.refresh()
+		}
+	}
 
 	// Function: navigate
 	// Moves the directory to `path` (resetting filter and marks, restoring the
@@ -233,10 +303,16 @@ function createDirectory({ fs, path: initialPath, context: initialContext }) {
 	})
 
 	// Function: dispose
-	// Cancels any in-flight read so a late listing can no longer publish.
+	// Cancels any in-flight read so a late listing can no longer publish, and
+	// releases the path watcher.
 	dir.dispose = () => {
 		readToken += 1
+		stopWatching()
 	}
+
+	// Start watching the opening directory; a later move re-arms the watcher
+	// on its target (see `read`).
+	watchCurrentPath()
 
 	return dir
 }

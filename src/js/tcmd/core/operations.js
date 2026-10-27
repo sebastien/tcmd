@@ -11,9 +11,13 @@
 // the command bar) or undefined.
 //
 // Registry entries carry presentation metadata used by the panel and help:
-// `signature`, `description`, `aliases` and an optional `confirmText`. An
-// optional `risk` ("caution" or "destructive") is the single source for the
-// operation's colour group and the panel's two-step `[Confirm]` step.
+// `signature`, `description`, `aliases`, `group` and an optional `confirmText`.
+// An optional `displayCommand(session, argv)` overrides the `[Confirm]` line,
+// and `preview(session, argv, draft)` supplies operation-specific preflight
+// output. `group` places the operation in the command panel (Command, File,
+// Info, Create, Edit, Delete); `sel` is script-only and has none. An optional
+// `risk` ("caution" or "destructive") is the single source for the
+// operation's colour treatment and the panel's two-step `[Confirm]` step.
 //
 // They also carry `args`, the structured signature the command panel renders:
 // one descriptor per positional argument. A descriptor is
@@ -31,7 +35,8 @@
 // - "raw": the rest of the line, unparsed (a shell command).
 // `panelOrder` reorders only the panel rows, leaving the argv order intact.
 
-import { basename, extname, join, normalize, parent as parentOf } from "./path.js"
+import { formatDisk, formatSize } from "./format.js"
+import { basename, extname, join, normalize, parent as parentOf, relative } from "./path.js"
 import { currentPane, currentPaneId, PANE_BUFFERS } from "./pane.js"
 
 // Constant: PATHS_PREFIX
@@ -84,6 +89,7 @@ function decodePathToken(text) {
 const operations = [
 	{
 		name: "copy",
+		group: "Edit",
 		signature: "copy FROM TO",
 		description: "Copy files and directories",
 		risk: "caution",
@@ -138,6 +144,7 @@ const operations = [
 	},
 	{
 		name: "mkdir",
+		group: "Create",
 		signature: "mkdir PATH...",
 		description: "Create directories",
 		arity: { min: 1 },
@@ -190,6 +197,7 @@ const operations = [
 	},
 	{
 		name: "new",
+		group: "Create",
 		signature: "new PATH...",
 		description: "Create empty files",
 		arity: { min: 1 },
@@ -232,6 +240,7 @@ const operations = [
 	},
 	{
 		name: "move",
+		group: "Edit",
 		signature: "move FROM TO",
 		description: "Move files and directories",
 		risk: "caution",
@@ -278,6 +287,7 @@ const operations = [
 	},
 	{
 		name: "rename",
+		group: "Edit",
 		signature: "rename FROM TO PATH",
 		description: "Rename a child path from one name to another",
 		risk: "caution",
@@ -287,6 +297,24 @@ const operations = [
 			{ name: "TO", kind: "literal" },
 			{ name: "PATH", kind: "path", mode: "dir" },
 		],
+		// The `[Confirm]` line names the two resolved paths relative to the
+		// working directory, rather than the `FROM TO PATH` argument triple the
+		// panel would assemble: `rename docs/a.txt docs/b.txt`.
+		displayCommand(session, argv) {
+			const [fromName, toName, pathToken] = argv
+			if (!fromName || !toName || !pathToken) return null
+			let directory
+			try {
+				directory = expandArg(session, pathToken)[0]
+			} catch {
+				return null
+			}
+			if (!directory) return null
+			const cwd = session.fs.cwd?.() ?? "/"
+			const source = relative(cwd, join(directory, fromName))
+			const target = relative(cwd, join(directory, toName))
+			return `rename ${shellQuote(source)} ${shellQuote(target)}`
+		},
 		async run(session, args) {
 			const fromName = `${args[0] ?? ""}`
 			const toName = `${args[1] ?? ""}`
@@ -318,6 +346,7 @@ const operations = [
 	},
 	{
 		name: "replace",
+		group: "Edit",
 		signature: "replace FIND REPLACE PATH...",
 		description: "Replace a literal substring in path names",
 		risk: "caution",
@@ -392,6 +421,7 @@ const operations = [
 	},
 	{
 		name: "delete",
+		group: "Delete",
 		signature: "delete PATH...",
 		description: "Delete paths, moving them to the trash",
 		risk: "destructive",
@@ -436,6 +466,7 @@ const operations = [
 	},
 	{
 		name: "erase",
+		group: "Delete",
 		signature: "erase PATH...",
 		description: "Delete paths without moving them to the trash",
 		risk: "destructive",
@@ -452,6 +483,7 @@ const operations = [
 	},
 	{
 		name: "unlink",
+		group: "Delete",
 		signature: "unlink PATH...",
 		description: "Remove symbolic links, leaving their targets alone",
 		risk: "destructive",
@@ -486,6 +518,7 @@ const operations = [
 	},
 	{
 		name: "stat",
+		group: "Info",
 		signature: "stat PATH...",
 		description: "Show file information, including disk usage",
 		arity: { min: 1 },
@@ -495,21 +528,70 @@ const operations = [
 			const details = []
 			const results = []
 			for (const path of paths) {
-				const stats = await session.fs.stat(path)
-				if (!stats) throw new Error(`not found: ${path}`)
-				const size = stats.isDir ? await session.fs.du(path) : stats.size
-				const summary = `${stats.isDir ? "directory" : "file"} · ${humanSize(size)} · ${new Date(stats.mtimeMs || 0).toISOString()}`
+				const { stats, size } = await pathUsage(session.fs, path)
+				const summary = `${stats.isDir ? "directory" : "file"} · ${formatSize(size)} · ${new Date(stats.mtimeMs || 0).toISOString()}`
 				details.push(path)
 				details.push(`  ${summary}`)
 				results.push(`${path} · ${summary}`)
 			}
-			session.showPreview.set(true)
-			session.previewTarget.set(await previewTarget(session, paths[0], details))
+			await showDetails(session, paths[0], details)
+			return results.join("; ")
+		},
+	},
+	{
+		name: "du",
+		group: "Info",
+		signature: "du PATH...",
+		aliases: ["usage"],
+		description: "Show disk usage per path (recursive for directories)",
+		arity: { min: 1 },
+		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
+		async run(session, args) {
+			const paths = expandAll(session, args)
+			const details = []
+			let total = 0
+			for (const path of paths) {
+				const { stats, size } = await pathUsage(session.fs, path)
+				total += size
+				details.push(path)
+				details.push(`  ${formatSize(size)}${stats.isDir ? " recursive" : ""}`)
+			}
+			if (paths.length > 1) details.push(`  total: ${formatSize(total)}`)
+			await showDetails(session, paths[0], details)
+			return paths.length === 1
+				? `${formatSize(total)} in ${paths[0]}`
+				: `${formatSize(total)} in ${paths.length} paths`
+		},
+	},
+	{
+		name: "df",
+		group: "Info",
+		signature: "df PATH...",
+		aliases: ["free"],
+		description: "Show filesystem free and total space",
+		arity: { min: 0 },
+		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
+		async run(session, args) {
+			const paths = args.length ? expandAll(session, args) : [currentPane(session).path.value]
+			const details = []
+			const results = []
+			for (const path of paths) {
+				const disk = await session.fs.disk(path)
+				if (!disk) throw new Error(`no filesystem information for ${path}`)
+				const used = Math.max(0, disk.total - disk.free)
+				const percent = disk.total > 0 ? Math.round((used / disk.total) * 100) : 0
+				const summary = `${formatDisk(disk)} (${percent}% used)`
+				details.push(path)
+				details.push(`  ${summary}`)
+				results.push(`${path} · ${summary}`)
+			}
+			await showDetails(session, paths[0], details)
 			return results.join("; ")
 		},
 	},
 	{
 		name: "abspath",
+		group: "File",
 		signature: "abspath PATH...",
 		description: "Show absolute paths",
 		arity: { min: 1 },
@@ -522,6 +604,7 @@ const operations = [
 	},
 	{
 		name: "realpath",
+		group: "File",
 		signature: "realpath PATH...",
 		description: "Show resolved paths, following symlinks",
 		arity: { min: 1 },
@@ -537,6 +620,7 @@ const operations = [
 	},
 	{
 		name: "touch",
+		group: "Edit",
 		signature: "touch PATH...",
 		description: "Create files or bump their modification time",
 		risk: "caution",
@@ -551,6 +635,7 @@ const operations = [
 	},
 	{
 		name: "chmod",
+		group: "Edit",
 		signature: "chmod MODE PATH...",
 		description: "Set read/write/execute permissions for user, group and other",
 		risk: "caution",
@@ -574,6 +659,7 @@ const operations = [
 	},
 	{
 		name: "chown",
+		group: "Edit",
 		signature: "chown OWNER PATH...",
 		description: "Set path ownership (OWNER is USER[:GROUP])",
 		risk: "caution",
@@ -622,6 +708,7 @@ const operations = [
 	},
 	{
 		name: "edit",
+		group: "Edit",
 		signature: "edit PATH",
 		description: "Edit a file with $EDITOR",
 		risk: "caution",
@@ -638,6 +725,7 @@ const operations = [
 	},
 	{
 		name: "hardlink",
+		group: "Edit",
 		signature: "hardlink FROM TO",
 		description: "Create hard links to paths",
 		risk: "caution",
@@ -661,6 +749,7 @@ const operations = [
 	},
 	{
 		name: "symlink",
+		group: "Edit",
 		signature: "symlink FROM TO",
 		description: "Create symbolic links to paths",
 		risk: "caution",
@@ -679,6 +768,7 @@ const operations = [
 	},
 	{
 		name: "view",
+		group: "File",
 		signature: "view PATH",
 		description: "Preview a path",
 		arity: { min: 1, max: 1 },
@@ -694,6 +784,7 @@ const operations = [
 	},
 	{
 		name: "open",
+		group: "File",
 		signature: "open PATH...",
 		description: "Open paths with the desktop opener",
 		arity: { min: 1 },
@@ -706,6 +797,7 @@ const operations = [
 	},
 	{
 		name: "bookmark",
+		group: "Command",
 		signature: "bookmark [NAME] [PATH]",
 		description: "List, add or remove named bookmarks",
 		arity: { min: 0, max: 2 },
@@ -736,6 +828,7 @@ const operations = [
 	},
 	{
 		name: "run",
+		group: "File",
 		signature: "run CMD",
 		aliases: ["!"],
 		description: "Run a shell command in the active pane",
@@ -846,6 +939,16 @@ function creationPaths(session, args, options) {
 async function isDir(session, path) {
 	const stats = await session.fs.stat(path)
 	return Boolean(stats?.isDir)
+}
+
+// Function: pathUsage
+// Stats and reported size for an information operation. Directories are
+// measured recursively, so `stat` and `du` share one calculation and one
+// missing-path error.
+async function pathUsage(fs, path) {
+	const stats = await fs.stat(path)
+	if (!stats) throw new Error(`not found: ${path}`)
+	return { stats, size: stats.isDir ? await fs.du(path) : stats.size }
 }
 
 async function refreshPanes(session) {
@@ -1025,6 +1128,14 @@ async function previewTarget(session, path, details) {
 	return target
 }
 
+// Function: showDetails
+// Opens the preview on `path` with the detail lines an information operation
+// produced, so `stat`, `du` and `df` share the same presentation.
+async function showDetails(session, path, details) {
+	session.showPreview.set(true)
+	session.previewTarget.set(await previewTarget(session, path, details))
+}
+
 // Function: parseSelection
 // Splits `sel` arguments into a sign, an optional buffer label and the path
 // tokens: `+A paths` adds to buffer A (the source pane), `-B paths` removes
@@ -1089,22 +1200,6 @@ function duplicateTargets(plan) {
 	return [...duplicates]
 }
 
-// Function: humanSize
-// Compact byte size for stat output (core-local: components own presentation
-// formatting).
-function humanSize(bytes) {
-	const value = Number(bytes ?? 0)
-	if (value < 1024) return `${value}B`
-	const units = ["K", "M", "G", "T"]
-	let size = value / 1024
-	let unit = 0
-	while (size >= 1024 && unit < units.length - 1) {
-		size /= 1024
-		unit++
-	}
-	return `${size >= 100 ? Math.round(size) : size.toFixed(1)}${units[unit]}`
-}
-
 export {
 	absolutePath,
 	expandAll,
@@ -1112,7 +1207,6 @@ export {
 	decodePathToken,
 	getOperation,
 	getOperations,
-	humanSize,
 	pathToken,
 	recordHistory,
 	refreshPanes,

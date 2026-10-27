@@ -264,6 +264,18 @@ describe("commands", () => {
 		expect(session.previewFull.value).toBe(false)
 	})
 
+	test("preview.scroll publishes a distinct request per direction", () => {
+		const session = makeSession()
+		const initial = session.previewScroll.value
+		session.dispatch("preview.scroll", { delta: -1 })
+		expect(session.previewScroll.value).toEqual({ delta: -1, token: initial.token + 1 })
+		session.dispatch("preview.scroll", { delta: 1 })
+		expect(session.previewScroll.value).toEqual({ delta: 1, token: initial.token + 2 })
+		// A zero or missing delta is not a scroll.
+		session.dispatch("preview.scroll", { delta: 0 })
+		expect(session.previewScroll.value.token).toBe(initial.token + 2)
+	})
+
 	test("view.toggleMode flips between the commander and the explorer", async () => {
 		const session = makeSession()
 		await load(session)

@@ -51,10 +51,10 @@ function currentPane(session) {
 // await pane.refresh()
 // pane.entries.value // sorted, filtered FileEntry[]
 // ```
-function createPane({ fs, path: initialPath, context } = {}) {
+function createPane({ fs, path: initialPath, context, watch } = {}) {
 	const pane = {}
 	pane.fs = fs
-	pane.directory = createDirectory({ fs, path: initialPath, context })
+	pane.directory = createDirectory({ fs, path: initialPath, context, watch })
 
 	// Proxy cells mirror the directory, so views address the pane uniformly.
 	const dir = pane.directory
@@ -70,6 +70,7 @@ function createPane({ fs, path: initialPath, context } = {}) {
 	pane.disk = dir.disk
 	pane.segments = dir.segments
 	pane.history = dir.history
+	pane.autoRefresh = dir.autoRefresh
 
 	// Function: current
 	// The pane's directory.
@@ -79,6 +80,7 @@ function createPane({ fs, path: initialPath, context } = {}) {
 	// currentEntry / toggleMark / setFilter / clearFilter — delegate to the
 	// directory.
 	pane.refresh = () => pane.directory.refresh()
+	pane.setAutoRefresh = (enabled) => pane.directory.setAutoRefresh(enabled)
 	pane.navigate = (path, options) => pane.directory.navigate(path, options)
 	pane.up = () => pane.directory.up()
 	pane.open = () => pane.directory.open()

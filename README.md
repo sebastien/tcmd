@@ -28,15 +28,16 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   (`⇧T`), which lists trashed entries by their original path. A double click on
   a row opens it like `Enter`.
 - Operations over the current panes: copy, move, mkdir/new, hardlink/symlink,
-  chmod/chown, delete/erase/unlink, stat, touch, selection buffers,
+  chmod/chown, delete/erase/unlink, stat, du/df, touch, selection buffers,
   edit/view/open and shell commands; `abspath` and `realpath` show
   copy-pasteable absolute paths and copy them to the clipboard, with the latter
   following symlinks. `unlink` removes links only, never their targets.
 - Command panel (`:`), the one entry point, a two-pane palette: the left pane
   filters (`:xxx`) over CLI operations grouped by purpose: **Command**,
-  **File**, **Create**, **Edit** (amber), and **Delete** (red). The Command group
-  also has the workspace-view toggle and Quit; File's `view` previews the selected path;
-  amber Edit also holds `copy` and the metadata changes. Bold section
+  **File**, **Info**, **Create**, **Edit** (amber), and **Delete** (red). The
+  Command group also has the workspace-view toggle and Quit; File's `view`
+  previews the selected path; Info holds `stat`, `du` and `df`; amber Edit also
+  holds `copy` and the metadata changes. Bold section
   titles head indented command names, alphabetized within each category. The right
   pane lists the selected command's arguments under its name — editable values
   use filled fields, while read-only values are plain and muted; `new`/`mkdir`
@@ -117,9 +118,17 @@ command panel (the one entry point for CLI operations, grouped by risk with
 editable arguments, an explicit Run button and the inline file picker on `⌃O`),
 `v` preview (fullscreen viewer when
 the terminal is narrow), `⇧V` maximize the preview over the columns and back
-again, `O`/`E` open/edit the previewed file, `/` fuzzy-filter
+again (in either full view, `↑`/`↓` scroll a file preview and `←`/`→` step to
+the previous/next entry), `O`/`E` open/edit the previewed file, `/` fuzzy-filter
 the active pane (`Enter` keeps it, `Esc` clears), `!` open the panel on the
-shell command, `^R` reload, `?` key reference, `q` quit.
+shell command, `F5`/`r`/`^R` reload, `?` key reference, `q` quit.
+
+Listings refresh themselves when the filesystem changes: the TUI and desktop
+views watch the displayed directories natively, while the web view polls them
+every few seconds. Hidden columns pause their watcher and re-read when shown.
+A refresh keeps the selected entry selected, so files written by other
+programs appear without moving the cursor. The keys above (and the web toolbar
+button) remain for a forced re-read.
 
 The workspace opens in explorer mode with a slim identity bar (`TinyCmd -
 HOST`) — the view mode and version trailing at its right, the mode word drawn
@@ -388,8 +397,8 @@ Decoupling rules:
   see `src/js/tcmd/vendor/`)
 - Bun as the runtime
 
-`deps/` symlinks to sibling checkouts; `scripts/link-deps.sh` (run as
-postinstall) re-links `node_modules` so upstream edits propagate.
+`deps/` symlinks to sibling checkouts; run `scripts/link-deps.sh` after
+`bun install` to re-link `node_modules` so upstream edits propagate.
 
 ## Tests
 

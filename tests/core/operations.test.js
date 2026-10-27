@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { createPane } from "../../src/js/tcmd/core/pane.js"
+import { PANEL_GROUPS } from "../../src/js/tcmd/core/panel.js"
 import { createSession } from "../../src/js/tcmd/core/session.js"
 import { expandArg, getOperation, getOperations, runOperation } from "../../src/js/tcmd/core/operations.js"
 import { runLine } from "../../src/js/tcmd/core/script.js"
@@ -60,9 +61,14 @@ describe("operations", () => {
 			expect(op.name.length).toBeGreaterThan(0)
 			expect(op.signature).toBeTruthy()
 			expect(typeof op.run).toBe("function")
+			// `sel` is script-only; every menu operation names a known group.
+			if (op.name === "sel") expect(op.group).toBeUndefined()
+			else expect(PANEL_GROUPS).toContain(op.group)
 		}
 		expect(getOperation("copy").signature).toBe("copy FROM TO")
 		expect(getOperation("!").name).toBe("run")
+		expect(getOperation("usage").name).toBe("du")
+		expect(getOperation("free").name).toBe("df")
 		expect(getOperation("nope")).toBeNull()
 	})
 
@@ -103,6 +109,32 @@ describe("operations", () => {
 		await runLine(session, "realpath notes.txt")
 		expect(session.notice.value.text).toBe("/home/notes.txt")
 		expect(os.copied).toEqual(["/home/notes.txt", "/home/notes.txt"])
+	})
+
+	test("du reports recursive sizes per path and a total", async () => {
+		const { session } = await makeSession()
+		await runLine(session, "du docs")
+		expect(session.notice.value.text).toBe("5B in /home/docs")
+		expect(session.previewTarget.value.details).toEqual(["/home/docs", "  5B recursive"])
+		await runLine(session, "du notes.txt docs")
+		expect(session.notice.value.text).toBe("17B in 2 paths")
+		expect(session.previewTarget.value.details.at(-1)).toBe("  total: 17B")
+	})
+
+	test("df reports free space for the current pane and each path", async () => {
+		const { session } = await makeSession()
+		await runLine(session, "df")
+		expect(session.notice.value.text).toBe("/home · 977K free of 3.8M (75% used)")
+		await runLine(session, "df docs notes.txt")
+		const text = session.notice.value.text
+		expect(text).toContain("/home/docs · 977K free of 3.8M (75% used)")
+		expect(text).toContain("/home/notes.txt · 977K free of 3.8M (75% used)")
+		expect(session.previewTarget.value.details).toEqual([
+			"/home/docs",
+			"  977K free of 3.8M (75% used)",
+			"/home/notes.txt",
+			"  977K free of 3.8M (75% used)",
+		])
 	})
 
 	test("copy copies files and directories recursively", async () => {

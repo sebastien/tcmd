@@ -5,7 +5,9 @@ describe("keymap", () => {
 	test("matches plain and ctrl chords", () => {
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "down" })).toBe("nav.down")
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "r", ctrl: true })).toBe("pane.reload")
-		expect(matchKeymap(DEFAULT_KEYMAP, { name: "r" })).toBeNull()
+		// F5 and plain `r` reload alongside the traditional `^R`.
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "r" })).toBe("pane.reload")
+		expect(matchKeymap(DEFAULT_KEYMAP, { name: "f5" })).toBe("pane.reload")
 		expect(matchKeymap(DEFAULT_KEYMAP, { name: "f1" })).toBeNull()
 	})
 

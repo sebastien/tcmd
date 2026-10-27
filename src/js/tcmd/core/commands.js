@@ -239,7 +239,7 @@ const commands = [
 	{
 		id: "pane.reload",
 		title: "Reload",
-		keys: "^R",
+		keys: "F5/r",
 		kind: "ui",
 		run(session) {
 			return pane(session).refresh()
@@ -576,6 +576,21 @@ const commands = [
 			// widths, focus and whether the preview was even shown — returns
 			// untouched on the next press.
 			session.previewFull.set(!session.previewFull.value)
+		},
+	},
+	{
+		id: "preview.scroll",
+		title: "Scroll preview",
+		kind: "ui",
+		hidden: true,
+		run(session, payload) {
+			// The renderers own the body and its measured viewport, so the
+			// command publishes a one-shot request instead of an offset. The
+			// token keeps repeated presses of the same direction distinct.
+			const delta = Math.trunc(Number(payload?.delta ?? 0))
+			if (!Number.isFinite(delta) || !delta) return
+			const current = session.previewScroll?.value
+			session.previewScroll?.set({ delta, token: (current?.token ?? 0) + 1 })
 		},
 	},
 	{

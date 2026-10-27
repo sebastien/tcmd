@@ -7,7 +7,8 @@
 // The command panel (Commando): the one entry point for the CLI operations
 // (`copy`, `move`, `mkdir`, `new`, `chmod`, `hardlink`, `symlink`, `delete`,
 // `run` — the `core/operations` registry). They are grouped by purpose
-// (Command, File, Create, Edit, Delete) and alphabetized within each group (see
+// (Command, File, Info, Create, Edit, Delete), using each operation's own
+// `group` metadata, and alphabetized within each group (see
 // `filterPanelEntries`). The workspace-view toggle and Quit are listed
 // alongside the CLI operations; other TinyCmd actions keep their keys.
 //
@@ -40,50 +41,23 @@ import { PERMISSION_BITS, PERMISSION_CLASSES, permissionItems, permissionOctal, 
 // right pane, where a textual argument owns the keyboard and Space toggles a
 // selection item).
 const PANEL_FOCUS = { OPS: "ops", ARGS: "args" }
-const PANEL_GROUPS = ["Command", "File", "Create", "Edit", "Delete"]
-const OPERATION_GROUPS = {
-	bookmark: "Command",
-	abspath: "File",
-	open: "File",
-	realpath: "File",
-	run: "File",
-	stat: "File",
-	view: "File",
-	mkdir: "Create",
-	new: "Create",
-	chmod: "Edit",
-	chown: "Edit",
-	copy: "Edit",
-	edit: "Edit",
-	hardlink: "Edit",
-	move: "Edit",
-	rename: "Edit",
-	replace: "Edit",
-	symlink: "Edit",
-	touch: "Edit",
-	delete: "Delete",
-	erase: "Delete",
-	unlink: "Delete",
-}
+const PANEL_GROUPS = ["Command", "File", "Info", "Create", "Edit", "Delete"]
 
 // Function: panelEntries
-// The entries the panel lists: the categorized CLI operations, the
-// workspace-view toggle (named `view` like File's preview operation, but in the
-// Command group) and Quit.
+// The entries the panel lists: the categorized CLI operations (each carries its
+// own `group`), the workspace-view toggle (named `view` like File's preview
+// operation, but in the Command group) and Quit.
 function panelEntries() {
 	const entries = getOperations()
-		.filter((op) => !op.hidden && OPERATION_GROUPS[op.name])
-		.map((op) => {
-			const group = OPERATION_GROUPS[op.name]
-			return {
-				id: `op:${op.name}`,
-				name: op.name,
-				group,
-				risk: op.risk ?? null,
-				matchNames: [op.name, ...(op.aliases ?? [])],
-				op,
-			}
-		})
+		.filter((op) => !op.hidden && op.group)
+		.map((op) => ({
+			id: `op:${op.name}`,
+			name: op.name,
+			group: op.group,
+			risk: op.risk ?? null,
+			matchNames: [op.name, ...(op.aliases ?? [])],
+			op,
+		}))
 	entries.push({
 		id: "command:view",
 		name: "view",
@@ -91,6 +65,16 @@ function panelEntries() {
 		risk: null,
 		matchNames: ["view"],
 		commandId: "view.toggleMode",
+		// A no-argument command still shows where it acts.
+		showPath: true,
+	})
+	entries.push({
+		id: "command:reload",
+		name: "reload",
+		group: "Command",
+		risk: null,
+		matchNames: ["reload", "refresh"],
+		commandId: "pane.reload",
 		// A no-argument command still shows where it acts.
 		showPath: true,
 	})
@@ -552,6 +536,7 @@ export { decodePathToken, pathToken } from "./operations.js"
 
 export {
 	PANEL_FOCUS,
+	PANEL_GROUPS,
 	argvFor,
 	bindArg,
 	bindArgs,

@@ -102,6 +102,8 @@ function createInit(session) {
 		parentSetFilter: (value) => parent.setFilter(value),
 		preview: session.preview,
 		previewFull: session.previewFull,
+		// The full previews apply body scroll requests through this cell.
+		previewScroll: session.previewScroll,
 		// The third column: the directory the inspector previews, so it reads
 		// as a pane. Over a file the inspector stays a card and these idle.
 		previewActive,
@@ -145,6 +147,32 @@ function fieldOwnsKeys(data, focus) {
 	return focus === PANEL_FOCUS.OPS || Boolean(unwrap(data.panelTextual))
 }
 
+// Function: isFilePreview
+// True when the inspector shows a file — a text body or a metadata card — as
+// opposed to a directory column, which keeps its listing cursor navigation.
+function isFilePreview(data) {
+	const entry = unwrap(data.appEntry)
+	return Boolean(entry) && !entry.isDir
+}
+
+// Function: routePreviewKeys
+// The arrows of a full preview: Up/Down scroll the body, Left/Right step to
+// the previous/next entry (the cursor movement the preview already follows).
+// Returns true when the key was handled, so the caller can stop routing.
+function routePreviewKeys(data, key) {
+	if (!isFilePreview(data)) return false
+	const name = key?.name
+	if (name === "up" || name === "down") {
+		data.dispatch("preview.scroll", { delta: name === "up" ? -1 : 1 })
+		return true
+	}
+	if (name === "left" || name === "right") {
+		data.dispatch(name === "left" ? "nav.up" : "nav.down")
+		return true
+	}
+	return false
+}
+
 // Function: createBehaviors
 // Builds the App data/key behavior map for the given renderer environment.
 // Published events are registered separately via `createEvents()` (`.sub`).
@@ -166,6 +194,8 @@ function createBehaviors(env) {
 					data.dispatch("file.open", { paneId: unwrap(data.active) })
 				} else if (key?.shift && key?.name === "e") {
 					data.dispatch("file.edit", { paneId: unwrap(data.active) })
+				} else {
+					routePreviewKeys(data, key)
 				}
 				return
 			}
@@ -394,6 +424,10 @@ function createBehaviors(env) {
 					return
 				}
 			}
+			// The maximized inspector (`⇧V`) previews a file full-width: the
+			// arrows scroll and step through files instead of driving the pane
+			// underneath. A directory column keeps its listing navigation.
+			if (unwrap(data.previewFull) && routePreviewKeys(data, key)) return
 			// Below the inline breakpoint the viewer overlay replaces the side
 			// panel, so `v` opens it instead of toggling `showPreview` (⇧V
 			// still maximizes over the columns, via the keymap).

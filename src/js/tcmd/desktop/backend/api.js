@@ -49,6 +49,15 @@ function createDesktopBackend({ runtime } = {}) {
 	if (!runtime) throw new TypeError("txiki.js runtime is required")
 	let filesystem = null
 	let pendingOpenFiles = []
+	// Native directory watchers, keyed by window and the frontend's watcher id.
+	// The main window owns the whole workspace; a page reload resets its set
+	// (`fsWatchReset`) so old watchers never outlive the page that asked.
+	const watchers = new Map()
+	const watchKey = (meta, id) => `${meta?.window ?? "main"}\u0000${id}`
+	const watchId = (id) => {
+		if (typeof id !== "string" || !id) throw new TypeError("watch id must be a non-empty string")
+		return id
+	}
 	const fs = () => (filesystem ??= createDesktopFs({ runtime }))
 	const fsInfo = () => ({
 		home: fs().home(),
@@ -63,6 +72,30 @@ function createDesktopBackend({ runtime } = {}) {
 		fsReadDir: ({ path }) => fs().readDir(path),
 		fsStat: ({ path }) => fs().stat(path),
 		fsRealpath: ({ path }) => fs().realpath(path),
+		// Directory watching: the frontend keeps a watcher id per pane and
+		// receives `fs-change` pushes over one shared channel.
+		fsWatch: ({ path, id }, app, meta) => {
+			const key = watchKey(meta, watchId(id))
+			watchers.get(key)?.close()
+			const watcher = runtime.watch(requirePath(path, runtime.cwd), () => app.push("fs-change", { id }))
+			watchers.set(key, watcher)
+			return true
+		},
+		fsUnwatch: ({ id }, _app, meta) => {
+			const key = watchKey(meta, watchId(id))
+			watchers.get(key)?.close()
+			watchers.delete(key)
+			return true
+		},
+		fsWatchReset: (_params, _app, meta) => {
+			const prefix = watchKey(meta, "")
+			for (const [key, watcher] of watchers) {
+				if (!key.startsWith(prefix)) continue
+				watcher.close()
+				watchers.delete(key)
+			}
+			return true
+		},
 		fsReadTextHead: ({ path, maxBytes }) => fs().readTextHead(path, maxBytes),
 		fsReadBytes: async ({ path, maxBytes }) => ({
 			base64: encodeBase64(await fs().readBytes(path, maxBytes)),

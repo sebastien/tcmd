@@ -46,6 +46,33 @@ function keepVisible(list, row) {
 	else if (rowRect.bottom > listRect.bottom) list.scrollTop += rowRect.bottom - listRect.bottom
 }
 
+// Function: previewBodies
+// The scrollable preview bodies in `root`: the inspector, the maximized
+// preview and the viewer each reuse one text/card body.
+function previewBodies(root) {
+	return root?.querySelectorAll?.(".preview-text, .preview-card") ?? []
+}
+
+// Function: resetPreviewScroll
+// Send the preview body back to the top. The inspector, the maximized preview
+// and the viewer each reuse one scrollable body, so a scroll offset would
+// otherwise carry over to the next file.
+function resetPreviewScroll(root) {
+	for (const body of previewBodies(root)) {
+		body.scrollTop = 0
+	}
+}
+
+// Function: applyPreviewScroll
+// Apply a full-preview scroll request from the App's arrow routing. The DOM
+// clamps `scrollTop` against the visible body, so the edges need no guard.
+function applyPreviewScroll(root, delta) {
+	if (!delta) return
+	for (const body of previewBodies(root)) {
+		body.scrollTop = Math.max(0, body.scrollTop + delta)
+	}
+}
+
 // Function: connectEffects
 // Returns a frame scheduler and teardown; the App registers teardown with
 // instance.effect(), so remounting leaves no listeners or observers behind.
@@ -113,7 +140,8 @@ function connectEffects(session, root, { size, help, viewer }) {
 	}
 	const trapKeys = (event) => {
 		// Reload remains disabled even when native controls own the other keys.
-		if (event.ctrlKey && event.key.toLowerCase() === "r") {
+		// F5 now refreshes the listing too, so it must not reload the page.
+		if ((event.ctrlKey && event.key.toLowerCase() === "r") || event.key === "F5") {
 			event.preventDefault()
 			return
 		}
@@ -160,12 +188,26 @@ function connectEffects(session, root, { size, help, viewer }) {
 		],
 		schedule,
 	)
+	// The preview target and its payload both change as the cursor moves:
+	// reset on either so a new file starts at the top even when its text
+	// arrives asynchronously.
+	const previewInputs = [session.previewEntry, session.preview].filter((value) => value?.isReactive)
+	const stopPreviewWatch = previewInputs.length
+		? effect(previewInputs, () => resetPreviewScroll(root))
+		: null
+	// Full-preview arrow scrolling: the shared controller publishes a delta,
+	// the DOM body applies it to its own measured viewport.
+	const stopScrollWatch = session.previewScroll?.isReactive
+		? effect([session.previewScroll], ([request]) => applyPreviewScroll(root, request?.delta ?? 0))
+		: null
 	schedule()
 	return {
 		schedule,
 		dispose() {
 			disposed = true
 			stopFocusWatch?.()
+			stopPreviewWatch?.()
+			stopScrollWatch?.()
 			if (frame !== null) view.cancelAnimationFrame(frame)
 			observer?.disconnect()
 			root.removeEventListener("keydown", trapKeys)
@@ -176,6 +218,6 @@ function connectEffects(session, root, { size, help, viewer }) {
 	}
 }
 
-export { columnWidth, connectEffects, isToolbarTarget, keepVisible }
+export { applyPreviewScroll, columnWidth, connectEffects, isToolbarTarget, keepVisible, resetPreviewScroll }
 
 // EOF
