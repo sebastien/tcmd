@@ -12,6 +12,8 @@ import {
 const theme = {
 	textHeadingFg: "title",
 	textSecondaryFg: "dim",
+	linkFg: "link",
+	warningFg: "warning",
 	brandTinyFrom: "#7aa2f7",
 	brandTinyTo: "#7dcfff",
 	brandCmdFrom: "#ff9e64",
@@ -46,6 +48,20 @@ describe("components Frame", () => {
 		// Mono (no brand colours): every letter falls back to the default.
 		const mono = createFrameBehaviors({ theme: { textHeadingFg: undefined } })
 		for (const letter of ["T", "C"]) expect(mono[`brand${letter}Fg`]()).toBeUndefined()
+	})
+
+	test("the identity bar shows the running web server, mode and address", () => {
+		const behaviors = createFrameBehaviors({ theme })
+		expect(behaviors.serverRunning(null, {})).toBe(false)
+		expect(behaviors.topBarServer(null, {})).toBe("")
+		const local = { webServer: { mode: "local", url: "http://127.0.0.1:8787" } }
+		expect(behaviors.serverRunning(null, local)).toBe(true)
+		expect(behaviors.topBarServer(null, local)).toBe("server local http://127.0.0.1:8787 ")
+		// Local is an ordinary link; LAN exposure takes the amber warning colour.
+		expect(behaviors.topBarServerFg(null, local)).toBe("link")
+		const lan = { webServer: { mode: "lan", url: "http://devbox:8787" } }
+		expect(behaviors.topBarServer(null, lan)).toBe("server lan http://devbox:8787 ")
+		expect(behaviors.topBarServerFg(null, lan)).toBe("warning")
 	})
 
 	test("the identity bar draws the mode word in its brand gradient", () => {

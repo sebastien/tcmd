@@ -14,14 +14,15 @@
 // are real panes — own listing, cursor, marks — so the explorer view and the
 // directory preview are clickable and keyboard-navigable like any other pane,
 // while path changes still land on the pane that owns the current directory
-// (see `currentId` / `core/commands#currentPane`).
+// (see `currentId` / `core/pane#currentPane`).
 
 import { cell, derived, effect } from "select/state/cells"
 import { createBookmarks } from "./bookmarks.js"
 import { createJournal } from "./journal.js"
-import { createDispatch, getCommandBarItems } from "./commands.js"
+import { createDispatch } from "./commands.js"
+import { getCommandBarItems } from "./bar.js"
 import { createNullOs } from "./os.js"
-import { PANEL_FOCUS, argvFor, bindArgs, filterPanelEntries, isTextualRow, panelCommand, panelEntries, panelEntryRows, panelRowList, panelRunnable, rowAt, withArgValue } from "./panel.js"
+import { PANEL_FOCUS, argvFor, bindArgs, filterPanelEntries, isTextualRow, panelCommandLines, panelCommandParts, panelEntries, panelEntryRows, panelRowList, panelRunnable, rowAt, withArgValue } from "./panel.js"
 import { createPickerPathQueue, pickerRowList, pickerVisibleEntries } from "./picker.js"
 import { basename, parent as parentPath } from "./path.js"
 import { hasBinaryByte, PREVIEW_BYTES, previewKind, previewSource } from "./preview.js"
@@ -45,7 +46,7 @@ const BOOKMARK_ADD_KEY = "+ add current path"
 // await session.load()
 // session.dispatch("pane.toggle")
 // ```
-function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explorer" } = {}) {
+function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explorer", server = false } = {}) {
 	const session = {}
 	session.fs = fs
 	session.os = os ?? createNullOs()
@@ -62,9 +63,19 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	session.pickerPane = createPane({ fs, path: left.path.value })
 	// Shown in the header title; empty when the environment has no hostname.
 	session.host = host ?? ""
+	// The running web UI server, or null when stopped: `{ mode, url, token }` where
+	// `mode` is "local" (loopback) or "lan" (the machine hostname). The TUI
+	// identity bar shows it and clicking it copies the URL; the host installs
+	// `toggleServer` (see `tui/server`) because core cannot open a port.
+	session.webServer = cell(null)
+	session.toggleServer = null
 	// The renderer installs its quit hook at mount; the panel's Quit command
 	// calls it (core cannot exit a process or unmount a DOM app itself).
 	session.quit = null
+	// The screenshot queue's tail promise, null when idle. Panel runs return
+	// early so the panel can close before capture; scripts await completion
+	// inside the operation. Captures serialize name selection and writing.
+	session.screenshotPending = null
 	// Bookmark model (named paths). The store defaults to in-memory.
 	session.bookmarks = bookmarks ?? createBookmarks()
 	// Undo/redo journal: reversible file operations (`mkdir`, `copy`, `move`,
@@ -115,6 +126,12 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// it (`components/Frame#showViewer`). Independent of `showPreview` and
 	// `previewFull`, which drive the inline and the maximized inspector.
 	session.viewerOpen = cell(false)
+	// True while the inspector is on screen in any of its three forms: inline,
+	// maximized over the columns, or inside the fullscreen viewer.
+	session.previewVisible = derived(
+		[session.showPreview, session.previewFull, session.viewerOpen],
+		([showPreview, previewFull, viewerOpen]) => Boolean(showPreview || previewFull || viewerOpen),
+	)
 	session.notice = cell(null)
 	session.confirm = cell(null)
 	// The pane whose filter input currently owns the keyboard, or null.
@@ -198,7 +215,10 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	session.panelPermBit = cell(0)
 	session.panelFocus = cell(PANEL_FOCUS.OPS)
 	session.panelDraft = cell([])
-	session.panelEntries = cell(panelEntries())
+	// The panel gains an explicit `server stop` entry only while the web UI
+	// server is up, so the stop action is discoverable instead of hidden
+	// behind "run the same mode again".
+	session.panelEntries = derived([session.webServer], ([webServer]) => panelEntries({ server, running: Boolean(webServer) }))
 	// Errors from a panel run stay beside the action so the user can retry
 	// without losing the command draft.
 	session.panelRunError = cell(null)
@@ -304,6 +324,34 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// Preview payload: text head for files, metadata for the rest; `stat`
 	// targets carry `details` and render as a card even for directories.
 	session.preview = cell(null)
+	// True while the inspector renders a directory *column* (its own listing).
+	// A `stat` card pinned on a directory is not a column: it keeps `preview`
+	// populated and renders like any other card.
+	session.previewDirectory = derived(
+		[session.previewEntry, session.preview],
+		([entry, preview]) => Boolean(entry?.isDir) && !preview,
+	)
+	// True while that column is actually on screen — the inspector's only
+	// listing, and the only case in which cursor/mark/filter commands target
+	// it (see `core/pane#isColumnPane`).
+	session.previewColumn = derived(
+		[session.previewVisible, session.previewDirectory],
+		([visible, directory]) => Boolean(visible && directory),
+	)
+	// The column listing commands act on. A source/destination pane or the
+	// explorer's parent mirror while it is the focus; the inspector when it
+	// previews a directory and is the only listing on screen (maximized or
+	// fullscreen), even if focus still sits on a pane hidden behind it; the
+	// anchor pane otherwise — a file card has no listing of its own. Single
+	// source for `core/pane#pane` and `focusedMarked` below.
+	session.focusedId = derived(
+		[session.active, session.currentId, session.viewMode, session.previewColumn, session.viewerOpen, session.previewFull],
+		([active, currentId, viewMode, previewColumn, viewerOpen, previewFull]) => {
+			if (previewColumn && (active === "preview" || viewerOpen || previewFull)) return "preview"
+			if (active === "parent" && viewMode === "explorer") return "parent"
+			return currentId
+		},
+	)
 	// Preview body scroll requests: a monotonic `{ delta, token }` event the
 	// renderers apply to their own body. Keeping it a signal rather than an
 	// offset lets each renderer clamp against its own measured viewport; the
@@ -421,12 +469,52 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 		},
 	)
 
-	// Command bar rows: context-dependent key hints (see core/commands). The
-	// panel button is dropped when a host disables the panel.
+	// Command bar rows: contextual key hints (see core/bar). The modal that
+	// owns the keyboard comes first, then the full preview mode, then the
+	// focused workspace column.
 	session.commandBarItems = derived(
-		[session.filtering, session.bookmarkOpen, session.panelOpen, session.pickerOpen, session.panelArmed, session.overlay],
-		([filtering, bookmarkOpen, panelOpen, pickerOpen, panelArmed, overlay]) =>
-			getCommandBarItems({ filtering, bookmarkOpen, panelOpen, pickerOpen, panelArmed, overlay }),
+		[
+			session.filtering,
+			session.bookmarkOpen,
+			session.panelOpen,
+			session.pickerOpen,
+			session.panelArmed,
+			session.overlay,
+			session.confirm,
+			session.viewerOpen,
+			session.previewFull,
+			session.previewDirectory,
+			session.active,
+			session.viewMode,
+			session.previewVisible,
+		],
+		([filtering, bookmarkOpen, panelOpen, pickerOpen, panelArmed, overlay, confirm, viewerOpen, previewFull, previewDirectory, active, viewMode, previewVisible]) =>
+			getCommandBarItems({
+				active,
+				bookmarkOpen,
+				confirm,
+				filtering,
+				overlay,
+				panelArmed,
+				panelOpen,
+				pickerOpen,
+				previewDirectory,
+				previewFull,
+				previewVisible,
+				viewMode,
+				viewerOpen,
+			}),
+	)
+	// The marked count trailing the bar follows the focused listing: the
+	// parent/preview mirrors included, and the anchor pane when the inspector
+	// shows a file (it has no listing of its own).
+	session.focusedMarked = derived(
+		[session.focusedId, left.marked, right.marked, session.panes.parent.marked, session.panes.preview.marked],
+		([focused, leftMarks, rightMarks, parentMarks, previewMarks]) => {
+			if (focused === "preview") return previewMarks
+			if (focused === "parent") return parentMarks
+			return focused === "right" ? rightMarks : leftMarks
+		},
 	)
 
 	// The entry list filtered by the typed query; `panelOpIndex` indexes into
@@ -454,23 +542,25 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// The argument column: the picker's entry rows while picking; otherwise the
 	// selected operation's arguments followed by its explicit Run action.
 	session.panelRows = derived(
-		[session.panelDraft, session.panelEntry, session.pickerOpen, session.pickerRows, session.panelRunError, session.panelArmed, session.activePath],
-		([draft, entry, open, picker, runError, armed, activePath]) => {
+		[session.panelDraft, session.panelEntry, session.pickerOpen, session.pickerRows, session.panelRunError, session.panelArmed, session.activePath, session.webServer],
+		([draft, entry, open, picker, runError, armed, activePath, webServer]) => {
 			if (open) return picker
 			if (!entry) return []
 			const rows = panelRowList(draft)
-			// A command with no arguments still shows the context it would act
-			// on: a read-only PATH row over the active pane's path.
-			if (!rows.length && entry.showPath) {
+			// Read-only context rows can be clicked to copy their value. The
+			// server token is revealed only when its panel entry is selected.
+			if (!rows.length && (entry.showPath || entry.showToken)) {
+				const name = entry.showToken ? "TOKEN" : "PATH"
+				const value = entry.showToken ? (webServer?.token ?? "") : (activePath ?? "")
 				rows.push({
 					type: "arg",
-					key: "arg:path",
+					key: `arg:${name.toLowerCase()}`,
 					rowIndex: 0,
 					argIndex: -1,
 					itemIndex: -1,
-					name: "PATH",
-					summary: activePath ?? "",
-					kind: "path",
+					name,
+					summary: value,
+					kind: entry.showToken ? "literal" : "path",
 					role: "active",
 					optional: false,
 					variadic: false,
@@ -480,7 +570,7 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 					mode: "dir",
 					multi: false,
 					readonly: true,
-					value: activePath ?? "",
+					value,
 					count: 0,
 				})
 			}
@@ -511,7 +601,8 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 		},
 	)
 	// Preserve the existing `panelCommand` projection for consumers: operations
-	// with a custom preview return it; all others return the assembled command.
+	// with a custom preview return it; all others return the assembled command,
+	// one item per line when it carries several tokens.
 	// The panel renders custom preflight output separately from its Run action.
 	session.panelCommand = derived(
 		[session.panelDraft, session.panelEntry, session.panelPreview],
@@ -632,8 +723,9 @@ async function load(session) {
 
 // Function: prefillPanelDraft
 // Seeds a freshly bound draft: `replace` prefills FIND with a single selected
-// basename; exact `rename` prefills FROM and the containing directory from the
-// active entry (or uses the pane's current directory when there is none).
+// basename; exact `rename` prefills FROM and TO with that basename and the
+// containing directory from the active entry (or uses the pane's current
+// directory when there is none).
 function prefillPanelDraft(session, entry, draft) {
 	const name = entry?.op?.name
 	if (name === "replace") {
@@ -645,21 +737,25 @@ function prefillPanelDraft(session, entry, draft) {
 	}
 	if (name !== "rename") return
 	const active = session.active?.value
+	// The focused listing, including the inspector when it is the only one on
+	// screen (see `core/pane#pane`).
+	const focused = session.focusedId?.value ?? active
 	const auxiliaryPane =
-		(active === "parent" && session.panes.parent) ||
-		(active === "preview" &&
-			session.showPreview?.value &&
-			session.previewEntry?.value?.isDir &&
-			!session.preview?.value &&
-			session.panes.preview)
+		(focused === "parent" && session.panes.parent) ||
+		(focused === "preview" && session.panes.preview)
 	const pane = auxiliaryPane || session.panes[session.currentId?.value ?? active] || session.panes.left
 	const from = (draft ?? []).find((binding) => binding.name === "FROM")
+	const to = (draft ?? []).find((binding) => binding.name === "TO")
 	const path = (draft ?? []).find((binding) => binding.name === "PATH")
 	const marked = [...(pane.marked?.value ?? [])]
 	const selectedPath =
 		marked.length === 1 ? marked[0] : marked.length === 0 ? pane.currentEntry?.()?.path : null
 	if (selectedPath) {
-		if (from) from.value = basename(selectedPath)
+		const selectedName = basename(selectedPath)
+		if (from) from.value = selectedName
+		// Matching FROM is the safe starting point: the user edits the one
+		// segment that changes, and the diff line under TO shows where.
+		if (to) to.value = selectedName
 		if (path) path.value = parentPath(selectedPath) ?? pane.path.value ?? ""
 	} else if (path) {
 		path.value = pane.path.value ?? ""
@@ -668,14 +764,13 @@ function prefillPanelDraft(session, entry, draft) {
 
 // Function: panelCommandLine
 // The command the panel prints below `[Confirm]`: an operation's own
-// `displayCommand` when it has one (rename spells out the two resolved paths),
-// otherwise the operation name followed by its assembled argument tokens.
+// `displayParts` when it has one (rename spells out the two resolved paths),
+// otherwise its assembled argument tokens, laid out one item per line and
+// hanging under the command name (see `panelCommandLines`).
 function panelCommandLine(session, entry, draft) {
-	const display = entry?.op?.displayCommand?.(session, argvFor(draft), draft)
-	if (display) return display
-	const name = entry?.name ?? ""
-	const args = panelCommand(draft)
-	return args ? `${name} ${args}` : name
+	const parts =
+		entry?.op?.displayParts?.(session, argvFor(draft), draft) ?? panelCommandParts(draft)
+	return panelCommandLines(entry?.name ?? "", parts)
 }
 
 function entrySummary(entry) {

@@ -46,6 +46,7 @@ const DEFAULT_KEYMAP = [
 	{ key: "e", shift: true, command: "file.edit" },
 	{ key: "q", command: "app.quit" },
 	{ key: "?", command: "app.help" },
+	{ key: "s", shift: true, command: "app.screenshot" },
 ]
 
 // Function: matchKeymap

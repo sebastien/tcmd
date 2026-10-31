@@ -9,20 +9,19 @@
 // they call `session.dispatch(id, payload)`, keeping the model the single
 // source of truth for every presentation layer.
 //
-// Commands carry presentation metadata:
-// - `kind`: "ui" for UI-level actions; the command panel lists the two it can
-//   reach (the workspace-view toggle and Quit) alongside the CLI operations
-//   (see core/panel.js).
-// - `hidden`: true for internal commands that never show in the panel.
-// The default command bar is the explicit `BAR_COMMANDS` list below, in that
-// order.
+// Commands carry presentation metadata: `kind` is "ui" for UI-level actions,
+// and the command panel additionally lists the two it can reach (the
+// workspace-view toggle and Quit) alongside the CLI operations (see
+// core/panel.js).
+// The command bar's rows are composed in `core/bar` from this registry plus
+// the current context.
 
 import { parent as parentOf } from "./path.js"
 import { PANEL_FOCUS, argvFor, bindingAt, missingBinding, rowAt, withArgValue, withToggledItem } from "./panel.js"
 import { pickerAbsolutePath, pickerDirectoryText } from "./picker.js"
 import { hasBinaryByte, previewKind, previewSource, SNIFF_BYTES } from "./preview.js"
 import { clampCursor, moveCursor } from "./selection.js"
-import { currentPane } from "./pane.js"
+import { currentPane, isColumnPane, pane } from "./pane.js"
 import { runLine } from "./script.js"
 import { getOperation, refreshPanes, runOperation } from "./operations.js"
 
@@ -31,80 +30,6 @@ import { getOperation, refreshPanes, runOperation } from "./operations.js"
 // ctrl-arrow accelerators.
 const PAGE = 10
 const JUMP = 5
-
-// Constant: FILTER_KEYS
-// Command-bar hints shown while a pane filter is capturing input.
-const FILTER_KEYS = [
-	{ id: null, title: "Navigate", keys: "↑/↓" },
-	{ id: null, title: "Done", keys: "Enter", primary: true },
-	{ id: null, title: "Clear", keys: "Esc" },
-]
-
-// Constant: BOOKMARK_KEYS
-// Command-bar hints while the bookmarks panel owns the keyboard.
-const BOOKMARK_KEYS = [
-	{ id: null, title: "Navigate", keys: "↑/↓" },
-	{ id: null, title: "Remove", keys: "⌫/Del" },
-	{ id: null, title: "Open", keys: "Enter", primary: true },
-	{ id: null, title: "Close", keys: "Esc" },
-]
-
-// Constant: PANEL_HINT_KEYS
-// Command-bar hints while the command panel is open.
-const PANEL_HINT_KEYS = [
-	{ id: null, title: "Command", keys: "↑/↓" },
-	{ id: null, title: "Arg", keys: "⇥" },
-	{ id: null, title: "Browse", keys: "^O" },
-	{ id: null, title: "Toggle", keys: "Spc" },
-	{ id: null, title: "Run", keys: "↵", primary: true },
-	{ id: null, title: "Close", keys: "Esc" },
-]
-
-// Constant: PANEL_CONFIRM_KEYS
-// The same hints after a risky action is armed: Enter now confirms.
-const PANEL_CONFIRM_KEYS = PANEL_HINT_KEYS.map((hint) =>
-	hint.title === "Run" ? { ...hint, title: "Confirm" } : hint,
-)
-
-// Constant: PICKER_KEYS
-// Command-bar hints while the panel's file picker owns the keyboard.
-const PICKER_KEYS = [
-	{ id: null, title: "Path", keys: "type" },
-	{ id: null, title: "Row", keys: "↑/↓" },
-	{ id: null, title: "Open", keys: "→" },
-	{ id: null, title: "Go", keys: "↵", primary: true },
-	{ id: null, title: "Here", keys: "^↵" },
-	{ id: null, title: "Focus", keys: "⇥" },
-	{ id: null, title: "Back", keys: "Esc" },
-]
-
-// Constant: HISTORY_KEYS / TRASH_KEYS
-// Command-bar hints while the shared list overlay owns the keyboard.
-const HISTORY_KEYS = [
-	{ id: null, title: "Row", keys: "↑/↓" },
-	{ id: null, title: "Jump", keys: "↵", primary: true },
-	{ id: null, title: "Close", keys: "Esc" },
-]
-
-const TRASH_KEYS = [
-	{ id: null, title: "Row", keys: "↑/↓" },
-	{ id: null, title: "Restore", keys: "↵", primary: true },
-	{ id: null, title: "Close", keys: "Esc" },
-]
-
-// Constant: BAR_COMMANDS
-// The command bar's default entries, in display order. Kept as an explicit
-// list so the bar stays a short, stable set of primary actions instead of
-// every command that happens to be context-relevant.
-const BAR_COMMANDS = [
-	"panel.open",
-	"list.mark",
-	"filter.start",
-	"pane.toggle",
-	"bookmark.open",
-	"view.toggleMode",
-	"app.help",
-]
 
 const commands = [
 	{
@@ -186,24 +111,7 @@ const commands = [
 		kind: "ui",
 		primary: true,
 		run(session) {
-			// The entry under the *focused* pane's cursor decides where the
-			// current directory goes: a directory descends into it. On an
-			// auxiliary column (parent/preview) that means the current pane
-			// follows the selection, which is what keeps the mirror in step.
-			const focused = pane(session)
-			const entry = focused.currentEntry()
-			if (!entry) return
-			const current = currentPane(session)
-			if (entry.isDir) return current.navigate(entry.path)
-			// A file outside the current pane pins the inspector on it before
-			// it is opened, so the preview follows the entry that was acted on.
-			if (focused !== current) {
-				session.previewTarget.set(entry)
-				session.showPreview.set(true)
-			}
-			// A file: edit it when it is a text file the host can edit,
-			// otherwise show it fullscreen (see `openFile`).
-			return openFile(session, current, entry)
+			return enterSelection(session)
 		},
 	},
 	{
@@ -300,7 +208,6 @@ const commands = [
 		id: "bookmark.up",
 		title: "Previous bookmark",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			moveBookmark(session, -1)
 		},
@@ -309,7 +216,6 @@ const commands = [
 		id: "bookmark.down",
 		title: "Next bookmark",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			moveBookmark(session, 1)
 		},
@@ -318,7 +224,6 @@ const commands = [
 		id: "bookmark.remove",
 		title: "Remove bookmark",
 		kind: "ui",
-		hidden: true,
 		async run(session) {
 			const items = session.bookmarkItems.value ?? []
 			const index = clampCursor(session.bookmarkIndex.value, items.length)
@@ -334,7 +239,6 @@ const commands = [
 		id: "bookmark.setIndex",
 		title: "Highlight bookmark",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			session.bookmarkIndex.set(Math.max(0, payload?.index ?? 0))
 		},
@@ -343,7 +247,6 @@ const commands = [
 		id: "bookmark.select",
 		title: "Jump to bookmark",
 		kind: "ui",
-		hidden: true,
 		async run(session) {
 			const items = session.bookmarkItems.value
 			const item = items[clampCursor(session.bookmarkIndex.value, items.length)]
@@ -375,7 +278,6 @@ const commands = [
 		id: "bookmark.cancel",
 		title: "Cancel bookmark",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			closeBookmark(session)
 		},
@@ -450,7 +352,6 @@ const commands = [
 		id: "overlay.up",
 		title: "Previous row",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			const rows = session.overlayItems.value
 			session.overlayIndex.set(moveCursor(session.overlayIndex.value, -1, rows.length))
@@ -460,7 +361,6 @@ const commands = [
 		id: "overlay.down",
 		title: "Next row",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			const rows = session.overlayItems.value
 			session.overlayIndex.set(moveCursor(session.overlayIndex.value, 1, rows.length))
@@ -470,7 +370,6 @@ const commands = [
 		id: "overlay.setIndex",
 		title: "Highlight row",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			if (payload?.index !== undefined) session.overlayIndex.set(Math.max(0, payload.index))
 		},
@@ -479,7 +378,6 @@ const commands = [
 		id: "overlay.activate",
 		title: "Activate row",
 		kind: "ui",
-		hidden: true,
 		async run(session) {
 			const mode = session.overlay.value
 			const rows = session.overlayItems.value
@@ -494,7 +392,6 @@ const commands = [
 		id: "overlay.cancel",
 		title: "Close list",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			closeOverlay(session)
 		},
@@ -503,7 +400,6 @@ const commands = [
 		id: "list.cursor",
 		title: "Select row",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			const target = payload?.paneId ? session.panes[payload.paneId] : pane(session)
 			activate(session, payload?.paneId)
@@ -525,7 +421,6 @@ const commands = [
 		id: "pane.activate",
 		title: "Activate pane",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			activate(session, payload?.paneId)
 		},
@@ -534,7 +429,6 @@ const commands = [
 		id: "pane.setPath",
 		title: "Go to path",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			// A breadcrumb click focuses its column, then lands the current
 			// directory there: the auxiliary columns mirror it, so their
@@ -556,7 +450,6 @@ const commands = [
 		id: "view.toggleViewer",
 		title: "Fullscreen",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			// The fullscreen inspector overlay. `v` opens it on a narrow
 			// terminal and Enter opens it on a file that cannot be edited (see
@@ -582,7 +475,6 @@ const commands = [
 		id: "preview.scroll",
 		title: "Scroll preview",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			// The renderers own the body and its measured viewport, so the
 			// command publishes a one-shot request instead of an offset. The
@@ -609,7 +501,7 @@ const commands = [
 	{
 		id: "file.open",
 		title: "Open file",
-		keys: "O",
+		keys: "⇧O",
 		kind: "ui",
 		run(session) {
 			const entry = session.previewEntry.value
@@ -620,7 +512,7 @@ const commands = [
 	{
 		id: "file.edit",
 		title: "Edit file",
-		keys: "E",
+		keys: "⇧E",
 		kind: "ui",
 		run(session) {
 			const entry = session.previewEntry.value
@@ -653,7 +545,6 @@ const commands = [
 		id: "panel.shell",
 		title: "Shell command",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			// `!` is the "run a shell command" reflex: land on the `run`
 			// operation with its raw CMD field already owning the keyboard. The
@@ -666,7 +557,6 @@ const commands = [
 		id: "panel.up",
 		title: "Previous operation",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			const length = session.panelFiltered.value.length
 			session.panelOpIndex.set(moveCursor(session.panelOpIndex.value, -1, length))
@@ -676,7 +566,6 @@ const commands = [
 		id: "panel.down",
 		title: "Next operation",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			const length = session.panelFiltered.value.length
 			session.panelOpIndex.set(moveCursor(session.panelOpIndex.value, 1, length))
@@ -686,7 +575,6 @@ const commands = [
 		id: "panel.prevArg",
 		title: "Previous argument",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			const length = session.panelRows.value.length
 			session.panelRowIndex.set(moveCursor(session.panelRowIndex.value, -1, length))
@@ -696,7 +584,6 @@ const commands = [
 		id: "panel.nextArg",
 		title: "Next argument",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			const length = session.panelRows.value.length
 			session.panelRowIndex.set(moveCursor(session.panelRowIndex.value, 1, length))
@@ -706,7 +593,6 @@ const commands = [
 		id: "panel.tab",
 		title: "Next argument or command",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			// Tab cycles the focus ring: the command filter, each argument header,
 			// then the Run action, wrapping at both ends (an item row is reached
@@ -721,7 +607,15 @@ const commands = [
 				session.panelFocus.set(PANEL_FOCUS.ARGS)
 				return
 			}
-			const at = stops.indexOf(session.panelRowIndex.value)
+			// From an argument's item/permission rows, the "field" is its
+			// header: Tab moves on to the next header (or Run), Shift-Tab back.
+			const row = rows[session.panelRowIndex.value]
+			let at = stops.indexOf(session.panelRowIndex.value)
+			if (at === -1 && row?.argIndex !== undefined && row.argIndex >= 0) {
+				at = stops.findIndex(
+					(index) => rows[index].type === "arg" && rows[index].argIndex === row.argIndex,
+				)
+			}
 			if (delta > 0) {
 				if (at === -1 || at >= stops.length - 1) session.panelFocus.set(PANEL_FOCUS.OPS)
 				else session.panelRowIndex.set(stops[at + 1])
@@ -736,7 +630,6 @@ const commands = [
 		id: "panel.setQuery",
 		title: "Filter commands",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			session.panelQuery.set(`${payload?.query ?? ""}`)
 		},
@@ -745,7 +638,6 @@ const commands = [
 		id: "panel.type",
 		title: "Type into the command filter",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			// A key pressed while a non-textual argument owns the cursor jumps
 			// back to the command column and edits the filter.
@@ -758,7 +650,6 @@ const commands = [
 		id: "panel.setRow",
 		title: "Highlight argument",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			if (payload?.index !== undefined) session.panelRowIndex.set(Math.max(0, payload.index))
 		},
@@ -767,7 +658,6 @@ const commands = [
 		id: "panel.setOp",
 		title: "Select operation",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			// Selecting an operation (a click) moves the cursor without
 			// stealing focus from the command filter.
@@ -778,7 +668,6 @@ const commands = [
 		id: "panel.focusArg",
 		title: "Focus arguments",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			// A click on an argument focuses the argument column.
 			session.panelFocus.set(PANEL_FOCUS.ARGS)
@@ -788,7 +677,6 @@ const commands = [
 		id: "panel.moveBit",
 		title: "Move permission bit",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			// Left/Right walk the r/w/x cells of a focused permission row.
 			const row = rowAt(session.panelRows.value, session.panelRowIndex.value)
@@ -801,7 +689,6 @@ const commands = [
 		id: "panel.togglePerm",
 		title: "Toggle permission bit",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			// A click on one permission cell.
 			const { argIndex, itemIndex } = payload ?? {}
@@ -813,7 +700,6 @@ const commands = [
 		id: "panel.toggleItem",
 		title: "Toggle argument item",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			const row = rowAt(session.panelRows.value, session.panelRowIndex.value)
 			if (!row) return
@@ -843,7 +729,6 @@ const commands = [
 		id: "panel.copy",
 		title: "Copy argument value",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			// A click on a read-only argument value copies it through the host
 			// (OSC 52 in the TUI, the Clipboard API in a browser); the command
@@ -855,7 +740,7 @@ const commands = [
 				session.notice?.set({ kind: "warning", text: "clipboard is not available" })
 				return
 			}
-			session.notice?.set({ kind: "tip", text: `copied ${text}` })
+			session.notice?.set({ kind: "tip", text: `copied ${payload?.label ?? text}` })
 			showBriefPanelResult(session)
 		},
 	},
@@ -865,7 +750,6 @@ const commands = [
 		id: "panel.browse",
 		title: "Browse for a path",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			// Browse the focused argument when it is pickable, else the first
 			// pickable argument of the operation; a no-op when there is none.
@@ -879,7 +763,6 @@ const commands = [
 		id: "picker.up",
 		title: "Previous picker row",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			const length = session.pickerRows.value.length
 			session.pickerFocus.set("rows")
@@ -890,7 +773,6 @@ const commands = [
 		id: "picker.down",
 		title: "Next picker row",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			const length = session.pickerRows.value.length
 			session.pickerFocus.set("rows")
@@ -901,7 +783,6 @@ const commands = [
 		id: "picker.setCursor",
 		title: "Highlight picker row",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			if (payload?.index !== undefined) session.panelRowIndex.set(Math.max(0, payload.index))
 			session.pickerFocus.set("rows")
@@ -911,7 +792,6 @@ const commands = [
 		id: "picker.focusPath",
 		title: "Edit the picker path",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			session.pickerFocus.set("path")
 		},
@@ -920,7 +800,6 @@ const commands = [
 		id: "picker.focusRows",
 		title: "Focus the picker entries",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			session.pickerFocus.set("rows")
 		},
@@ -929,7 +808,6 @@ const commands = [
 		id: "picker.type",
 		title: "Type into the picker path",
 		kind: "ui",
-		hidden: true,
 		run(session, payload) {
 			// A printable key pressed while the entry list owns the keyboard
 			// jumps back to the path field and extends it, so typing always
@@ -943,7 +821,6 @@ const commands = [
 		id: "picker.path",
 		title: "Go to the typed picker path",
 		kind: "ui",
-		hidden: true,
 		async run(session) {
 			// Enter in the path field commits it: an existing directory is
 			// chosen (destination) or opened (file/any picker), an existing
@@ -981,7 +858,6 @@ const commands = [
 		id: "picker.enter",
 		title: "Choose picker row",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			const entry = pickerEntry(session)
 			if (!entry) return undefined
@@ -998,7 +874,6 @@ const commands = [
 		id: "picker.descend",
 		title: "Open the picker's directory",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			const entry = pickerEntry(session)
 			if (entry?.type === "parent") return session.dispatch("picker.parent")
@@ -1010,7 +885,6 @@ const commands = [
 		id: "picker.parent",
 		title: "Picker parent directory",
 		kind: "ui",
-		hidden: true,
 		async run(session) {
 			session.pickerPaths.invalidate()
 			session.pickerQuery.set("")
@@ -1025,7 +899,6 @@ const commands = [
 		id: "picker.chooseDir",
 		title: "Choose the picker's directory",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			return choosePicker(session, session.pickerPane.path.value)
 		},
@@ -1034,7 +907,6 @@ const commands = [
 		id: "picker.cancel",
 		title: "Leave the picker",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			// Back to the argument column, panel still open.
 			session.pickerPaths.invalidate()
@@ -1049,16 +921,20 @@ const commands = [
 		id: "panel.run",
 		title: "Run command",
 		kind: "ui",
-		hidden: true,
 		async run(session) {
 			const entry = session.panelEntry.value
 			if (!entry) return
 			if (entry.commandId) {
 				closePanel(session)
-				return session.dispatch(entry.commandId)
+				return session.dispatch(entry.commandId, entry.commandPayload)
 			}
 			const op = entry.op
 			const draft = session.panelDraft.value
+			// Enter on a browsable path/destination argument opens its file
+			// picker, so the target can be chosen (or changed) with the same
+			// gesture. Tab moves on to the next field/Run, which executes.
+			const focused = focusedBinding(session)
+			if (focused?.picker === true) return openPicker(session, focused.index, focused)
 			// An incomplete command does not fail: a blank destination/path
 			// asks where to (the picker opens and the run resumes on a choice —
 			// explorer mode has no DST pane to default from), and any other
@@ -1099,7 +975,6 @@ const commands = [
 		id: "panel.cancel",
 		title: "Close command panel",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			closePanel(session)
 		},
@@ -1121,7 +996,6 @@ const commands = [
 		id: "filter.accept",
 		title: "Keep filter",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			session.filtering.set(null)
 		},
@@ -1130,7 +1004,6 @@ const commands = [
 		id: "filter.clear",
 		title: "Clear filter",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			pane(session).clearFilter()
 			session.filtering.set(null)
@@ -1140,7 +1013,6 @@ const commands = [
 		id: "confirm.yes",
 		title: "Confirm",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			const pending = session.confirm.value
 			if (!pending) return
@@ -1166,9 +1038,57 @@ const commands = [
 		id: "confirm.no",
 		title: "Cancel",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			session.confirm.set(null)
+		},
+	},
+	{
+		id: "app.screenshot",
+		title: "Screenshot",
+		keys: "⇧S",
+		kind: "ui",
+		// The operation is in the panel's Command group; this entry only binds
+		// the shortcut and advertises it in Help. The capture itself is
+		// host-side (see `core/os` and `tui/screenshot`).
+		run(session) {
+			return runOperation(session, getOperation("screenshot"), [])
+		},
+	},
+	{
+		id: "app.server",
+		title: "Web server",
+		kind: "ui",
+		// The panel's Server entries dispatch this with `{ mode }`: "local"
+		// binds loopback, "lan" the machine hostname. The TUI installs the
+		// host hook (`tui/server`); hosts without one never list the entries.
+		async run(session, payload) {
+			if (!session.toggleServer) {
+				session.notice?.set({ kind: "warning", text: "the web server is not available in this environment" })
+				return
+			}
+			const requested = payload?.mode
+			if (requested === "token") {
+				const token = session.webServer?.value?.token
+				if (!token) {
+					session.notice?.set({ kind: "warning", text: "server is not running" })
+					return
+				}
+				return session.dispatch("panel.copy", { text: token, label: "server token" })
+			}
+			const mode = requested === "lan" ? "lan" : requested === "stop" ? "stop" : "local"
+			// `server stop` is only listed while a server is up; a direct
+			// dispatch still reports it instead of claiming a stop.
+			if (mode === "stop" && !session.webServer?.value) {
+				session.notice?.set({ kind: "warning", text: "server is not running" })
+				return
+			}
+			const server = await session.toggleServer(mode)
+			session.webServer?.set(server ?? null)
+			session.notice?.set(
+				server
+					? { kind: "tip", text: `server ${server.mode} listening on ${server.url}` }
+					: { kind: "tip", text: "server stopped" },
+			)
 		},
 	},
 	// Quit: the key path intercepts `app.quit` before dispatch, while the
@@ -1180,7 +1100,6 @@ const commands = [
 		title: "Quit",
 		keys: "q",
 		kind: "ui",
-		hidden: true,
 		run(session) {
 			return session.quit?.()
 		},
@@ -1194,7 +1113,6 @@ const commands = [
 		title: "Help",
 		keys: "?",
 		kind: "ui",
-		hidden: true,
 		run() {},
 	},
 ]
@@ -1212,32 +1130,6 @@ function getCommand(id) {
 		if (commands[i].id === id) return commands[i]
 	}
 	return null
-}
-
-// Function: getCommandBarItems
-// Command-bar rows for the current context: the panel's key hints while it is
-// open, the bookmark-panel hints while that panel owns the keyboard, the
-// filter hints while a pane filter is capturing input, or the fixed
-// `BAR_COMMANDS` set otherwise, in display order. Takes the context as named
-// fields — four adjacent flags are too easy to transpose.
-function getCommandBarItems({ filtering, bookmarkOpen, panelOpen, pickerOpen, panelArmed, overlay }) {
-	if (panelOpen) return pickerOpen ? PICKER_KEYS : panelArmed ? PANEL_CONFIRM_KEYS : PANEL_HINT_KEYS
-	if (bookmarkOpen) return BOOKMARK_KEYS
-	if (overlay === "history") return HISTORY_KEYS
-	if (overlay === "trash") return TRASH_KEYS
-	if (filtering) return FILTER_KEYS
-	return BAR_COMMANDS.map((id) => getCommand(id)).filter(Boolean).map(barRow)
-}
-
-// Function: barRow
-// Projects a command to the small row object the command bar renders.
-function barRow(command) {
-	return {
-		id: command.id,
-		title: command.title,
-		keys: command.keys,
-		primary: command.primary === true,
-	}
 }
 
 // Function: createDispatch
@@ -1264,16 +1156,6 @@ function fail(session, error) {
 	return null
 }
 
-// Function: isColumnPane
-// Whether the focused column is backed by a rendered pane. The parent column
-// only exists in explorer mode (focus is handed back on leaving it); the
-// inspector column only while it previews a directory — over a file it is a
-// read-only card with no listing to drive.
-function isColumnPane(session, paneId) {
-	if (paneId !== "preview") return paneId !== "parent" || session.viewMode.value === "explorer"
-	return Boolean(session.showPreview.value) && Boolean(session.previewEntry.value?.isDir) && !session.preview.value
-}
-
 // Function: hasFilterField
 // Whether the focused column renders a filter input. The inspector column
 // never does — its header is the preview title — so `/` hands focus to the
@@ -1283,14 +1165,24 @@ function hasFilterField(session, paneId) {
 	return paneId !== "preview" && isColumnPane(session, paneId)
 }
 
-// Function: pane
-// The pane cursor movement, marks and reload act on: the focused column's
-// pane when it has one, else the current pane (so the inspector over a file
-// keeps scrolling the directory it is showing).
-function pane(session) {
-	const focused = session.panes[session.active.value]
-	if (!focused || !isColumnPane(session, session.active.value)) return currentPane(session)
-	return focused
+// Function: enterSelection
+// Opens the entry under the focused pane's cursor. A directory descends into
+// it; a file outside the current pane pins the inspector on it before it is
+// opened, so the preview follows the entry that was acted on. Shared by Enter
+// in the workspace and by the full directory preview's bar.
+function enterSelection(session) {
+	const focused = pane(session)
+	const entry = focused.currentEntry()
+	if (!entry) return
+	const current = currentPane(session)
+	if (entry.isDir) return current.navigate(entry.path)
+	if (focused !== current) {
+		session.previewTarget.set(entry)
+		session.showPreview.set(true)
+	}
+	// A file: edit it when it is a text file the host can edit, otherwise show
+	// it fullscreen (see `openFile`).
+	return openFile(session, current, entry)
 }
 
 // Function: activate
@@ -1601,6 +1493,11 @@ function choosePicker(session, path) {
 	session.panelRowIndex.set(index >= 0 ? index : 0)
 	if (session.pickerPendingRun.value) {
 		session.pickerPendingRun.set(false)
+		// The picker was opened to satisfy a missing destination: move the
+		// cursor to Run so the resumed run arms or executes instead of
+		// reopening the picker on the path it just chose.
+		const runIndex = session.panelRows.value.findIndex((row) => row.type === "run")
+		if (runIndex >= 0) session.panelRowIndex.set(runIndex)
 		return session.dispatch("panel.run")
 	}
 	return undefined
@@ -1638,11 +1535,9 @@ function showBriefPanelResult(session) {
 }
 
 export {
-	barRow,
 	closePanel,
 	createDispatch,
 	getCommand,
-	getCommandBarItems,
 	getCommands,
 	openPanel,
 }

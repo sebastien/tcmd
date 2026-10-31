@@ -40,6 +40,20 @@ describe("CommandPanel", () => {
 		expect(
 			behaviors.footer(null, { entry: { name: "delete" }, rows: [{ type: "run", armed: true }] }),
 		).toBe(PANEL_FOOTER.replace("↵ run", "↵ confirm"))
+		// A focused path/destination argument advertises Enter as Browse, even
+		// while the command is armed.
+		expect(
+			behaviors.footer(null, {
+				entry: { name: "copy" },
+				focus: "args",
+				argCursor: 1,
+				rows: [
+					{ type: "arg", name: "FROM" },
+					{ type: "arg", name: "TO", picker: true },
+					{ type: "run", armed: true },
+				],
+			}),
+		).toBe(PANEL_FOOTER.replace("↵ run", "↵ browse"))
 	})
 
 	test("prints the armed command below Confirm in the action colour", () => {

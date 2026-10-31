@@ -16,11 +16,14 @@
 // column body publish back to the App.
 //
 // Environment: `textFg`, `textSecondaryFg`, `textHeadingFg`, and the optional
-// `actions` footer text (default: the TUI's `[Open O] [Edit E]` hints; the web
-// substitutes a note that those keys do not exist in a browser).
+// `actions` footer text (default: the TUI's `[Open …]`/`[Edit …]` hints, read
+// from the command registry; the web substitutes a note that those keys do not
+// exist in a browser).
 
 import { unwrap } from "select/state/cells"
+import { getCommand } from "../core/commands.js"
 import { formatSize } from "./format.js"
+import { keyGlyph } from "./CommandItem.js"
 import { previewSource } from "../core/preview.js"
 
 const KIND_LABELS = {
@@ -110,12 +113,22 @@ function headerTitle(preview, entry) {
 	return "inspector"
 }
 
+// Function: defaultActions
+// The TUI footer hints, read from the command registry so a relabel of
+// `file.open`/`file.edit` cannot drift from the bar, the full previews and the
+// `?` reference.
+function defaultActions() {
+	const open = keyGlyph(getCommand("file.open")?.keys)
+	const edit = keyGlyph(getCommand("file.edit")?.keys)
+	return ` [Open ${open}] [Edit ${edit}]`
+}
+
 // Function: createBehaviors
 // Builds the FilePreview behavior map for the given renderer environment.
 // `env.actions` overrides the footer line so a presentation can carry its own
 // copy (the browser has no Open/Edit); the default advertises the TUI keys.
 function createBehaviors(env) {
-	const actions = env.actions ?? (() => " [Open O] [Edit E]")
+	const actions = env.actions ?? defaultActions
 	const directory = (_self, data) =>
 		isDirectoryPane(unwrap(data.preview), unwrap(data.entry))
 	const body = (_self, data) => !directory(_self, data)

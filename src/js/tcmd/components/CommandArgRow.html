@@ -19,9 +19,21 @@
 	<button class="panel-run-button" when="isRun" type="button" tabindex="-1" out:aria-label="runAriaLabel" out="runLabel"></button>
 	<span class="panel-field" when="isArg" out:data-editable="editable">
 		<span class="panel-field-bracket" out="fieldOpen"></span>
-		<input class="panel-value" when="editing" type="text" inout="value" aria-label="Argument value" />
+		<input class="panel-value" when="editing" ref="valueInput" type="text" inout="value" on:focus="selectStem" aria-label="Argument value" />
 		<span class="panel-field-value" when="!editing" out="summary"></span>
 		<span class="panel-field-bracket" out="fieldClose"></span>
+	</span>
+	<span class="panel-diff" when="hasDiff">
+		<span class="panel-diff-changed" when="diffChanged">
+			<span class="panel-diff-dim" when="diffFromPrefix" out="diffFromPrefix"></span>
+			<span class="panel-diff-removed" when="diffFromChanged" out="diffFromChanged"></span>
+			<span class="panel-diff-dim" when="diffFromSuffix" out="diffFromSuffix"></span>
+			<span class="panel-diff-dim" out="diffArrow"></span>
+			<span class="panel-diff-dim" when="diffToPrefix" out="diffToPrefix"></span>
+			<span class="panel-diff-added" when="diffToChanged" out="diffToChanged"></span>
+			<span class="panel-diff-dim" when="diffToSuffix" out="diffToSuffix"></span>
+		</span>
+		<span class="panel-diff-dim" when="diffUnchanged" out="diffUnchangedText"></span>
 	</span>
 	<span class="panel-summary" when="isPlain" out="summary"></span>
 	<svg class="panel-op-chevron ui-icon" when="isOp" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><use href="#lucide-chevron-right"></use></svg>

@@ -72,6 +72,33 @@ function rowSummary(row) {
 	return row.summary ?? ""
 }
 
+// Function: stemEnd
+// Where a name's stem ends: the last dot, or the whole name when there is no
+// extension. A leading dot (a dotfile) counts as no extension, so its whole
+// name is selected. `rename` uses this to preselect `notes` in `notes.txt`
+// while keeping the extension.
+function stemEnd(name) {
+	const text = `${name ?? ""}`
+	const at = text.lastIndexOf(".")
+	return at > 0 ? at : text.length
+}
+
+// Function: selectStem
+// Focus handler for a rename TO field: when the field still matches FROM, the
+// stem is selected so typing replaces the name and keeps the extension. Works
+// on both presentations — the web input exposes `setSelectionRange`, the TUI
+// input `setSelection`.
+function selectStem(self, data, event) {
+	if (data?.row?.selectStem !== true || data?.row?.diff?.unchanged !== true) return
+	const input = event?.target ?? self?.ref?.valueInput
+	if (!input) return
+	const text = `${input.value ?? unwrap(data?.value) ?? ""}`
+	const end = stemEnd(text)
+	if (end <= 0) return
+	if (typeof input.setSelectionRange === "function") input.setSelectionRange(0, end)
+	else if (typeof input.setSelection === "function") input.setSelection(0, end)
+}
+
 // Function: wantsFocus
 // The focus token a row belongs to: the command list ("ops"), the argument
 // pane ("args"), or none (a group header or a list frame never takes the
@@ -111,6 +138,9 @@ function createBehaviors(env) {
 	const editing = (_self, data) => focused(data) && type(data) === "arg" && data.row?.textual === true
 	const behaviors = {
 		editing,
+		// A rename TO field starts on the same name as FROM, so focusing it
+		// selects the stem for a quick replacement (see `selectStem`).
+		selectStem,
 		// --- shared row content ---
 		marker: (_self, data) => (focused(data) ? ">" : " "),
 		markerFg: () => env.accentFg,
@@ -150,9 +180,26 @@ function createBehaviors(env) {
 		isList: (_self, data) => isList(data),
 		showPlain: (_self, data) => type(data) === "op" || type(data) === "entry" || type(data) === "parent",
 		isPlain: (_self, data) => type(data) === "entry" || type(data) === "parent",
-		// An argument stacks its label over its value; every other row is one
-		// line tall.
-		rowHeight: (_self, data) => (type(data) === "arg" ? 2 : 1),
+		// A rename TO row adds a third line comparing the new name with FROM:
+		// the common parts dim, the replaced middle of each side highlighted,
+		// or `(unchanged)` while both names still match.
+		hasDiff: (_self, data) => Boolean(data.row?.diff),
+		diffChanged: (_self, data) => data.row?.diff?.unchanged === false,
+		diffUnchanged: (_self, data) => data.row?.diff?.unchanged === true,
+		diffUnchangedText: () => "(unchanged)",
+		diffFromPrefix: (_self, data) => data.row?.diff?.prefix ?? "",
+		diffFromChanged: (_self, data) => data.row?.diff?.fromChanged ?? "",
+		diffFromSuffix: (_self, data) => data.row?.diff?.suffix ?? "",
+		diffArrow: () => " → ",
+		diffToPrefix: (_self, data) => data.row?.diff?.prefix ?? "",
+		diffToChanged: (_self, data) => data.row?.diff?.toChanged ?? "",
+		diffToSuffix: (_self, data) => data.row?.diff?.suffix ?? "",
+		diffDimFg: () => env.textSecondaryFg,
+		diffRemovedFg: () => env.warningFg,
+		diffAddedFg: () => env.accentSecondaryFg,
+		// An argument stacks its label over its value; a diff adds a third
+		// line. Every other row is one line tall.
+		rowHeight: (_self, data) => (type(data) === "arg" ? (data.row?.diff ? 3 : 2) : 1),
 		runMarginTop: (_self, data) => (type(data) === "run" ? 1 : 0),
 		runLabel: (_self, data) => (data?.row?.error ? "[Retry]" : data?.row?.armed ? "[Confirm]" : "[Run]"),
 		runAriaLabel: (_self, data) =>
@@ -203,4 +250,4 @@ function createBehaviors(env) {
 	return behaviors
 }
 
-export { createBehaviors, isFocused, riskFg, rowName, rowSummary, wantsFocus }
+export { createBehaviors, isFocused, riskFg, rowName, rowSummary, selectStem, stemEnd, wantsFocus }

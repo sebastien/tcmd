@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { cell } from "select/state/cells"
-import { components, fileListScrollTop, keepVisible, panelDialogHeight, panelOpScrollTop, registerComponents } from "../../src/js/tcmd/tui/catalogue.js"
+import { components, fileListScrollTop, keepVisible, panelArgScrollTop, panelDialogHeight, panelOpScrollTop, registerComponents } from "../../src/js/tcmd/tui/catalogue.js"
 import { tuiTheme } from "../../src/js/tcmd/tui/theme.js"
 
 // The thumb is the only painted scrollbar colour (the track blends into the
@@ -331,5 +331,29 @@ describe("panelDialogHeight", () => {
 		expect(panelDialogHeight({ ctx: { height: 18 } })).toBe(15)
 		expect(panelDialogHeight({ ctx: { height: 30 } })).toBe(21)
 		expect(panelDialogHeight({ ctx: {} })).toBe("72%")
+	})
+})
+
+describe("panelArgScrollTop", () => {
+	const box = (extra = {}) => ({ height: 6, scrollTop: 0, ...extra })
+
+	test("keeps the armed confirm preview in view below Run", () => {
+		const rows = [
+			{ type: "arg", name: "FROM" },
+			{ type: "run", command: "copy /a\n     /b\n     /c\n     /dst" },
+		]
+		const self = { ref: { args: box() } }
+		// Two argument lines + Run + four confirm lines overflow the six-line
+		// viewport by one, and Run owns the cursor.
+		expect(panelArgScrollTop(self, { rows, argCursor: 1, preview: null })).toBe(1)
+	})
+
+	test("a one-line confirm stays put", () => {
+		const rows = [
+			{ type: "arg", name: "PATH" },
+			{ type: "run", command: "delete /a" },
+		]
+		const self = { ref: { args: box() } }
+		expect(panelArgScrollTop(self, { rows, argCursor: 1, preview: null })).toBe(0)
 	})
 })

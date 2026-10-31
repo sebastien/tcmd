@@ -279,13 +279,23 @@ function panelArgScrollTop(self, data) {
 		const firstItem = row.type === "item" && (i === 0 || rows[i - 1].type !== "item")
 		const lastItem = row.type === "item" && (i === rows.length - 1 || rows[i + 1].type !== "item")
 		if (firstItem) offset += 1
-		const height = row.type === "arg" ? 2 : 1
+		// A rename TO row adds a diff line under its field.
+		const height = row.type === "arg" ? (row.diff ? 3 : 2) : 1
 		if (i === cursor) {
 			cursorTop = offset
 			cursorHeight = height
 		}
 		offset += height
 		if (lastItem) offset += 1
+	}
+	// The armed command hangs one or more lines below Run; count them in the
+	// content height and, while Run owns the cursor, in the visible range so
+	// the preview scrolls into view instead of staying under the fold.
+	const run = rows[rows.length - 1]
+	const confirmHeight = run?.type === "run" && run.command ? `${run.command}`.split("\n").length : 0
+	if (confirmHeight) {
+		offset += confirmHeight
+		if (cursor === rows.length - 1) cursorHeight += confirmHeight
 	}
 	return keepRangeVisible(box, cursorTop, cursorHeight, offset)
 }
@@ -307,7 +317,7 @@ function keepRangeVisible(box, top, height, total) {
 }
 
 // Function: commandBarRows
-// Appends the active pane's marked count as a trailing dimmed entry, fits the
+// Appends the focused listing's marked count as a trailing dimmed entry, fits the
 // entries on one line (dropping what does not fit behind an ellipsis), then
 // maps them to rows.
 function commandBarRows(commandItem) {
@@ -491,6 +501,6 @@ function registerComponents() {
 	return components
 }
 
-export { components, fileListScrollTop, keepVisible, panelDialogHeight, panelOpScrollTop, registerComponents }
+export { components, fileListScrollTop, keepVisible, panelArgScrollTop, panelDialogHeight, panelOpScrollTop, registerComponents }
 
 // EOF

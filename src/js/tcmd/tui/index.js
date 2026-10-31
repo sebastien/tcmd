@@ -18,6 +18,8 @@ import { render } from "select.tui"
 import { createBookmarks, createFileBookmarkStore } from "../core/bookmarks.js"
 import { createNodeFs, createNodeOs, createPane, createSession, load } from "../core/index.js"
 import { createAppComponent } from "./app.js"
+import { createServerToggle } from "./server.js"
+import { writeScreenshot } from "./screenshot.js"
 
 // Function: readSize
 // Normalizes a renderer resize payload. OpenTUI's live renderer emits
@@ -65,6 +67,11 @@ async function main(paths = []) {
 		resume: () => instance?._ownedRenderer?.resume?.(),
 		// OSC 52: the renderer knows whether the terminal supports it.
 		copy: (text) => instance?._ownedRenderer?.copyToClipboardOSC52?.(text) ?? false,
+		// `screenshot` reads the renderer's next painted frame (see
+		// `tui/screenshot`), so it captures the screen after the command panel
+		// that asked for it has closed.
+		screenshot: ({ svgPath, ansPath }) =>
+			writeScreenshot({ renderer: instance?._ownedRenderer, svgPath, ansPath }),
 	})
 	const bookmarks = createBookmarks({
 		store: createFileBookmarkStore({
@@ -74,11 +81,28 @@ async function main(paths = []) {
 			mkdir,
 		}),
 	})
-	const session = createSession({ fs, os, left, right, host: nodeOs.hostname(), bookmarks })
+	const server = createServerToggle()
+	const session = createSession({ fs, os, left, right, host: nodeOs.hostname(), bookmarks, server: true })
+	session.toggleServer = (mode) => server.toggle(mode)
 	await load(session)
 	const size = cell({ width: 0, height: 0 })
 	const help = cell(false)
-	const App = createAppComponent(session, { size, help })
+	const App = createAppComponent(session, {
+		size,
+		help,
+		// Quitting must release the web server's port: the process exit alone
+		// would drop it too, but stopping first keeps the hook usable in tests
+		// and leaves no half-closed listener behind.
+		quit: (self) => {
+			void server.stop().catch(() => {})
+			// Destroying the renderer from within a keypress deadlocks the
+			// native render loop; defer past the current frame.
+			setTimeout(() => {
+				self.quit()
+				process.exit(0)
+			}, 100)
+		},
+	})
 	instance = await render(App, {
 		useMouse: true,
 		exitOnCtrlC: false,

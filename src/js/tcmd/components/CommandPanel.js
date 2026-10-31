@@ -81,10 +81,18 @@ function createBehaviors(env) {
 		}),
 		footer: (_self, data) => {
 			if (unwrap(data?.picking)) return PICKER_FOOTER
+			const rows = unwrap(data?.rows) ?? []
+			// A focused path/destination opens its picker with Enter; Run still
+			// runs or confirms from wherever the cursor sits.
+			const cursorRow =
+				unwrap(data?.focus) === PANEL_FOCUS.ARGS ? rows[unwrap(data?.argCursor)] : null
+			const browsing = cursorRow?.type === "arg" && cursorRow.picker === true
 			// An armed risky action turns Enter into the confirmation step. The
 			// run row carries the flag (the rows input is already reactive).
-			const armed = (unwrap(data?.rows) ?? []).some((row) => row.type === "run" && row.armed)
-			const base = armed ? PANEL_FOOTER.replace("↵ run", "↵ confirm") : PANEL_FOOTER
+			const armed = rows.some((row) => row.type === "run" && row.armed)
+			let base = PANEL_FOOTER
+			if (browsing) base = base.replace("↵ run", "↵ browse")
+			else if (armed) base = base.replace("↵ run", "↵ confirm")
 			// The permission grid adds a bit cursor to the usual keys.
 			return unwrap(data?.entry)?.name === "chmod" ? `${base}   ←→ bits` : base
 		},

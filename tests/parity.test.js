@@ -3,6 +3,7 @@
 // shared `components/*` logic, so this guards the shared contract end to end.
 
 import { beforeAll, describe, expect, test } from "bun:test"
+import { cell } from "select/state/cells"
 import { createPane, createSession, load } from "../src/js/tcmd/core/index.js"
 import { createMockFs } from "./helpers/mock-fs.js"
 
@@ -52,7 +53,7 @@ describe("cross-engine parity", () => {
 		const webInstance = createWebApp(session).new().mount(host)
 		const webText = host.textContent
 
-		const setup = await testRender(createAppComponent(session), {
+		const setup = await testRender(createAppComponent(session, { size: cell({ width: 100, height: 20 }) }), {
 			width: 100,
 			height: 20,
 		})

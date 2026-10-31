@@ -69,6 +69,8 @@ describe("operations", () => {
 		expect(getOperation("!").name).toBe("run")
 		expect(getOperation("usage").name).toBe("du")
 		expect(getOperation("free").name).toBe("df")
+		expect(getOperation("info").name).toBe("file")
+		expect(getOperation("create").name).toBe("new")
 		expect(getOperation("nope")).toBeNull()
 	})
 
@@ -111,6 +113,136 @@ describe("operations", () => {
 		expect(os.copied).toEqual(["/home/notes.txt", "/home/notes.txt"])
 	})
 
+	test("screenshot writes the next free SVG/ANSI pair in the focused column", async () => {
+		const fs = createMockFs({
+			"/": [{ name: "home", isDir: true }],
+			"/home": [
+				{ name: "screenshot.svg", text: "<svg/>" },
+				{ name: "screenshot.ans", text: "" },
+			],
+		})
+		const calls = []
+		const os = {
+			canEdit: false,
+			copy: () => false,
+			screenshot: async (paths) => {
+				calls.push(paths)
+				return paths
+			},
+		}
+		const session = createSession({
+			fs,
+			os,
+			left: createPane({ fs, path: "/home" }),
+			right: createPane({ fs, path: "/" }),
+		})
+		await Promise.all(Object.values(session.panes).map((pane) => pane.refresh()))
+
+		// Scripts wait for the capture; only panel runs return early so the
+		// panel can close before the frame is captured.
+		expect(await runLine(session, "screenshot")).toBe("ran")
+		expect(session.screenshotPending).toBeNull()
+		expect(calls).toEqual([{ svgPath: "/home/screenshot-2.svg", ansPath: "/home/screenshot-2.ans" }])
+		expect(session.notice.value).toEqual({ kind: "tip", text: "screenshot → screenshot-2.svg + screenshot-2.ans" })
+	})
+
+	test("concurrent screenshots serialize name selection and writes", async () => {
+		const { fs, os, session } = await makeSession()
+		const calls = []
+		let release
+		let started
+		const gate = new Promise((resolve) => { release = resolve })
+		const firstStarted = new Promise((resolve) => { started = resolve })
+		os.screenshot = async (paths) => {
+			calls.push(paths)
+			if (calls.length === 1) {
+				started()
+				await gate
+			}
+			await fs.touch(paths.svgPath)
+			await fs.touch(paths.ansPath)
+		}
+		const runs = Promise.all([runLine(session, "screenshot"), runLine(session, "screenshot")])
+		await firstStarted
+		expect(calls).toHaveLength(1)
+		release()
+		expect(await runs).toEqual(["ran", "ran"])
+		expect(calls).toEqual([
+			{ svgPath: "/home/screenshot.svg", ansPath: "/home/screenshot.ans" },
+			{ svgPath: "/home/screenshot-2.svg", ansPath: "/home/screenshot-2.ans" },
+		])
+		expect(session.screenshotPending).toBeNull()
+	})
+
+	test("screenshot script failures return error and do not block queued captures", async () => {
+		const { os, session } = await makeSession()
+		os.screenshot = async () => { throw new Error("disk full") }
+		expect(await runLine(session, "screenshot")).toBe("error")
+		expect(session.notice.value).toEqual({ kind: "error", text: "disk full" })
+		expect(session.screenshotPending).toBeNull()
+		let calls = 0
+		os.screenshot = async () => {
+			if (++calls === 1) throw new Error("capture failed")
+		}
+		expect(await Promise.all([runLine(session, "screenshot"), runLine(session, "screenshot")])).toEqual(["error", "ran"])
+		expect(calls).toBe(2)
+	})
+
+	test("panel screenshots return before capture completes and report deferred failures", async () => {
+		const { os, session } = await makeSession()
+		let fail
+		const capture = new Promise((_resolve, reject) => { fail = reject })
+		os.screenshot = () => capture
+		expect(await runOperation(session, getOperation("screenshot"), [], { panel: true })).toBe("ran")
+		const pending = session.screenshotPending
+		expect(pending).toBeInstanceOf(Promise)
+		fail(new Error("capture failed"))
+		await expect(pending).rejects.toThrow("capture failed")
+		expect(session.notice.value).toEqual({ kind: "error", text: "capture failed" })
+		expect(session.screenshotPending).toBeNull()
+	})
+
+	test("screenshot defaults to the inspector's directory when it is the focused listing", async () => {
+		const fs = createMockFs({
+			"/": [{ name: "home", isDir: true }],
+			"/home": [{ name: "docs", isDir: true }, { name: "notes.txt", text: "x" }],
+			"/home/docs": [{ name: "a.txt", text: "a" }],
+		})
+		const calls = []
+		const os = {
+			canEdit: false,
+			copy: () => false,
+			screenshot: async (paths) => {
+				calls.push(paths)
+				return paths
+			},
+		}
+		const session = createSession({
+			fs,
+			os,
+			left: createPane({ fs, path: "/home" }),
+			right: createPane({ fs, path: "/" }),
+		})
+		await Promise.all(Object.values(session.panes).map((pane) => pane.refresh()))
+		// The cursor sits on `docs/`, so the inspector previews that directory;
+		// focusing the column moves the default there, not to the anchor pane.
+		session.active.set("preview")
+		await session.panes.preview.navigate("/home/docs", { record: false })
+
+		await runLine(session, "screenshot")
+		await session.screenshotPending
+		expect(calls).toEqual([{ svgPath: "/home/docs/screenshot.svg", ansPath: "/home/docs/screenshot.ans" }])
+	})
+
+	test("screenshot reports a host without a grid to capture", async () => {
+		const { session } = await makeSession()
+		await runLine(session, "screenshot")
+		expect(session.notice.value).toEqual({
+			kind: "error",
+			text: "screenshots are not available in this environment",
+		})
+	})
+
 	test("du reports recursive sizes per path and a total", async () => {
 		const { session } = await makeSession()
 		await runLine(session, "du docs")
@@ -135,6 +267,55 @@ describe("operations", () => {
 			"/home/notes.txt",
 			"  977K free of 3.8M (75% used)",
 		])
+	})
+
+	test("file identifies content from the bytes and flags a mismatched extension", async () => {
+		const fs = createMockFs({
+			"/": [{ name: "home", isDir: true }],
+			"/home": [
+				{ name: "notes.txt", text: "hello\nworld\n", size: 12 },
+				{ name: "fake.png", text: "hello\n", size: 6 },
+				{ name: "shot.png", bytes: Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), size: 8 },
+				{ name: "docs", isDir: true },
+			],
+			"/home/docs": [{ name: "readme.md", text: "# Hi\n", size: 5 }],
+		})
+		const left = createPane({ fs, path: "/home" })
+		const right = createPane({ fs, path: "/" })
+		const session = createSession({ fs, left, right })
+		await Promise.all(Object.values(session.panes).map((pane) => pane.refresh()))
+
+		await runLine(session, "file notes.txt")
+		expect(session.notice.value.text).toBe("/home/notes.txt · ASCII text (text/plain) · 12B")
+		expect(session.previewTarget.value.details).toEqual([
+			"/home/notes.txt",
+			"  format: ASCII text (text/plain)",
+			"  encoding: ASCII",
+			"  lines: 2",
+			"  size: 12B",
+			"  mode: rw-r--r-- (644)",
+		])
+
+		await runLine(session, "file shot.png")
+		expect(session.notice.value.text).toBe("/home/shot.png · PNG image (image/png) · 8B")
+		await runLine(session, "file fake.png")
+		expect(session.previewTarget.value.details).toContain(
+			"  note: extension .png suggests a binary format, but the content is ASCII",
+		)
+
+		await runLine(session, "file docs")
+		expect(session.notice.value.text).toBe("/home/docs · directory · 1 entry · 5B")
+		expect(session.previewTarget.value.details.slice(0, 4)).toEqual([
+			"/home/docs",
+			"  type: directory",
+			"  entries: 1",
+			"  size: 5B recursive",
+		])
+
+		// No argument: the focused cursor entry. `info` is the alias.
+		left.cursor.set(2)
+		await runLine(session, "info")
+		expect(session.notice.value.text).toBe("/home/notes.txt · ASCII text (text/plain) · 12B")
 	})
 
 	test("copy copies files and directories recursively", async () => {

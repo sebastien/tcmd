@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { copyFile, mkdir, mkdtemp, rm, symlink } from "node:fs/promises"
 import { join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { hostUrl, main as serveWeb } from "../scripts/serve-web.js"
+import { hostUrl, startWebServer } from "../src/js/tcmd/web/server.js"
 
 const launcher = fileURLToPath(new URL("../bin/tcmd", import.meta.url))
 const script = fileURLToPath(new URL("../bin/tcmd.js", import.meta.url))
@@ -11,7 +11,7 @@ async function originFrom(child) {
 	let output = ""
 	for await (const chunk of child.stdout) {
 		output += new TextDecoder().decode(chunk)
-		const match = output.match(/http:\/\/[^\s:]+:\d+/)
+		const match = output.match(/http:\/\/[^\s]+/)
 		if (match) return match[0]
 	}
 	throw new Error(`Server exited before listening: ${await new Response(child.stderr).text()}`)
@@ -30,11 +30,14 @@ describe("tcmd --server", () => {
 				stdout: "pipe",
 				stderr: "pipe",
 			})
-			const origin = await originFrom(child)
-			const page = await fetch(origin)
+			const linkUrl = await originFrom(child)
+			const origin = new URL(linkUrl).origin
+			expect((await fetch(origin)).status).toBe(403)
+			const page = await fetch(linkUrl)
 			expect(page.status).toBe(200)
 			const html = await page.text()
 			const token = html.match(/name="tcmd-token" content="([^"]+)"/)[1]
+			expect(token).toBe(new URL(linkUrl).searchParams.get("token"))
 			expect(token).not.toBe("__TCMD_TOKEN__")
 			expect((await fetch(`${origin}/main.js`)).status).toBe(200)
 			expect((await fetch(`${origin}/style.css`)).status).toBe(200)
@@ -49,20 +52,45 @@ describe("tcmd --server", () => {
 		}
 	})
 
+	test("the thin web:serve launcher serves the authenticated page from another cwd", async () => {
+		const root = await mkdtemp("/tmp/opencode/tcmd-web-launcher-")
+		let child
+		try {
+			child = Bun.spawn([process.execPath, fileURLToPath(new URL("../scripts/serve-web.js", import.meta.url))], {
+				cwd: root,
+				env: { ...process.env, HOST: "127.0.0.1", PORT: "0", TCMD_WEB_ROOT: root },
+				stdout: "pipe",
+				stderr: "pipe",
+			})
+			const linkUrl = await originFrom(child)
+			expect((await fetch(new URL(linkUrl).origin)).status).toBe(403)
+			const response = await fetch(linkUrl)
+			expect(response.status).toBe(200)
+			expect(await response.text()).toContain(`content="${new URL(linkUrl).searchParams.get("token")}"`)
+		} finally {
+			child?.kill()
+			if (child) await child.exited
+			await rm(root, { recursive: true, force: true })
+		}
+	})
+
 	test("a missing browser bundle is built on demand", async () => {
 		const root = await mkdtemp("/tmp/opencode/tcmd-build-")
 		let server
+		let url
 		try {
 			const publicDir = join(root, "public")
 			await mkdir(publicDir)
 			for (const file of ["index.html", "style.css"]) {
 				await copyFile(new URL(`../public/${file}`, import.meta.url), join(publicDir, file))
 			}
-			;({ server } = await serveWeb({ publicDir: pathToFileURL(`${publicDir}/`), root, port: 0 }))
+			;({ server, url } = await startWebServer({ publicDir: pathToFileURL(`${publicDir}/`), root, port: 0 }))
+			// The returned URL is what the TUI puts in its identity bar.
+			expect(url).toBe(`http://127.0.0.1:${server.port}`)
 			const bundle = Bun.file(join(publicDir, "main.js"))
 			expect(await bundle.exists()).toBe(true)
 			expect(bundle.size).toBeGreaterThan(0)
-			expect((await fetch(`http://127.0.0.1:${server.port}/main.js`)).status).toBe(200)
+			expect((await fetch(url + "/main.js")).status).toBe(200)
 		} finally {
 			await server?.stop(true)
 			await rm(root, { recursive: true, force: true })

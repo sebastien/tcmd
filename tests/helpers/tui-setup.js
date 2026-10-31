@@ -22,7 +22,7 @@ async function makeSetup(tree, width = 100, height = 20, options = {}) {
 	const fs = createMockFs(tree)
 	const left = createPane({ fs, path: "/home" })
 	const right = createPane({ fs, path: "/" })
-	const session = createSession({ fs, left, right, viewMode: options.viewMode })
+	const session = createSession({ fs, left, right, viewMode: options.viewMode, server: true })
 	await load(session)
 	const size = cell({ width, height })
 	const App = createAppComponent(session, { size })

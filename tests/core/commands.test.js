@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { createPane } from "../../src/js/tcmd/core/pane.js"
 import { createSession, load } from "../../src/js/tcmd/core/session.js"
-import { getCommand, getCommandBarItems, getCommands } from "../../src/js/tcmd/core/commands.js"
+import { getCommand, getCommands } from "../../src/js/tcmd/core/commands.js"
+import { getCommandBarItems } from "../../src/js/tcmd/core/bar.js"
 import { PANEL_FOCUS } from "../../src/js/tcmd/core/panel.js"
 import { createMockFs } from "../helpers/mock-fs.js"
 
@@ -171,6 +172,60 @@ describe("commands", () => {
 		session.os.copy = () => false
 		session.dispatch("panel.copy", { text: "/home/notes.txt" })
 		expect(session.notice.value).toMatchObject({ kind: "warning" })
+	})
+
+	test("app.server starts, switches and stops the two web UI modes", async () => {
+		const session = makeSession()
+		let current = null
+		session.toggleServer = async (mode) => {
+			if (mode === "stop" || current === mode) {
+				current = null
+				return null
+			}
+			current = mode
+			return {
+				mode,
+				url: mode === "lan" ? "http://devbox:8787" : "http://127.0.0.1:8787",
+			}
+		}
+		// No payload means the safe local mode.
+		await session.dispatch("app.server")
+		expect(session.webServer.value).toEqual({ mode: "local", url: "http://127.0.0.1:8787" })
+		expect(session.notice.value).toMatchObject({ kind: "tip", text: "server local listening on http://127.0.0.1:8787" })
+		// The other mode switches the active server.
+		await session.dispatch("app.server", { mode: "lan" })
+		expect(session.webServer.value).toEqual({ mode: "lan", url: "http://devbox:8787" })
+		expect(session.notice.value).toMatchObject({ kind: "tip", text: "server lan listening on http://devbox:8787" })
+		// The explicit stop entry stops it.
+		await session.dispatch("app.server", { mode: "stop" })
+		expect(session.webServer.value).toBeNull()
+		expect(session.notice.value).toMatchObject({ kind: "tip", text: "server stopped" })
+		// Stop with nothing running reports that instead of claiming a stop.
+		await session.dispatch("app.server", { mode: "stop" })
+		expect(session.notice.value).toMatchObject({ kind: "warning", text: "server is not running" })
+		// The same mode still toggles off, as before.
+		await session.dispatch("app.server", { mode: "local" })
+		expect(session.webServer.value).toEqual({ mode: "local", url: "http://127.0.0.1:8787" })
+		await session.dispatch("app.server", { mode: "local" })
+		expect(session.webServer.value).toBeNull()
+		expect(session.notice.value).toMatchObject({ kind: "tip", text: "server stopped" })
+		// A host without the hook reports that instead of failing silently.
+		session.toggleServer = null
+		await session.dispatch("app.server")
+		expect(session.notice.value).toMatchObject({ kind: "warning" })
+	})
+
+	test("server token copies the running token without toggling the server or echoing the secret", async () => {
+		const session = makeSession()
+		let copied
+		session.os.copy = (text) => { copied = text; return true }
+		session.toggleServer = () => { throw new Error("must not toggle") }
+		await session.dispatch("app.server", { mode: "token" })
+		expect(session.notice.value).toMatchObject({ kind: "warning", text: "server is not running" })
+		session.webServer.set({ mode: "local", url: "http://127.0.0.1:8787", token: "secret-token" })
+		await session.dispatch("app.server", { mode: "token" })
+		expect(copied).toBe("secret-token")
+		expect(session.notice.value).toMatchObject({ kind: "tip", text: "copied server token" })
 	})
 
 	test("view.toggleViewer opens and closes the fullscreen inspector", async () => {
@@ -490,13 +545,14 @@ describe("commands", () => {
 		expect(session.dispatch("nope")).toBeNull()
 	})
 
-	test("the command bar exposes the fixed action set", () => {
+	test("the command bar exposes the workspace action set", () => {
 		const items = getCommandBarItems({ filtering: null, bookmarkOpen: false, panelOpen: false })
-		// The bar is the explicit, short action list: the panel is the command
-		// entry point, and no entry claims a primary highlight.
+		// The bar is contextual: the panel is the command entry point, and Open
+		// is the primary action of the focused listing.
 		expect(items.some((item) => item.id === "panel.open")).toBe(true)
-		expect(items.some((item) => item.id === "panel.toggle")).toBe(false)
-		expect(items.some((item) => item.primary)).toBe(false)
+		expect(items.some((item) => item.id === "pane.enter")).toBe(true)
+		expect(items.some((item) => item.id === "pane.toggle")).toBe(true)
+		expect(items.find((item) => item.id === "pane.enter")?.primary).toBe(true)
 	})
 
 	test("the bookmark bar offers removal from the selected row", () => {

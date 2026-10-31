@@ -32,6 +32,22 @@ function makeSession() {
 }
 
 describe("session", () => {
+	test("server token is a read-only panel value only while the server runs", () => {
+		const fs = createMockFs(TREE)
+		const session = createSession({ fs, left: createPane({ fs, path: "/home" }), right: createPane({ fs, path: "/" }), server: true })
+		expect(session.panelEntries.value.some((entry) => entry.showToken)).toBe(false)
+		session.webServer.set({ mode: "local", url: "http://127.0.0.1:8787", token: "secret-token" })
+		session.dispatch("panel.open")
+		session.panelQuery.set("server token")
+		expect(session.panelEntry.value.name).toBe("server token")
+		expect(session.panelRows.value[0]).toMatchObject({
+			name: "TOKEN", value: "secret-token", summary: "secret-token", readonly: true, textual: false,
+		})
+		session.webServer.set(null)
+		expect(session.panelEntries.value.some((entry) => entry.showToken)).toBe(false)
+		expect(JSON.stringify(session.panelRows.value)).not.toContain("secret-token")
+	})
+
 	test("opens in explorer mode by default", () => {
 		const fs = createMockFs(TREE)
 		const session = createSession({ fs, left: createPane({ fs, path: "/home" }), right: createPane({ fs, path: "/" }) })
@@ -150,29 +166,33 @@ describe("session", () => {
 		expect(session.preview.value.innerExt).toBe("tar")
 	})
 
-	test("command bar shows the fixed bar commands, then panel hints while open", () => {
+	test("command bar follows the focused workspace column, then the panel hints", () => {
 		const session = makeSession()
 		const ids = session.commandBarItems.value.map((item) => item.id)
 		expect(ids).toEqual([
 			"panel.open",
+			"pane.enter",
 			"list.mark",
 			"filter.start",
 			"pane.toggle",
+			"view.togglePreview",
+			"app.help",
 			"bookmark.open",
 			"view.toggleMode",
-			"app.help",
 		])
 		expect(session.commandBarItems.value.map((item) => item.title)).toEqual([
 			"Commands",
+			"Open",
 			"Mark",
 			"Filter",
 			"Switch",
+			"Preview",
+			"Help",
 			"Bookmarks",
 			"Toggle Mode",
-			"Help",
 		])
 		expect(ids).not.toContain("nav.up")
-		expect(ids).not.toContain("pane.enter")
+		expect(ids).toContain("pane.enter")
 
 		session.panelOpen.set(true)
 		const hints = session.commandBarItems.value.map((item) => item.title)
@@ -183,14 +203,84 @@ describe("session", () => {
 		expect(picker).toContain("Go")
 	})
 
+	test("the command bar follows the full preview mode and its content", async () => {
+		const session = makeSession()
+		await load(session)
+		// The cursor starts on `tester/`: the inspector renders a directory
+		// column, and the full previews switch to listing navigation.
+		expect(session.previewDirectory.value).toBe(true)
+		session.viewerOpen.set(true)
+		expect(session.commandBarItems.value.map((item) => item.title)).toEqual(["Row", "Open", "Parent", "Mark", "Close"])
+		// The listing keys keep their chords, so a bar click is not the only way.
+		expect(session.commandBarItems.value.find((item) => item.id === "list.mark")?.keys).toBe("Spc")
+		expect(session.commandBarItems.value.find((item) => item.id === "pane.enter")?.keys).toBe("→/Enter")
+		session.viewerOpen.set(false)
+		session.previewFull.set(true)
+		expect(session.commandBarItems.value.map((item) => item.title)).toEqual(["Row", "Open", "Parent", "Mark", "Restore"])
+		session.previewFull.set(false)
+
+		// A file preview scrolls and steps through its neighbours instead. Open
+		// and Edit advertise the keymap's own chords in both full views.
+		session.panes.left.cursor.set(1)
+		expect(session.previewDirectory.value).toBe(false)
+		session.viewerOpen.set(true)
+		expect(session.commandBarItems.value.map((item) => item.title)).toEqual(["Scroll", "Prev", "Next", "Open", "Edit", "Close"])
+		expect(session.commandBarItems.value.find((item) => item.id === "file.open")?.keys).toBe("⇧O")
+		expect(session.commandBarItems.value.find((item) => item.id === "file.edit")?.keys).toBe("⇧E")
+		session.viewerOpen.set(false)
+		session.previewFull.set(true)
+		expect(session.commandBarItems.value.map((item) => item.title)).toEqual(["Scroll", "Prev", "Next", "Open", "Edit", "Restore"])
+		expect(session.commandBarItems.value.find((item) => item.id === "file.open")?.keys).toBe("⇧O")
+		expect(session.commandBarItems.value.find((item) => item.id === "file.edit")?.keys).toBe("⇧E")
+	})
+
+	test("the command bar follows the parent and inspector focus", async () => {
+		const fs = createMockFs(TREE)
+		const session = createSession({
+			fs,
+			left: createPane({ fs, path: "/home" }),
+			right: createPane({ fs, path: "/" }),
+			viewMode: "explorer",
+		})
+		await load(session)
+		session.active.set("parent")
+		// Every workspace column keeps the panel entry point (`:`).
+		expect(session.commandBarItems.value.map((item) => item.title)).toContain("Parent")
+		expect(session.commandBarItems.value.map((item) => item.title)).toContain("Commands")
+
+		// Focused on the inline inspector over a directory: a listing, so it
+		// keeps Mark/Filter-like actions and the panel.
+		session.active.set("preview")
+		expect(session.previewColumn.value).toBe(true)
+		const directoryTitles = session.commandBarItems.value.map((item) => item.title)
+		expect(directoryTitles).toEqual(["Commands", "Open", "Parent", "Mark", "Switch", "Hide", "Maximize", "Help", "Bookmarks", "Toggle Mode"])
+		expect(session.commandBarItems.value.find((item) => item.id === "list.mark")?.keys).toBe("Spc")
+
+		// Focused on the inline inspector over a file: a card, no listing.
+		session.panes.left.cursor.set(1)
+		expect(session.previewColumn.value).toBe(false)
+		const fileTitles = session.commandBarItems.value.map((item) => item.title)
+		expect(fileTitles).toContain("Open")
+		expect(fileTitles).toContain("Edit")
+		expect(fileTitles).toContain("Maximize")
+		expect(fileTitles).toContain("Commands")
+		expect(fileTitles).not.toContain("Mark")
+	})
+
+	test("the confirm dialog owns the command bar hints", () => {
+		const session = makeSession()
+		session.confirm.set({ text: "erase?" })
+		expect(session.commandBarItems.value.map((item) => item.title)).toEqual(["Yes", "No"])
+	})
+
 	test("the panel lists categorized name-only operations and the view command", () => {
 		const session = makeSession()
 		const items = session.panelItems.value
 		const entries = items.filter((item) => item.type === "op")
 		expect(entries.map((item) => item.name)).toEqual([
-			"bookmark", "quit", "reload", "view",
+			"bookmark", "quit", "reload", "screenshot", "view",
 			"abspath", "open", "realpath", "run", "view",
-			"df", "du", "stat",
+			"df", "du", "file", "stat",
 			"mkdir", "new",
 			"chmod", "chown", "copy", "edit", "hardlink", "move", "rename", "replace", "symlink", "touch",
 			"delete", "erase", "unlink",

@@ -44,12 +44,30 @@ async function api(route, { params, method = "GET", body, token = TOKEN } = {}) 
 
 describe("web server", () => {
 	test("serves the host page with the API token injected", async () => {
-		const response = await fetch(`${origin}/`)
+		const response = await fetch(`${origin}/?token=${TOKEN}`)
+		expect(response.status).toBe(200)
+		expect(response.headers.get("referrer-policy")).toBe("no-referrer")
 		expect(response.headers.get("content-type")).toContain("text/html")
 		const html = await response.text()
 		expect(html).toContain('id="app"')
 		expect(html).toContain(`content="${TOKEN}"`)
 		expect(html).not.toContain("__TCMD_TOKEN__")
+	})
+
+	test("never reveals the API token to an unauthenticated page request", async () => {
+		for (const path of ["/", "/index.html", "/%69ndex.html"]) {
+			for (const query of ["", "?token=wrong"]) {
+				const response = await fetch(`${origin}${path}${query}`)
+				expect(response.status).toBe(403)
+				expect(response.headers.get("cache-control")).toBe("no-store")
+				expect(await response.text()).not.toContain(TOKEN)
+			}
+		}
+		const page = await fetch(`${origin}/index.html?token=${TOKEN}&fs=http`)
+		expect(page.status).toBe(200)
+		expect(await page.text()).toContain(`content="${TOKEN}"`)
+		// The URL token only unlocks the page; API calls still need the header.
+		expect((await fetch(`${origin}/api/info?token=${TOKEN}`)).status).toBe(403)
 	})
 
 	test("requires the token on /api/*", async () => {

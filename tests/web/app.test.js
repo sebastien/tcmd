@@ -399,9 +399,8 @@ describe("web app", () => {
 			await settle()
 			expect(host.querySelector(".panel-args").textContent).toContain("SRC · 1 selected")
 			expect(session.panes.left.marked.value.size).toBe(2)
-			// From an item, Tab returns to operations, then visits FROM and TO.
-			press(host, "Tab")
-			press(host, "Tab")
+			// From an item, Tab moves to the next field, TO, whose value input
+			// takes the keyboard.
 			press(host, "Tab")
 			await settle()
 			expect(document.activeElement === host.querySelector(".panel-value")).toBe(true)
@@ -417,7 +416,9 @@ describe("web app", () => {
 			expect(copies).toBe(0)
 			expect(session.panelOpen.value).toBe(true)
 			expect(host.querySelector(".panel-run-button").textContent).toBe("[Confirm]")
-			expect(host.querySelector(".panel-confirm-command").textContent).toContain("copy")
+			expect(host.querySelector(".panel-confirm-command").textContent).toContain(
+				"copy /home/notes.txt\n     /etc",
+			)
 			// The second click executes exactly once.
 			host.querySelector(".panel-run-button").dispatchEvent(new MouseEvent("click", { bubbles: true }))
 			await settle()
@@ -427,6 +428,38 @@ describe("web app", () => {
 			expect(host.querySelector('.command-bar [role="status"]').textContent).toContain("copied")
 			await new Promise((resolve) => setTimeout(resolve, 2600))
 			expect(host.querySelector('.command-bar [role="status"]')).toBeNull()
+		} finally {
+			instance.unmount()
+		}
+	})
+
+	test("rename prefills TO, shows the live diff and selects the name stem", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			// Row 0 is the `tester/` directory; `notes.txt` is row 1.
+			session.panes.left.cursor.set(1)
+			press(host, ":")
+			await settle()
+			type(host.querySelector(".panel-query"), "rename")
+			await settle()
+			expect(session.panelEntry.value.name).toBe("rename")
+			// Ops -> FROM -> TO.
+			press(host, "Tab")
+			press(host, "Tab")
+			await settle()
+			const input = host.querySelector(".panel-value")
+			expect(document.activeElement).toBe(input)
+			expect(input.value).toBe("notes.txt")
+			// The stem is selected, leaving the extension out.
+			expect([input.selectionStart, input.selectionEnd]).toEqual([0, 5])
+			expect(host.querySelector(".panel-diff").textContent).toContain("(unchanged)")
+			// Editing the field updates the diff without leaving the row.
+			type(input, "memo.txt")
+			await settle()
+			const diff = host.querySelector(".panel-diff")
+			expect(diff.textContent).toContain("notes.txt → memo.txt")
+			expect(diff.querySelector(".panel-diff-removed").textContent).toBe("notes")
+			expect(diff.querySelector(".panel-diff-added").textContent).toBe("memo")
 		} finally {
 			instance.unmount()
 		}
@@ -683,6 +716,13 @@ describe("web app", () => {
 			const viewer = host.querySelector(".viewer")
 			expect(viewer).not.toBeNull()
 			expect(viewer.querySelector(".preview").textContent).toContain("notes.txt")
+			// The bottom bar follows the viewer: preview actions, not the
+			// workspace's Commands/Mark/Filter set.
+			const bar = host.querySelector(".command-bar").textContent
+			expect(bar).toContain("Scroll")
+			expect(bar).toContain("Prev")
+			expect(bar).toContain("Next")
+			expect(bar).not.toContain("Commands")
 			press(host, "Escape")
 			await settle()
 			expect(session.viewerOpen.value).toBe(false)

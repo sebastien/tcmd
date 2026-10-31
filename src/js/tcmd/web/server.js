@@ -7,22 +7,69 @@
 // Development server for the web view. Serves `public/` and exposes a JSON
 // filesystem API (`/api/*`) over the Node filesystem adapter, so browsers
 // without OPFS (or users who want to browse real files) can run the web UI.
+// `startWebServer` builds a missing browser bundle and reports the listening
+// URL; both the CLI launcher and TUI host use it. `createWebServer` only binds
+// the static/API server, without building assets or printing startup output.
 //
 // Security: binds to loopback only by default (`HOST` overrides the address)
-// and requires the per-process token, injected into `index.html` at serve
-// time, on every API request. When `root` is set, every path is confined to
+// and requires the per-process token in the page URL before injecting it into
+// `index.html`; every API request must then carry it in a header. When `root` is set, every path is confined to
 // it. This is a local development
 // tool, not a sandbox: it serves the same files `bun run tcmd` can reach, so
 // do not expose the port.
 
 import nodeFs from "node:fs/promises"
+import { isIP } from "node:net"
 import { dirname, isAbsolute, relative, resolve as resolvePath, sep } from "node:path"
+import { fileURLToPath } from "node:url"
 import { encodeBase64 } from "../core/base64.js"
 import { createNodeFs } from "../core/fs.js"
 
 // Constant: TOKEN_PLACEHOLDER
 // Value replaced in `index.html` when the page is served.
 const TOKEN_PLACEHOLDER = "__TCMD_TOKEN__"
+
+// Function: hostUrl
+// The URL a client should open. IPv6 literals (possibly zone-qualified) are
+// bracketed so the result is a valid URL.
+function hostUrl(hostname, port) {
+	const host = isIP(hostname) === 6 ? `[${hostname}]` : hostname
+	return `http://${host}:${port}`
+}
+
+// Function: startWebServer
+// Starts the web server. Published packages include the browser bundle; a
+// source checkout builds it on demand, independently of the caller's cwd.
+// `quiet` suppresses startup output for the TUI; `url` is the base address,
+// while `token` authenticates the page link and subsequent API requests.
+async function startWebServer(options = {}) {
+	const publicDir = options.publicDir ?? new URL("../../../../public/", import.meta.url)
+	if (!(await Bun.file(new URL("main.js", publicDir)).exists())) {
+		const build = await Bun.build({
+			entrypoints: [fileURLToPath(new URL("./main.js", import.meta.url))],
+			outdir: fileURLToPath(publicDir),
+			target: "browser",
+		})
+		if (!build.success) throw new AggregateError(build.logs, "Could not build the web UI")
+	}
+	const result = createWebServer({ ...options, publicDir })
+	const host = result.server.hostname
+	const url = hostUrl(host, result.server.port)
+	if (!options.quiet) {
+		// A machine name resolves to several addresses, but the server binds
+		// only one of them, so prefer an IP literal.
+		if (host !== "127.0.0.1" && host !== "localhost" && isIP(host) === 0) {
+			console.warn(
+				`tcmd web:      warning: ${host} is a name; bound to one of its addresses only.\n` +
+					`                Use an IP literal instead (0.0.0.0 or :: for every interface).`
+			)
+		}
+		console.log(`tcmd web:      ${url}/?token=${encodeURIComponent(result.token)}`)
+		console.log(`filesystem API: /api/* rooted at ${result.root}`)
+		console.log("append &fs=http for your files, or &fs=opfs for browser storage")
+	}
+	return { ...result, url }
+}
 
 // Function: createWebServer
 // Builds the server. `port` 0 picks a free port (tests); `root` defaults to
@@ -236,6 +283,12 @@ function createWebServer({
 			return new Response("Bad request", { status: 400 })
 		}
 		if (path === "/") path = "/index.html"
+		if (path === "/index.html" && url.searchParams.get("token") !== token) {
+			return new Response("Invalid or missing token. Open the token link from the terminal or toolbar.", {
+				status: 403,
+				headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" },
+			})
+		}
 		const target = new URL(`.${path}`, rootHref)
 		if (!target.href.startsWith(rootHref.href)) return new Response("Not found", { status: 404 })
 		const file = Bun.file(target)
@@ -243,7 +296,7 @@ function createWebServer({
 		if (path === "/index.html") {
 			const html = (await file.text()).replaceAll(TOKEN_PLACEHOLDER, token)
 			return new Response(html, {
-				headers: { "Cache-Control": "no-store", "Content-Type": "text/html; charset=utf-8" },
+				headers: { "Cache-Control": "no-store", "Content-Type": "text/html; charset=utf-8", "Referrer-Policy": "no-referrer" },
 			})
 		}
 		return new Response(file, { headers: { "Cache-Control": "no-store" } })
@@ -289,6 +342,6 @@ function clampBytes(value) {
 	return Math.min(Math.floor(bytes), 1024 * 1024)
 }
 
-export { createWebServer, TOKEN_PLACEHOLDER }
+export { createWebServer, hostUrl, startWebServer, TOKEN_PLACEHOLDER }
 
 // EOF

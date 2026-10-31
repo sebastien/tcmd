@@ -1084,6 +1084,33 @@ input:focus-visible {
 	font: inherit;
 }
 
+/* The rename diff line under TO: common text dim, the removed middle amber,
+   the added middle in the mark colour. */
+.panel-diff {
+	display: inline-flex;
+	min-width: 0;
+	overflow: hidden;
+	white-space: pre;
+}
+
+.panel-diff-changed {
+	display: inline-flex;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.panel-diff-dim {
+	color: var(--text-dim);
+}
+
+.panel-diff-removed {
+	color: var(--warning);
+}
+
+.panel-diff-added {
+	color: var(--mark);
+}
+
 .panel-list-indent {
 	white-space: pre;
 }
@@ -1282,6 +1309,10 @@ input:focus-visible {
 
 .panel-row[data-type="arg"] > .panel-field {
 	grid-area: 2 / 1;
+}
+
+.panel-row[data-type="arg"] > .panel-diff {
+	grid-area: 3 / 1;
 }
 
 .panel-row.is-focused,

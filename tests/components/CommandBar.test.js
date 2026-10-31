@@ -65,6 +65,29 @@ describe("CommandBar", () => {
 		expect(commandBarMarksItem({ active: "left", leftMarked: new Set(), rightMarked: new Set() })).toBeNull()
 	})
 
+	test("the marked count follows the focused listing", () => {
+		const focusedMarked = new Set(["a", "b"])
+		expect(commandBarMarksItem({ active: "left", focusedMarked })).toEqual({
+			id: null,
+			title: "2 marked",
+			dim: true,
+		})
+		// A file card in a full view has no listing to mark; a directory
+		// column keeps its count in both full views.
+		expect(commandBarMarksItem({ focusedMarked, viewerOpen: true })).toBeNull()
+		expect(commandBarMarksItem({ focusedMarked, previewFull: true, previewDirectory: false })).toBeNull()
+		expect(commandBarMarksItem({ focusedMarked, previewFull: true, previewDirectory: true })).toEqual({
+			id: null,
+			title: "2 marked",
+			dim: true,
+		})
+		expect(commandBarMarksItem({ focusedMarked, viewerOpen: true, previewDirectory: true })).toEqual({
+			id: null,
+			title: "2 marked",
+			dim: true,
+		})
+	})
+
 	test("fits entries on one line, appending an ellipsis when they do not", () => {
 		const items = [
 			{ id: "a", title: "Open", keys: "Enter" },

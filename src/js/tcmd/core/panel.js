@@ -46,10 +46,12 @@ const PANEL_GROUPS = ["Command", "File", "Info", "Create", "Edit", "Delete"]
 // Function: panelEntries
 // The entries the panel lists: the categorized CLI operations (each carries its
 // own `group`), the workspace-view toggle (named `view` like File's preview
-// operation, but in the Command group) and Quit.
-function panelEntries() {
+// operation, but in the Command group) and Quit. `server` adds the two web UI
+// modes, which only the TUI host offers (see `tui/server`); `running` adds the
+// stop and token entries while a server is actually up.
+function panelEntries({ server = false, running = false } = {}) {
 	const entries = getOperations()
-		.filter((op) => !op.hidden && op.group)
+		.filter((op) => op.group)
 		.map((op) => ({
 			id: `op:${op.name}`,
 			name: op.name,
@@ -78,6 +80,50 @@ function panelEntries() {
 		// A no-argument command still shows where it acts.
 		showPath: true,
 	})
+	if (server) {
+		// Two explicit modes rather than one toggle: "local" stays on the
+		// loopback interface, "lan" binds the machine hostname so peers on the
+		// network can reach it. Both carry a payload to `app.server`.
+		entries.push({
+			id: "command:server-lan",
+			name: "server lan",
+			group: "Command",
+			risk: null,
+			matchNames: ["server lan", "server", "lan"],
+			commandId: "app.server",
+			commandPayload: { mode: "lan" },
+		})
+		entries.push({
+			id: "command:server-local",
+			name: "server local",
+			group: "Command",
+			risk: null,
+			matchNames: ["server local", "server", "local"],
+			commandId: "app.server",
+			commandPayload: { mode: "local" },
+		})
+		if (running) {
+			entries.push({
+				id: "command:server-token",
+				name: "server token",
+				group: "Command",
+				risk: null,
+				matchNames: ["server token", "server", "token"],
+				commandId: "app.server",
+				commandPayload: { mode: "token" },
+				showToken: true,
+			})
+			entries.push({
+				id: "command:server-stop",
+				name: "server stop",
+				group: "Command",
+				risk: null,
+				matchNames: ["server stop", "server", "stop"],
+				commandId: "app.server",
+				commandPayload: { mode: "stop" },
+			})
+		}
+	}
 	entries.push({
 		id: "command:quit",
 		name: "quit",
@@ -142,7 +188,7 @@ function panelEntryRows(entries) {
 // the parent mirror selects from its own listing — the current directory, a
 // directory — and focusing the preview selects from the directory it mirrors.
 // A focused column without a listing (the inspector over a file) falls back to
-// the pane that owns the current directory, matching `core/commands#pane`.
+// the pane that owns the current directory, matching `core/pane#pane`.
 function explorerColumnId(session) {
 	const active = session.active?.value
 	if (active === "parent") return active
@@ -219,6 +265,8 @@ function bindArg(session, arg, index) {
 		role,
 		optional: arg.optional === true,
 		variadic: arg.variadic === true,
+		diff: arg.diff ?? null,
+		selectStem: arg.selectStem === true,
 		textual:
 			arg.kind === "literal" || arg.kind === "raw" || arg.kind === "buffer" || arg.kind === "path",
 	}
@@ -341,14 +389,15 @@ function missingArg(bindings) {
 	return missingBinding(bindings)?.name ?? null
 }
 
-// Function: panelCommand
-// The command line the draft maps to: each argument rendered as the value it
-// contributes — a selection as its selected paths, a destination/textual arg
-// as its value — quoted as it would appear in a shell. A required argument left
-// empty shows a `«NAME»` placeholder so the mapping stays legible, and an empty
-// optional argument is omitted (it contributes no token). This is the "resolved
-// command" the panel previews in full.
-function panelCommand(bindings) {
+// Function: panelCommandParts
+// The display tokens the draft maps to: each argument rendered as the value it
+// contributes — a selection as one token per selected path, a
+// destination/textual arg as its value — quoted as it would appear in a shell.
+// A required argument left empty shows a `«NAME»` placeholder so the mapping
+// stays legible, and an empty optional argument is omitted (it contributes no
+// token). Shared by `panelCommand` (the one-line projection) and
+// `panelCommandLines` (the `[Confirm]` preview).
+function panelCommandParts(bindings) {
 	const parts = []
 	for (const binding of bindings ?? []) {
 		if (binding.kind === "selection") {
@@ -365,7 +414,29 @@ function panelCommand(bindings) {
 		if (value) parts.push(shellQuote(value))
 		else if (binding.optional !== true) parts.push(`«${binding.name}»`)
 	}
-	return parts.join(" ")
+	return parts
+}
+
+// Function: panelCommand
+// The command line the draft maps to: the parts joined into one shell-like
+// line (see `panelCommandParts`). This is the "resolved command" projection.
+function panelCommand(bindings) {
+	return panelCommandParts(bindings).join(" ")
+}
+
+// Function: panelCommandLines
+// The `[Confirm]` preview: the operation name followed by the first token, then
+// one token per line, hanging under the first one so the command stays explicit
+// when a selection carries many paths. A command with no tokens is just its
+// name, and a single-token command stays on one line.
+function panelCommandLines(name, parts) {
+	const label = `${name ?? ""}`
+	const tokens = parts ?? []
+	if (!tokens.length) return label
+	const head = label ? `${label} ${tokens[0]}` : `${tokens[0]}`
+	if (tokens.length === 1) return head
+	const indent = " ".repeat(label.length + 1)
+	return [head, ...tokens.slice(1).map((token) => `${indent}${token}`)].join("\n")
 }
 
 // Function: panelRunnable
@@ -392,6 +463,37 @@ function panelSummary(binding) {
 	return binding.value ? binding.value : "(empty)"
 }
 
+// Function: nameDiff
+// The character difference between two names, split into the unchanged
+// prefix/suffix and the replaced middle on each side. `rename` uses it to
+// preview what its `TO` name changes relative to `FROM`; null when either side
+// is empty, since there is nothing to compare yet.
+function nameDiff(from, to) {
+	const before = `${from ?? ""}`
+	const after = `${to ?? ""}`
+	if (!before || !after) return null
+	let prefix = 0
+	const maxPrefix = Math.min(before.length, after.length)
+	while (prefix < maxPrefix && before[prefix] === after[prefix]) prefix += 1
+	// Common suffix of the remainders, never overlapping the prefix (so a
+	// deletion such as `aa` -> `a` keeps its removed `a`).
+	let suffix = 0
+	const maxSuffix = Math.min(before.length - prefix, after.length - prefix)
+	while (
+		suffix < maxSuffix &&
+		before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
+	) {
+		suffix += 1
+	}
+	return {
+		unchanged: before === after,
+		prefix: after.slice(0, prefix),
+		suffix: suffix ? after.slice(after.length - suffix) : "",
+		fromChanged: before.slice(prefix, before.length - suffix),
+		toChanged: after.slice(prefix, after.length - suffix),
+	}
+}
+
 // Function: panelRowList
 // Flattens the draft into the rows the panel's right-hand argument pane
 // renders: one header row per argument (its label and value/summary),
@@ -402,14 +504,20 @@ function panelSummary(binding) {
 // list rows are; this stays pure and index-stable.
 function panelRowList(bindings) {
 	const rows = []
+	const list = bindings ?? []
+	const byName = new Map(list.map((binding) => [binding.name, binding]))
 	// The pane may show arguments in a different order from the argv (PATH
 	// before MODE/OWNER); the binding `index` still keys the draft.
-	const ordered = [...(bindings ?? [])].sort(
+	const ordered = [...list].sort(
 		(a, b) => (a.panelOrder ?? a.index) - (b.panelOrder ?? b.index),
 	)
 	for (const binding of ordered) {
 		const multi = binding.multi === true
 		const items = binding.items ?? []
+		// An argument can name another one to diff against (`rename`'s TO
+		// against FROM); the row carries the comparison for its third line.
+		const reference = binding.diff ? byName.get(binding.diff) : null
+		const diff = reference ? nameDiff(reference.value, binding.value) : null
 		// A selection that resolves to a single path is not a list: it renders
 		// as a pre-filled, read-only path (no checkbox/radio to pick from).
 		const single = items.length === 1
@@ -433,6 +541,8 @@ function panelRowList(bindings) {
 			readonly: single,
 			value: binding.value,
 			count: items.length,
+			diff,
+			selectStem: binding.selectStem === true,
 		})
 		if (single) continue
 		// A permission argument renders as one row per class (u/g/o) with its
@@ -545,7 +655,10 @@ export {
 	isTextualRow,
 	missingArg,
 	missingBinding,
+	nameDiff,
 	panelCommand,
+	panelCommandLines,
+	panelCommandParts,
 	panelEntries,
 	panelEntryRows,
 	panelRowList,

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { createPane } from "../../src/js/tcmd/core/pane.js"
 import { createSession } from "../../src/js/tcmd/core/session.js"
-import { getCommandBarItems } from "../../src/js/tcmd/core/commands.js"
+import { getCommandBarItems } from "../../src/js/tcmd/core/bar.js"
 import { bindArg } from "../../src/js/tcmd/core/panel.js"
 import { replacePlan } from "../../src/js/tcmd/core/operations.js"
 import { createMockFs } from "../helpers/mock-fs.js"
@@ -192,7 +192,7 @@ describe("file picker", () => {
 		session.dispatch("picker.setCursor", { index })
 		await session.dispatch("picker.enter")
 		expect(session.panelArmed.value).toBe(true)
-		expect(session.panelRows.value.at(-1).command).toBe("copy /home/notes.txt /home/docs")
+		expect(session.panelRows.value.at(-1).command).toBe("copy /home/notes.txt\n     /home/docs")
 		expect((await fs.readDir("/home/docs")).map((entry) => entry.name)).not.toContain("notes.txt")
 		// The second Run executes.
 		await session.dispatch("panel.run")
@@ -277,12 +277,12 @@ describe("replace", () => {
 })
 
 describe("exact rename", () => {
-	test("a selected path prefills FROM and its parent PATH", async () => {
+	test("a selected path prefills FROM, TO and its parent PATH", async () => {
 		const { session } = await makeSession()
 		selectEntry(session, "notes.txt")
 		await openOp(session, "rename")
 		expect(binding(session, "FROM").value).toBe("notes.txt")
-		expect(binding(session, "TO").value).toBe("")
+		expect(binding(session, "TO").value).toBe("notes.txt")
 		expect(binding(session, "PATH").value).toBe("/home")
 		expect(binding(session, "PATH").picker).toBe(true)
 	})
@@ -320,7 +320,7 @@ describe("exact rename", () => {
 		)
 		await session.dispatch("panel.run")
 		expect(session.panelArmed.value).toBe(true)
-		expect(session.panelRows.value.at(-1).command).toBe("rename notes.txt memo.txt")
+		expect(session.panelRows.value.at(-1).command).toBe("rename notes.txt\n       memo.txt")
 	})
 
 	test("the confirm line keeps the directory segment under the cwd", async () => {
@@ -337,7 +337,7 @@ describe("exact rename", () => {
 		)
 		await session.dispatch("panel.run")
 		expect(session.panelRows.value.at(-1).command).toBe(
-			"rename docs/readme.md docs/guide.md",
+			"rename docs/readme.md\n       docs/guide.md",
 		)
 	})
 })

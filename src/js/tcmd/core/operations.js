@@ -12,7 +12,8 @@
 //
 // Registry entries carry presentation metadata used by the panel and help:
 // `signature`, `description`, `aliases`, `group` and an optional `confirmText`.
-// An optional `displayCommand(session, argv)` overrides the `[Confirm]` line,
+// An optional `displayParts(session, argv)` overrides the tokens of the
+// `[Confirm]` line,
 // and `preview(session, argv, draft)` supplies operation-specific preflight
 // output. `group` places the operation in the command panel (Command, File,
 // Info, Create, Edit, Delete); `sel` is script-only and has none. An optional
@@ -21,8 +22,8 @@
 //
 // They also carry `args`, the structured signature the command panel renders:
 // one descriptor per positional argument. A descriptor is
-// `{ name, kind, role?, optional?, variadic?, panelOrder?, prefill? }` where
-// `kind` is:
+// `{ name, kind, role?, optional?, variadic?, panelOrder?, prefill?, diff?,
+// selectStem? }` where `kind` is:
 // - "selection": one or more paths from a pane's selection (marks, falling
 //   back to the cursor entry). `role` picks the pane: "source" (SRC), "dest"
 //   (DST) or "active" (default).
@@ -34,10 +35,15 @@
 // - "literal": free text (a name), edited in the panel's text field.
 // - "raw": the rest of the line, unparsed (a shell command).
 // `panelOrder` reorders only the panel rows, leaving the argv order intact.
+// `diff` names another argument whose value is compared under this one (the
+// panel draws the changed middle as an extra line); `selectStem` preselects a
+// filename stem when the field takes focus (see `rename`'s TO).
 
+import { describeBytes, formatMismatch, SAMPLE_BYTES } from "./fileinfo.js"
 import { formatDisk, formatSize } from "./format.js"
 import { basename, extname, join, normalize, parent as parentOf, relative } from "./path.js"
-import { currentPane, currentPaneId, PANE_BUFFERS } from "./pane.js"
+import { currentPane, currentPaneId, pane, PANE_BUFFERS } from "./pane.js"
+import { permissionSymbolic } from "./permissions.js"
 
 // Constant: PATHS_PREFIX
 // The prefix of a self-contained path-list token the command panel encodes
@@ -199,6 +205,7 @@ const operations = [
 		name: "new",
 		group: "Create",
 		signature: "new PATH...",
+		aliases: ["create"],
 		description: "Create empty files",
 		arity: { min: 1 },
 		args: [
@@ -294,13 +301,14 @@ const operations = [
 		arity: { min: 3, max: 3 },
 		args: [
 			{ name: "FROM", kind: "literal" },
-			{ name: "TO", kind: "literal" },
+			{ name: "TO", kind: "literal", diff: "FROM", selectStem: true },
 			{ name: "PATH", kind: "path", mode: "dir" },
 		],
-		// The `[Confirm]` line names the two resolved paths relative to the
+		// The `[Confirm]` preview names the two resolved paths relative to the
 		// working directory, rather than the `FROM TO PATH` argument triple the
-		// panel would assemble: `rename docs/a.txt docs/b.txt`.
-		displayCommand(session, argv) {
+		// panel would assemble: `rename docs/a.txt docs/b.txt`, one item per
+		// line in the preview.
+		displayParts(session, argv) {
 			const [fromName, toName, pathToken] = argv
 			if (!fromName || !toName || !pathToken) return null
 			let directory
@@ -313,7 +321,7 @@ const operations = [
 			const cwd = session.fs.cwd?.() ?? "/"
 			const source = relative(cwd, join(directory, fromName))
 			const target = relative(cwd, join(directory, toName))
-			return `rename ${shellQuote(source)} ${shellQuote(target)}`
+			return [shellQuote(source), shellQuote(target)]
 		},
 		async run(session, args) {
 			const fromName = `${args[0] ?? ""}`
@@ -532,6 +540,27 @@ const operations = [
 				const summary = `${stats.isDir ? "directory" : "file"} · ${formatSize(size)} · ${new Date(stats.mtimeMs || 0).toISOString()}`
 				details.push(path)
 				details.push(`  ${summary}`)
+				results.push(`${path} · ${summary}`)
+			}
+			await showDetails(session, paths[0], details)
+			return results.join("; ")
+		},
+	},
+	{
+		name: "file",
+		group: "Info",
+		signature: "file PATH...",
+		aliases: ["info"],
+		description: "Identify a path's actual format from its contents",
+		arity: { min: 0 },
+		args: [{ name: "PATH", kind: "selection", role: "active", variadic: true }],
+		async run(session, args) {
+			const paths = args.length ? expandAll(session, args) : defaultInfoPaths(session)
+			const details = []
+			const results = []
+			for (const path of paths) {
+				const { details: lines, summary } = await describePath(session, path)
+				details.push(path, ...lines)
 				results.push(`${path} · ${summary}`)
 			}
 			await showDetails(session, paths[0], details)
@@ -827,6 +856,56 @@ const operations = [
 		},
 	},
 	{
+		name: "screenshot",
+		group: "Command",
+		signature: "screenshot [TO]",
+		description: "Save the current screen as SVG and ANSI",
+		arity: { min: 0, max: 1 },
+		args: [{ name: "TO", kind: "path", mode: "dir", prefill: "current", optional: true }],
+		async run(session, args, options = {}) {
+			// Default to the focused column's directory (the inspector included
+			// when it is the only listing), matching the docs and the panel's
+			// `current` prefill.
+			const target = args.length ? expandAll(session, args) : [pane(session).path.value]
+			if (target.length !== 1) throw new Error("screenshot: TO must be a single directory")
+			const directory = target[0]
+			if (!(await isDir(session, directory))) throw new Error(`not a directory: ${directory}`)
+			const screenshot = session.os?.screenshot
+			if (!screenshot) throw new Error("screenshots are not available in this environment")
+			// Only panel runs return early: `panel.run` closes the command panel only
+			// after this operation returns, while the host reads the next
+			// rendered frame — the first one without the panel. The result lands
+			// in the command bar instead of the panel's own status. The promise
+			// stays on the session so a script or a test can await the files
+			// instead of polling (`session.screenshotPending`).
+			// Keep name selection and capture together in the session queue.
+			// A failed capture must not prevent the next one from running.
+			const pending = (session.screenshotPending ?? Promise.resolve())
+				.catch(() => {})
+				.then(() => nextScreenshotPaths(session, directory))
+				.then(async ({ svgPath, ansPath }) => {
+					await screenshot({ svgPath, ansPath })
+					await refreshPanes(session)
+					session.notice.set({
+						kind: "tip",
+						text: `screenshot → ${basename(svgPath)} + ${basename(ansPath)}`,
+					})
+				})
+				.finally(() => {
+					// A second capture may have started meanwhile: only clear ours.
+					if (session.screenshotPending === pending) session.screenshotPending = null
+				})
+			session.screenshotPending = pending
+			// Panel runs are detached, but still report failures without an
+			// unhandled rejection. Script/shortcut runs propagate to runOperation.
+			if (options.panel) {
+				void pending.catch((error) => {
+					session.notice.set({ kind: "error", text: `${error?.message ?? error}` })
+				})
+			} else await pending
+		},
+	},
+	{
 		name: "run",
 		group: "File",
 		signature: "run CMD",
@@ -951,6 +1030,69 @@ async function pathUsage(fs, path) {
 	return { stats, size: stats.isDir ? await fs.du(path) : stats.size }
 }
 
+// Function: defaultInfoPaths
+// The path an argument-less information operation inspects: the focused
+// column's cursor entry, or its directory when the listing is empty.
+function defaultInfoPaths(session) {
+	const focused = pane(session)
+	const entry = focused.currentEntry?.()
+	return [entry?.path ?? focused.path.value]
+}
+
+// Function: describePath
+// The detailed `file` report for one path: content format (magic signature,
+// encoding, line count) for a regular file, entry count and recursive size for
+// a directory, plus the metadata both share. The summary is the one-line form
+// the command bar echoes.
+async function describePath(session, path) {
+	const stats = await session.fs.stat(path)
+	if (!stats) throw new Error(`not found: ${path}`)
+	const details = []
+	let summary
+	if (stats.isDir) {
+		const entries = await session.fs.readDir(path).catch(() => null)
+		const count = entries?.length ?? 0
+		const size = await session.fs.du(path)
+		summary = `directory · ${count} entr${count === 1 ? "y" : "ies"} · ${formatSize(size)}`
+		details.push("  type: directory")
+		details.push(`  entries: ${count}`)
+		details.push(`  size: ${formatSize(size)} recursive`)
+		if (!entries) details.push("  note: directory is not readable")
+	} else {
+		const size = stats.size ?? 0
+		// Device nodes have no readable body: report their metadata only.
+		const info = stats.isDevice ? null : await readInfo(session, path, size)
+		const mismatch = info ? formatMismatch(info, extname(path)) : null
+		const label = info?.label ?? "unreadable content"
+		const mime = info?.mime ? ` (${info.mime})` : ""
+		summary = `${label}${mime} · ${formatSize(size)}`
+		details.push(`  format: ${label}${mime}`)
+		if (info?.encoding) details.push(`  encoding: ${info.encoding}`)
+		if (info?.lines != null) details.push(`  lines: ${info.lines}${info.partial ? " (sampled)" : ""}`)
+		details.push(`  size: ${formatSize(size)}`)
+		if (mismatch) details.push(`  note: ${mismatch}`)
+	}
+	const link = await linkEntry(session.fs, path)
+	if (link) details.push(`  link: -> ${link.target ?? "?"}`)
+	if (stats.mode) {
+		const octal = (Number(stats.mode) & 0o777).toString(8).padStart(3, "0")
+		details.push(`  mode: ${permissionSymbolic(stats.mode)} (${octal})`)
+	}
+	if (stats.owner) details.push(`  owner: ${stats.owner}`)
+	if (stats.mtimeMs) details.push(`  modified: ${new Date(stats.mtimeMs).toISOString()}`)
+	if (stats.ctimeMs) details.push(`  changed: ${new Date(stats.ctimeMs).toISOString()}`)
+	return { details, summary }
+}
+
+// Function: readInfo
+// Reads the leading bytes of `path` and identifies them. A read failure
+// (permissions, a vanished file) yields null so the metadata still reports.
+async function readInfo(session, path, size) {
+	const bytes = await session.fs.readBytes(path, SAMPLE_BYTES).catch(() => null)
+	if (!bytes) return null
+	return describeBytes(bytes, { partial: size > bytes.length })
+}
+
 async function refreshPanes(session) {
 	// Every rendered column: the two panes, plus the explorer's parent mirror
 	// and the directory the inspector is showing.
@@ -1025,6 +1167,22 @@ async function linkEntry(fs, path) {
 // hosts and tests may omit it). `entry` is `{ label, undo, redo }`.
 function recordHistory(session, entry) {
 	session.journal?.record?.(entry)
+}
+
+// Function: nextScreenshotPaths
+// The first free `<directory>/screenshot[-N].svg` + `.ans` pair. Both names
+// must be free, so a capture never overwrites an earlier one — the same
+// refusal `new` applies to files it cannot promise to leave alone.
+async function nextScreenshotPaths(session, directory) {
+	for (let index = 1; index < 1000; index++) {
+		const base = index === 1 ? "screenshot" : `screenshot-${index}`
+		const svgPath = join(directory, `${base}.svg`)
+		const ansPath = join(directory, `${base}.ans`)
+		if (!(await pathExists(session.fs, svgPath)) && !(await pathExists(session.fs, ansPath))) {
+			return { svgPath, ansPath }
+		}
+	}
+	throw new Error("screenshot: too many existing screenshots")
 }
 
 async function pathExists(fs, path) {

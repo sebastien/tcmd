@@ -62,7 +62,7 @@ describe("golden frames", () => {
 			expect(frame).toContain("report.txt")
 			expect(frame).not.toContain("directory: documents/")
 			// The inspector no longer foots with the shortcut line.
-			expect(frame).not.toContain("[Open O] [Edit E]")
+			expect(frame).not.toContain("[Open ⇧O] [Edit ⇧E]")
 			// The status bar shows bracket shorthands on the left, inside the
 			// frame — no Powerline pill caps.
 			const bar = frame.split("\n").find((line) => line.includes("[Commands :]"))
@@ -83,7 +83,7 @@ describe("golden frames", () => {
 			const frame = setup.captureCharFrame()
 			// Two panes remain; the inspector is gone (width < 100).
 			expect(frame).toContain("/home")
-			expect(frame).not.toContain(" [Open O] [Edit E]")
+			expect(frame).not.toContain(" [Open ⇧O] [Edit ⇧E]")
 			// Long names no longer collide with the size column.
 			expect(frame).toContain("archive.tar.gz")
 			expect(frame).toContain("10.0M")
@@ -211,9 +211,13 @@ describe("golden frames", () => {
 				.filter((span) => ["Command", "File", "Info"].includes(span.text))
 			expect(groupSpans.map((span) => span.attributes)).toEqual([1, 1, 1])
 			expect(frame).toContain("quit")
-			expect(frame).toContain("stat")
-			expect(frame).toContain("du")
+			expect(frame).toContain("server lan")
+			expect(frame).toContain("server local")
 			expect(frame).toContain("df")
+			// The Info tail (du/file/stat) and Create/Edit/Delete sit below
+			// the fold at this height; the list scrolls to keep the selected
+			// command visible.
+			expect(frame).not.toContain("stat")
 			expect(frame).toContain("reload")
 			// Create/Edit/Delete sit below the fold at this height.
 			expect(frame).not.toContain("mkdir")
@@ -247,13 +251,39 @@ describe("golden frames", () => {
 			expect(frame).toContain("type to filter")
 			// The command bar underneath switches to the panel hints.
 			expect(frame).toContain("Toggle")
-			// The Info group fits, but Create/Edit/Delete sit below the fold;
-			// the list scrolls to keep the selected command visible.
+			// Create/Edit/Delete sit below the fold; the list scrolls to keep
+			// the selected command visible.
 			session.dispatch("panel.setOp", { index: session.panelFiltered.value.length - 1 })
 			await settle(setup)
 			const scrolled = setup.captureCharFrame()
 			expect(scrolled).toContain("Edit")
 			expect(scrolled).toContain("Delete")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("the armed confirm previews one item per line", async () => {
+		const { setup, session } = await makeSetup(120, 30, { viewMode: "commander" })
+		try {
+			session.panes.left.marked.set(new Set(["/home/notes.txt", "/home/tiny.txt"]))
+			session.dispatch("panel.open")
+			await settle(setup)
+			session.dispatch("panel.setOp", {
+				index: session.panelFiltered.value.findIndex((op) => op.name === "copy"),
+			})
+			await settle(setup)
+			await session.dispatch("panel.run")
+			await settle(setup)
+			const frame = setup.captureCharFrame()
+			const lines = frame.split("\n")
+			const first = lines.findIndex((line) => line.includes("copy /home/notes.txt"))
+			expect(first).toBeGreaterThanOrEqual(0)
+			// The remaining tokens hang under the first one, one per line.
+			const column = lines[first].indexOf("copy ")
+			const cell = (line) => line.slice(column).split("│")[0].trimEnd()
+			expect(cell(lines[first + 1])).toBe("     /home/tiny.txt")
+			expect(cell(lines[first + 2])).toBe("     /")
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -430,7 +460,9 @@ describe("golden frames", () => {
 			const narrow = setup.captureCharFrame()
 			expect(narrow).not.toContain("report.txt")
 			expect(narrow).toContain("[Switch ⇥]")
-			expect(narrow).toContain("[Bookmarks b]")
+			// The context bar leads with Open and Preview, so the tail (Help,
+			// Bookmarks, Mode) is the part elided at this width.
+			expect(narrow).toContain("…")
 			expect(narrow).not.toContain("[Toggle Mode t]")
 			const bar = narrow.split("\n").find((line) => line.includes("[Commands :]"))
 			expect(bar.trimEnd()).toEndWith("…")

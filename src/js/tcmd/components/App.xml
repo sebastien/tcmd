@@ -19,6 +19,11 @@
 			<text out="brandM" out:fg="brandMFg" wrapMode="none"></text>
 			<text out="brandD" out:fg="brandDFg" wrapMode="none"></text>
 			<text out="topBar" out:fg="topBarFg" wrapMode="none"></text>
+			<!-- Web UI server (`:server`): while running, its address rides
+			     after the host and clicking it copies the URL. -->
+			<box when="serverRunning" flexShrink="0" height="1" overflow="hidden" on:click="!server:copy">
+				<text out="topBarServer" out:fg="topBarServerFg" wrapMode="none"></text>
+			</box>
 			<box flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden"></box>
 			<!-- The view mode, letter by letter so each carries its gradient:
 			     explorer shimmers along the Tiny blues, commander along the
@@ -115,7 +120,10 @@
 			             flexGrow="1"></filepreview>
 			<commandbar in:items="commandBarItems" in:notice="notice" in:leftError="leftError"
 			            in:rightError="rightError" in:active="active" in:uiSize="uiSize"
-			            in:leftMarked="leftMarked" in:rightMarked="rightMarked" out:height="barHeight"></commandbar>
+			            in:leftMarked="leftMarked" in:rightMarked="rightMarked"
+			            in:focusedMarked="focusedMarked" in:viewerOpen="viewerOpen"
+			            in:previewFull="previewFull" in:previewDirectory="previewDirectory"
+			            out:height="barHeight"></commandbar>
 		</box>
 	</box>
 

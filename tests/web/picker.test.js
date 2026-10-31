@@ -133,6 +133,40 @@ describe("web picker", () => {
 		}
 	})
 
+	test("Enter on the destination opens the picker and reopens it after a choice", async () => {
+		const { host, instance, session } = await mountApp()
+		try {
+			session.dispatch("panel.open")
+			session.dispatch("panel.setOp", {
+				index: session.panelFiltered.value.findIndex((entry) => entry.name === "copy"),
+			})
+			const to = session.panelRows.value.findIndex((row) => row.type === "arg" && row.name === "TO")
+			session.dispatch("panel.focusArg")
+			session.dispatch("panel.setRow", { index: to })
+			await settle()
+			const enter = () =>
+				(host.querySelector(".panel-value") ?? host).dispatchEvent(
+					new host.ownerDocument.defaultView.KeyboardEvent("keydown", {
+						key: "Enter",
+						bubbles: true,
+						cancelable: true,
+					}),
+				)
+			enter()
+			await settle()
+			expect(session.pickerOpen.value).toBe(true)
+			await session.dispatch("picker.chooseDir")
+			await settle()
+			expect(session.pickerOpen.value).toBe(false)
+			expect(session.panelArmed.value).toBe(false)
+			enter()
+			await settle()
+			expect(session.pickerOpen.value).toBe(true)
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
 	test("replace previews mappings and keeps the Run action outside the scroller", async () => {
 		const { host, instance, session } = await mountApp()
 		try {

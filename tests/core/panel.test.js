@@ -10,7 +10,10 @@ import {
 	decodePathToken,
 	filterPanelEntries,
 	missingArg,
+	nameDiff,
 	panelCommand,
+	panelCommandLines,
+	panelCommandParts,
 	panelEntries,
 	panelRowList,
 	panelRunnable,
@@ -75,15 +78,46 @@ describe("panel", () => {
 		}
 	})
 
+	test("offers the two web server modes, plus stop while a server is running", () => {
+		expect(panelEntries().some((entry) => entry.name.startsWith("server "))).toBe(false)
+		const entries = panelEntries({ server: true })
+		expect(entries.filter((entry) => entry.name.startsWith("server ")).map((entry) => [entry.name, entry.commandPayload.mode])).toEqual([
+			["server lan", "lan"],
+			["server local", "local"],
+		])
+		// The explicit stop entry only exists while the server is up.
+		expect(entries.some((entry) => entry.name === "server stop")).toBe(false)
+		expect(entries.some((entry) => entry.name === "server token")).toBe(false)
+		const running = panelEntries({ server: true, running: true })
+		expect(running.filter((entry) => entry.name.startsWith("server ")).map((entry) => [entry.name, entry.commandPayload.mode])).toEqual([
+			["server lan", "lan"],
+			["server local", "local"],
+			["server token", "token"],
+			["server stop", "stop"],
+		])
+		for (const entry of running.filter((item) => item.name.startsWith("server "))) {
+			expect(entry).toMatchObject({ group: "Command", commandId: "app.server" })
+		}
+		// The family query shows every mode; naming one narrows to it.
+		expect(filterPanelEntries(running, "server").map((item) => item.name)).toEqual([
+			"server lan",
+			"server local",
+			"server stop",
+			"server token",
+		])
+		expect(filterPanelEntries(running, "server local").map((item) => item.name)).toEqual(["server local"])
+		expect(filterPanelEntries(running, "server stop").map((item) => item.name)).toEqual(["server stop"])
+	})
+
 	test("filterPanelEntries groups by purpose and alphabetizes within each category", () => {
 		const entries = panelEntries()
 		// Groups use the fixed Command / File / Info / Create / Edit / Delete
 		// order; names are sorted alphabetically within each category.
 		expect(filterPanelEntries(entries, "").map((entry) => entry.name)).toEqual(
 			[
-				"bookmark", "quit", "reload", "view",
+				"bookmark", "quit", "reload", "screenshot", "view",
 				"abspath", "open", "realpath", "run", "view",
-				"df", "du", "stat",
+				"df", "du", "file", "stat",
 				"mkdir", "new",
 				"chmod", "chown", "copy", "edit", "hardlink", "move", "rename", "replace", "symlink", "touch",
 				"delete", "erase", "unlink",
@@ -97,8 +131,9 @@ describe("panel", () => {
 		// Matches retain category order rather than relevance-ranking.
 		expect(filterPanelEntries(entries, "op").map((entry) => entry.name)).toEqual(["open", "copy"])
 		expect(filterPanelEntries(entries, "edit").map((entry) => entry.name)).toEqual(["edit"])
-		// An alias matches (`!` -> run).
+		// An alias matches (`!` -> run, `create` -> new).
 		expect(filterPanelEntries(entries, "!").map((entry) => entry.name)).toEqual(["run"])
+		expect(filterPanelEntries(entries, "create").map((entry) => entry.name)).toEqual(["new"])
 		// The list no longer exposes or searches argument signatures.
 		expect(filterPanelEntries(entries, "buf")).toEqual([])
 		expect(filterPanelEntries(entries, "zzz")).toEqual([])
@@ -304,7 +339,7 @@ describe("panel", () => {
 		// chmod is amber: the first press prints and arms, the second executes.
 		await session.dispatch("panel.run")
 		expect(session.panelArmed.value).toBe(true)
-		expect(session.panelRows.value.at(-1).command).toBe("chmod 744 /home/notes.txt")
+		expect(session.panelRows.value.at(-1).command).toBe("chmod 744\n      /home/notes.txt")
 		await session.dispatch("panel.run")
 		expect((await fs.stat("/home/notes.txt")).mode & 0o777).toBe(0o744)
 	})
@@ -353,6 +388,32 @@ describe("panel", () => {
 			]),
 		).toBe("/a")
 		expect(panelCommand([{ kind: "literal", name: "CMD", value: "" }])).toBe("«CMD»")
+	})
+
+	test("panelCommandParts lists one quoted token per selected path", () => {
+		expect(
+			panelCommandParts([
+				{
+					kind: "selection",
+					name: "FROM",
+					items: [
+						{ path: "/home/a", selected: true },
+						{ path: "/home/b", selected: false },
+						{ path: "/home/c", selected: true },
+					],
+				},
+				{ kind: "dest", name: "TO", value: "/tmp" },
+			]),
+		).toEqual(["/home/a", "/home/c", "/tmp"])
+	})
+
+	test("panelCommandLines hangs every item under the command name", () => {
+		expect(panelCommandLines("copy", ["/home/a", "/home/b", "/tmp"])).toBe(
+			"copy /home/a\n     /home/b\n     /tmp",
+		)
+		// A single item stays on one line, and an empty command is its name.
+		expect(panelCommandLines("delete", ["/home/a"])).toBe("delete /home/a")
+		expect(panelCommandLines("quit", [])).toBe("quit")
 	})
 
 	test("panelRunnable mirrors missingArg", () => {
@@ -568,5 +629,109 @@ describe("panel", () => {
 		session.dispatch("panel.tab", { delta: -1 })
 		expect(session.panelFocus.value).toBe("args")
 		expect(session.panelRowIndex.value).toBe(2)
+	})
+
+	test("panel.tab treats an item list's header as its field", async () => {
+		const { session } = await makeSession()
+		session.panes.left.marked.set(new Set(["/home/docs", "/home/notes.txt"]))
+		session.dispatch("panel.open")
+		session.dispatch("panel.setOp", {
+			index: session.panelFiltered.value.findIndex((op) => op.name === "copy"),
+		})
+		await Promise.resolve()
+		const rows = session.panelRows.value
+		const item = rows.findIndex((row) => row.type === "item")
+		expect(item).toBeGreaterThan(0)
+		session.dispatch("panel.focusArg")
+		session.dispatch("panel.setRow", { index: item })
+		// Tab from inside FROM's items moves to the next field (TO), and
+		// Shift-Tab returns to FROM's header rather than to the item.
+		session.dispatch("panel.tab", { delta: 1 })
+		expect(session.panelRows.value[session.panelRowIndex.value].name).toBe("TO")
+		session.dispatch("panel.tab", { delta: -1 })
+		expect(session.panelRows.value[session.panelRowIndex.value].name).toBe("FROM")
+	})
+
+	test("Enter on a path argument opens its picker, and reopens it after a choice", async () => {
+		const { session } = await makeSession()
+		session.dispatch("panel.open")
+		session.dispatch("panel.setOp", {
+			index: session.panelFiltered.value.findIndex((op) => op.name === "copy"),
+		})
+		const to = session.panelRows.value.findIndex((row) => row.type === "arg" && row.name === "TO")
+		session.dispatch("panel.focusArg")
+		session.dispatch("panel.setRow", { index: to })
+		await session.dispatch("panel.run")
+		expect(session.pickerOpen.value).toBe(true)
+		expect(session.pickerArg.value).toBe(
+			session.panelDraft.value.find((binding) => binding.name === "TO").index,
+		)
+		// Choosing the current directory returns to TO; Enter on it reopens the
+		// picker instead of arming or running the command.
+		await session.dispatch("picker.chooseDir")
+		expect(session.pickerOpen.value).toBe(false)
+		expect(session.panelArmed.value).toBe(false)
+		await session.dispatch("panel.run")
+		expect(session.pickerOpen.value).toBe(true)
+	})
+})
+
+describe("rename diff", () => {
+	test("splits two names into the common prefix/suffix and changed middles", () => {
+		expect(nameDiff("notes.txt", "memo.txt")).toEqual({
+			unchanged: false,
+			prefix: "",
+			suffix: ".txt",
+			fromChanged: "notes",
+			toChanged: "memo",
+		})
+		expect(nameDiff("photo-2024.jpg", "photo-2025.jpg")).toEqual({
+			unchanged: false,
+			prefix: "photo-202",
+			suffix: ".jpg",
+			fromChanged: "4",
+			toChanged: "5",
+		})
+		expect(nameDiff("notes.txt", "notes.txt")).toEqual({
+			unchanged: true,
+			prefix: "notes.txt",
+			suffix: "",
+			fromChanged: "",
+			toChanged: "",
+		})
+	})
+
+	test("keeps insertions and deletions visible on their own side", () => {
+		expect(nameDiff("a", "aa")).toMatchObject({ fromChanged: "", toChanged: "a" })
+		expect(nameDiff("aa", "a")).toMatchObject({ fromChanged: "a", toChanged: "" })
+		expect(nameDiff("notes.txt", "notes.txt.bak")).toMatchObject({
+			prefix: "notes.txt",
+			suffix: "",
+			fromChanged: "",
+			toChanged: ".bak",
+		})
+		// Nothing to compare until both names exist.
+		expect(nameDiff("", "memo.txt")).toBeNull()
+		expect(nameDiff("notes.txt", "")).toBeNull()
+	})
+
+	test("panelRowList attaches the diff and stem selection to TO", () => {
+		const draft = [
+			{ index: 0, name: "FROM", kind: "literal", textual: true, value: "notes.txt", panelOrder: 0 },
+			{
+				index: 1,
+				name: "TO",
+				kind: "literal",
+				textual: true,
+				value: "memo.txt",
+				panelOrder: 1,
+				diff: "FROM",
+				selectStem: true,
+			},
+		]
+		const rows = panelRowList(draft)
+		expect(rows[0].diff).toBeNull()
+		expect(rows[1].diff).toMatchObject({ fromChanged: "notes", toChanged: "memo", suffix: ".txt" })
+		expect(rows[1].selectStem).toBe(true)
 	})
 })

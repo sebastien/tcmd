@@ -14,11 +14,16 @@ after it. Inside:
 
 - Top bar: the TinyCmd identity (and host).
 - Two panes, each its own single-line box, plus an optional inspector.
-- Status bar: the fixed key shorthands (`[Commands :]`, `[Mark Spc]`,
-  `[Filter /]`, `[Switch ⇥]`, `[Bookmarks b]`, `[Toggle Mode t]`, `[Help ?]`) on
-  one line; the active pane's marked count trails the list, entries that do not
-  fit are elided behind `…`, and a notice or error replaces the keys with a
-  one-line status.
+- Status bar: contextual key shorthands on one line. The workspace follows the
+  focused column (`[Commands :]`, `[Open →/⏎]`, `[Mark Spc]`, `[Filter /]`,
+  `[Switch ⇥]`, `[Preview v]`, `[Help ?]`, plus `[Parent ←]` in the explorer
+  mirrors); the fullscreen viewer shows `[Scroll ↑/↓]`, `[Prev ←]`,
+  `[Next →]`, `[Open ⇧O]`, `[Edit ⇧E]`, `[Close Esc]` for a file and the
+  listing keys (`[Row ↑/↓]`, `[Open →/⏎]`, `[Parent ←]`, `[Mark Spc]`) for a
+  directory; the maximized preview substitutes `[Restore ⇧V]` for Close. Panels,
+  pickers, bookmarks, filters and confirms own their own hints. The focused
+  listing's marked count trails the list, entries that do not fit are elided
+  behind `…`, and a notice or error replaces the keys with a one-line status.
 - Below the breakpoint the workspace is replaced by a resize hint.
 
 ### View modes
@@ -102,8 +107,10 @@ shared behaviours as plain text and never imports the TUI's renderables.
 `Enter` opens the entry under the cursor: a directory descends into it, a text
 file the host can edit opens in `$EDITOR`, and anything else — an image, media,
 a binary body, or any file on a host with no editor (the web) — opens the same
-fullscreen viewer, at any width. The viewer is modal: `Esc` or `v` closes it
-and `O`/`E` still act on the file.
+fullscreen viewer, at any width. The viewer owns the keyboard: `Esc` or `v`
+closes it and `⇧O`/`⇧E` still act on the file. A previewed directory keeps its
+listing inside either full view: `↑`/`↓` move the cursor, `→`/`Enter` open,
+`←` steps up and `Space` marks.
 
 ```text
   TinyCmd - devbox
@@ -121,7 +128,7 @@ and `O`/`E` still act on the file.
 │───────────────────────────────────││──────────────────────────────────││                                   │
 │  file · 26B          · -rw-r--r-- ││  file · 19B          · -rw-r--r--││                                   │
 └───────────────────────────────────┘└──────────────────────────────────┘╰───────────────────────────────────╯
-[Commands :] [Mark Spc] [Filter /] [Switch ⇥] [Bookmarks b] [Toggle Mode t] [Help ?]
+[Commands :] [Open →/⏎] [Mark Spc] [Filter /] [Switch ⇥] [Preview v] [Help ?] [Bookmarks b] [Toggle Mode t]
 ```
 
 ## Responsive behavior
@@ -133,9 +140,9 @@ events, with the renderer dimensions as a fallback):
 - `< 100 cols`: the inline inspector collapses; `v` opens the fullscreen viewer.
 - `⇧V` maximizes the inspector over the pane row at any width, hiding the
   columns until the next press brings the previous layout back.
-- The status bar keeps its shorthands on one line at every width; entries that
-  do not fit are dropped and a trailing `…` marks the truncation. The palette
-  and the `?` reference carry the full bindings.
+- The status bar keeps its contextual shorthands on one line at every width;
+  entries that do not fit are dropped and a trailing `…` marks the truncation.
+  The palette and the `?` reference carry the full bindings.
 
 ## Pane filter
 
@@ -155,7 +162,7 @@ events, with the renderer dimensions as a fallback):
   matching command takes the cursor (`edit` highlights `edit`) — and the left
   column groups entries by purpose: Command, File, Info, Create, Edit (amber),
   and Delete (red). Command includes the workspace-view toggle and Quit; File's
-  `view` previews the selected path; Info holds `stat`, `du` and `df`; Create
+  `view` previews the selected path; Info holds `stat`, `file`, `du` and `df`; Create
   holds `mkdir`/`new`; Edit (amber) holds
   `copy`, the link operations, and the permission and ownership changes;
   Delete holds `unlink` alongside `delete`/`erase`. Bold section titles head indented, alphabetized command names.
@@ -176,7 +183,7 @@ events, with the renderer dimensions as a fallback):
   argument (`chmod`'s `MODE`) is a compact grid: one row per `u`/`g`/`o` class
   with three clickable `R`/`W`/`X` cells, seeded from the selected file's
   current mode and assembled back into its octal value (`←`/`→` move between
-  the cells and `Space` toggles one). `⌃O` opens the
+  the cells and `Space` toggles one). `⌃O` (or `↵` on the field) opens the
   file picker on a path/destination argument: its path is an editable string,
   the matching entries are listed below as in a file panel (kind icons,
   right-aligned sizes, scrollbar) and `..` stays pinned at the top. Typing a
@@ -187,17 +194,23 @@ events, with the renderer dimensions as a fallback):
   command category color; errors move focus to it, turn it into `[Retry]` and
   show the message in a framed block below the button. `replace` additionally
   previews each `old → new`
-  mapping between the arguments and the action. A `[Close Esc]` close button
+  mapping between the arguments and the action. `rename` prefills `TO` from the
+  selected name, selects the name stem when `TO` takes focus, and adds a live
+  `old → new` diff line under `TO` — common text dimmed, the removed part amber,
+  the added part in the mark colour, and `(unchanged)` while the names still
+  match. A `[Close Esc]` close button
   sits in the top border, upper right. Amber (Edit) and red (Delete) actions
   are two-step: the first `[Run]` turns it into `[Confirm]` and prints the
-  assembled command below it in the action's red/amber colour; the second
+  assembled command below it in the action's red/amber colour — one item per
+  line, hanging under the command name; the second
   executes (`Retry` after an error stays confirmed). A successful result briefly
   replaces the command bar at the bottom. The selection is transient: toggling edits a draft
   that never mutates the pane marks, and running executes the operation directly
   (`chmod`/`chown`/link/edit and Delete never steal the separate confirm
   overlay). Type to filter, `↑↓` move within a
   column, `⇥`/`⇧⇥` cycle the focus ring from the command through each argument
-  and Run (wrapping at both ends), `Space` toggles, `↵` runs/confirms, `Esc` closes.
+  and Run (wrapping at both ends), `Space` toggles, `↵` opens the picker on a
+  path/destination argument and runs/confirms elsewhere, `Esc` closes.
 
 ```text
 ╭─ Command · bookmark ─────────────────────────────[Close Esc]────────────╮
@@ -250,7 +263,7 @@ events, with the renderer dimensions as a fallback):
 
 - copy FROM TO (supports directories automatically)
 - move FROM TO
-- new PATH... (creates empty files, refusing existing paths)
+- new PATH... (creates empty files, refusing existing paths; alias `create`)
 - hardlink FROM TO (hard links, into TO when it is a directory)
 - symlink FROM TO (symbolic links, into TO when it is a directory)
 - chmod MODE PATH... (octal permission bits; the panel edits MODE as R/W/X cells for u/g/o)
@@ -259,6 +272,7 @@ events, with the renderer dimensions as a fallback):
 - erase PATH (does not move to trash)
 - unlink PATH... (removes symbolic links only, never their targets)
 - stat PATH... (info, including du)
+- file PATH... (content-based format/encoding report, alias `info`)
 - du PATH... (recursive disk usage; alias `usage`)
 - df PATH... (filesystem free and total space; alias `free`)
 - abspath PATH... (normalized absolute paths, shell-quoted for copy/paste, copied to the clipboard)
@@ -270,6 +284,11 @@ events, with the renderer dimensions as a fallback):
 - view PATH, previews
 - open PATH, uses open/gnome-open
 - run CMD, runs the command (alias to !)
+- screenshot [TO], saves the current screen as `screenshot.svg` (vector, for a
+  web page) and `screenshot.ans` (ANSI text) in TO — the focused column's
+  directory by default. `⇧S` runs it directly; the capture waits one frame, so
+  the command panel that started it is not in the picture. A terminal-only
+  operation: a host without a grid reports it as unavailable.
 
 ## Theme
 

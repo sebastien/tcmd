@@ -25,6 +25,7 @@ function makeData(overrides = {}) {
 			panelRows: [],
 			panelRunnable: true,
 			panelTextual: false,
+			previewDirectory: false,
 			rightError: null,
 			rightFilter: null,
 			...overrides,
@@ -209,18 +210,28 @@ describe("App", () => {
 		])
 	})
 
-	test("the viewer overlay keeps swallowing arrows on a directory preview", () => {
+	test("the viewer overlay navigates a directory preview's listing", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
 		const { calls, data } = makeData({
 			viewerOpen: true,
 			appEntry: { isDir: true, name: "docs", path: "/docs" },
+			previewDirectory: true,
 		})
 		behaviors.keys(null, data, { name: "down" })
 		behaviors.keys(null, data, { name: "left" })
-		expect(calls).toEqual([])
+		behaviors.keys(null, data, { name: "right" })
+		behaviors.keys(null, data, { name: "space" })
+		// The listing commands resolve to the inspector themselves (see
+		// `session.focusedId`), so the router never moves the focus.
+		expect(calls).toEqual([
+			{ id: "nav.down", payload: undefined },
+			{ id: "pane.up", payload: undefined },
+			{ id: "pane.enter", payload: undefined },
+			{ id: "list.mark", payload: undefined },
+		])
 	})
 
-	test("the maximized preview routes file arrows but leaves directories to the keymap", () => {
+	test("the maximized preview routes file arrows and directory listing keys", () => {
 		const behaviors = createBehaviors({ quit: () => {} })
 		const file = makeData({
 			previewFull: true,
@@ -239,12 +250,13 @@ describe("App", () => {
 		const directory = makeData({
 			previewFull: true,
 			appEntry: { isDir: true, name: "docs", path: "/docs" },
+			previewDirectory: true,
 		})
 		behaviors.keys(null, directory.data, { name: "down" })
 		behaviors.keys(null, directory.data, { name: "left" })
 		expect(directory.calls).toEqual([
-			{ id: "nav.down", payload: { paneId: "left" } },
-			{ id: "pane.up", payload: { paneId: "left" } },
+			{ id: "nav.down", payload: undefined },
+			{ id: "pane.up", payload: undefined },
 		])
 	})
 
@@ -282,6 +294,19 @@ describe("App", () => {
 			{ id: "confirm.no", payload: undefined },
 			{ id: "confirm.no", payload: undefined },
 		])
+	})
+
+	test("copying the server address includes the token without echoing it in the notice", () => {
+		const events = createEvents()
+		const { calls, data } = makeData({ webServer: { url: "http://devbox:8787", token: "a+b&c" } })
+		events["server:copy"](null, data)
+		expect(calls).toEqual([{
+			id: "panel.copy",
+			payload: { text: "http://devbox:8787/?token=a%2Bb%26c", label: "server link" },
+		}])
+		const stopped = makeData({ webServer: null })
+		events["server:copy"](null, stopped.data)
+		expect(stopped.calls).toEqual([])
 	})
 
 	test("events map published payloads to dispatch", () => {

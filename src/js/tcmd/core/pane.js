@@ -37,9 +37,30 @@ function currentPaneId(session) {
 // on source/destination, the anchor pane while it is on an auxiliary column
 // (see `core/session`). Path-changing commands — open, up, history,
 // breadcrumbs, relative arguments — target it; only cursor movement follows
-// the focused column. `core/commands` keeps `pane()` for the latter.
+// the focused column (`pane()` below serves the latter).
 function currentPane(session) {
 	return session.panes[currentPaneId(session)] ?? session.panes.left
+}
+
+// Function: isColumnPane
+// Whether the focused column is backed by a rendered pane. The parent column
+// only exists in explorer mode (focus is handed back on leaving it); the
+// inspector column only while it previews a directory — over a file it is a
+// read-only card with no listing to drive. `session.previewColumn` is the
+// single definition of that second case.
+function isColumnPane(session, paneId) {
+	if (paneId !== "preview") return paneId !== "parent" || session.viewMode.value === "explorer"
+	return Boolean(session.previewColumn?.value)
+}
+
+// Function: pane
+// The pane cursor movement, marks and reload act on: the focused column's pane
+// when it has one, else the current pane (so the inspector over a file keeps
+// scrolling the directory it is showing). `session.focusedId` resolves the
+// column — including the inspector when it is the only listing on screen.
+function pane(session) {
+	const focused = session.panes[session.focusedId?.value ?? session.active?.value]
+	return focused ?? currentPane(session)
 }
 
 // Function: createPane
@@ -96,4 +117,4 @@ function createPane({ fs, path: initialPath, context, watch } = {}) {
 	return pane
 }
 
-export { PANE_BUFFERS, PANE_LABELS, createPane, currentPane, currentPaneId }
+export { PANE_BUFFERS, PANE_LABELS, createPane, currentPane, currentPaneId, isColumnPane, pane }

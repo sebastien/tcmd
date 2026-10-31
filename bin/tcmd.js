@@ -9,7 +9,7 @@ if (server) {
 		console.error("Usage: tcmd --server (configure with HOST, PORT and TCMD_WEB_ROOT)")
 		process.exit(1)
 	}
-	await import("../scripts/serve-web.js").then((web) => web.main())
+	await import("../src/js/tcmd/web/server.js").then((web) => web.startWebServer())
 } else {
 	await import("../src/js/tcmd/tui/index.js").then((tui) => tui.main(paths))
 }

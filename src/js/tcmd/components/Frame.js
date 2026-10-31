@@ -225,6 +225,21 @@ function createFrameBehaviors(env) {
 			return host ? ` - ${host} ` : " "
 		},
 		topBarFg: () => env.theme.textHeadingFg,
+		// The web UI server, when the host runs one (`server local` / `server
+		// lan`). The mode and URL sit right after the host and are clickable
+		// (see `components/App`); the `when` gate drops the text node entirely
+		// when stopped. LAN exposure takes the amber warning colour, local
+		// stays the ordinary link colour.
+		serverRunning: (_self, data) => Boolean(unwrap(data.webServer)?.url),
+		topBarServer: (_self, data) => {
+			const server = unwrap(data.webServer)
+			if (!server?.url) return ""
+			return `server ${server.mode ?? "local"} ${server.url} `
+		},
+		topBarServerFg: (_self, data) => {
+			const server = unwrap(data.webServer)
+			return server?.mode === "lan" ? env.theme.warningFg : env.theme.linkFg
+		},
 		// Right-aligned trail: the version, following the gradiented mode word
 		// (`modeL*`) slot by slot. Dimmer than the brand, so the row still
 		// reads left to right.

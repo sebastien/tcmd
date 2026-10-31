@@ -81,6 +81,34 @@ describe("tui picker", () => {
 		}
 	})
 
+	test("Enter on the destination opens the picker, and reopens it after a choice", async () => {
+		const { setup, session } = await makeSetup(TREE, 100, 20)
+		try {
+			session.dispatch("panel.open")
+			session.dispatch("panel.setOp", {
+				index: session.panelFiltered.value.findIndex((entry) => entry.name === "copy"),
+			})
+			const to = session.panelRows.value.findIndex((row) => row.type === "arg" && row.name === "TO")
+			session.dispatch("panel.focusArg")
+			session.dispatch("panel.setRow", { index: to })
+			await settle(setup)
+			setup.mockInput.pressKey("\r")
+			await settle(setup)
+			expect(session.pickerOpen.value).toBe(true)
+			// Choosing the current directory returns to TO, where Enter reopens
+			// the picker instead of arming the copy.
+			await session.dispatch("picker.chooseDir")
+			await settle(setup)
+			expect(session.pickerOpen.value).toBe(false)
+			expect(session.panelArmed.value).toBe(false)
+			setup.mockInput.pressKey("\r")
+			await settle(setup)
+			expect(session.pickerOpen.value).toBe(true)
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
 	test("replace previews its mapping above the pinned Run action", async () => {
 		const { setup, session } = await makeSetup(TREE, 100, 20)
 		try {
@@ -98,6 +126,38 @@ describe("tui picker", () => {
 			expect(frame).toContain("memo.txt")
 			expect(frame).toContain("[Run]")
 			expect(frame).toContain("notes.txt → memo.txt")
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("rename prefills TO from FROM and previews the live diff", async () => {
+		const { setup, session } = await makeSetup(TREE, 100, 24)
+		try {
+			const index = session.panes.left.entries.value.findIndex((entry) => entry.name === "notes.txt")
+			session.panes.left.cursor.set(index)
+			session.dispatch("panel.open")
+			const opIndex = session.panelFiltered.value.findIndex((entry) => entry.name === "rename")
+			session.dispatch("panel.setOp", { index: opIndex })
+			await settle(setup)
+			// The prefill starts unchanged, so the third line says so.
+			expect(session.panelDraft.value.find((b) => b.name === "TO").value).toBe("notes.txt")
+			expect(setup.captureCharFrame()).toContain("(unchanged)")
+			// Focusing TO selects the stem, keeping the extension for typing.
+			const rowIndex = session.panelRows.value.findIndex(
+				(row) => row.type === "arg" && row.name === "TO",
+			)
+			session.dispatch("panel.focusArg")
+			session.dispatch("panel.setRow", { index: rowIndex })
+			await settle(setup)
+			const input = setup.renderer.currentFocusedRenderable
+			expect(input?.value).toBe("notes.txt")
+			expect(input?.getSelection?.()).toEqual({ start: 0, end: 5 })
+			session.panelDraft.set(
+				session.panelDraft.value.map((b) => (b.name === "TO" ? { ...b, value: "memo.txt" } : b)),
+			)
+			await settle(setup)
+			expect(setup.captureCharFrame()).toContain("notes.txt → memo.txt")
 		} finally {
 			setup.renderer.destroy()
 		}

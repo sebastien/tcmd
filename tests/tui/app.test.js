@@ -31,10 +31,41 @@ describe("tui app", () => {
 			expect(frame).toContain("notes.txt")
 			expect(frame).toContain("home")
 			expect(frame).toContain("etc")
-			// Command bar key hints from the fixed bar set.
+			// Command bar key hints from the contextual workspace set.
 			expect(frame).toContain("[Commands :]")
 			expect(frame).toContain("[Switch ⇥]")
 			expect(session.panes.left.entries.value.length).toBe(3)
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("the identity bar shows the server mode and copies its URL on click", async () => {
+		const { setup, session } = await makeSetup(120, 20)
+		try {
+			const copied = []
+			session.os.copy = (text) => {
+				copied.push(text)
+				return true
+			}
+			session.webServer.set({ mode: "local", url: "http://127.0.0.1:8787", token: "secret-token" })
+			await settle(setup)
+			let line = setup.captureCharFrame().split("\n")[0]
+			expect(line).toContain("server local http://127.0.0.1:8787")
+			expect(line).not.toContain("secret-token")
+			// Clicking the address copies it through the host clipboard.
+			await setup.mockMouse.click(line.indexOf("http://127.0.0.1:8787"), 0)
+			await settle(setup)
+			expect(copied).toEqual(["http://127.0.0.1:8787/?token=secret-token"])
+			expect(setup.captureCharFrame()).not.toContain("secret-token")
+			// LAN shows the machine hostname and its own mode label.
+			session.webServer.set({ mode: "lan", url: "http://devbox:8787" })
+			await settle(setup)
+			line = setup.captureCharFrame().split("\n")[0]
+			expect(line).toContain("server lan http://devbox:8787")
+			session.webServer.set(null)
+			await settle(setup)
+			expect(setup.captureCharFrame().split("\n")[0]).not.toContain("server ")
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -193,6 +224,76 @@ describe("tui app", () => {
 			await new Promise((resolve) => setTimeout(resolve, 2600))
 			await settle(setup)
 			expect(session.notice.value).toBeNull()
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("the panel's server modes start, switch and stop the web server", async () => {
+		const { setup, session } = await makeSetup(120, 20)
+		try {
+			let current = null
+			session.toggleServer = async (mode) => {
+				if (mode === "stop" || current === mode) {
+					current = null
+					return null
+				}
+				current = mode
+				return {
+					mode,
+					url: mode === "lan" ? "http://devbox:8787" : "http://127.0.0.1:8787",
+				}
+			}
+			// Both modes are visible under the server family; the full name
+			// narrows to one entry, so `:server local` works as it reads.
+			setup.mockInput.pressKey(":")
+			await settle(setup)
+			await setup.mockInput.typeText("server")
+			await settle(setup)
+			expect(session.panelItems.value.map((item) => item.key)).toEqual(
+				expect.arrayContaining(["command:server-lan", "command:server-local"]),
+			)
+			await setup.mockInput.typeText(" local")
+			await settle(setup)
+			expect(session.panelItems.value.map((item) => item.key)).toEqual(["group:command", "command:server-local"])
+			setup.mockInput.pressKey("\r")
+			await settle(setup)
+			expect(current).toBe("local")
+			expect(session.webServer.value).toEqual({ mode: "local", url: "http://127.0.0.1:8787" })
+			expect(setup.captureCharFrame().split("\n")[0]).toContain("server local http://127.0.0.1:8787")
+			// `server lan` switches the running loopback server to the hostname.
+			setup.mockInput.pressKey(":")
+			await settle(setup)
+			await setup.mockInput.typeText("server lan")
+			await settle(setup)
+			setup.mockInput.pressKey("\r")
+			await settle(setup)
+			expect(current).toBe("lan")
+			expect(session.webServer.value).toEqual({ mode: "lan", url: "http://devbox:8787" })
+			expect(setup.captureCharFrame().split("\n")[0]).toContain("server lan http://devbox:8787")
+			// The explicit stop entry appears only while the server is up and
+			// stops it without needing to remember the active mode.
+			setup.mockInput.pressKey(":")
+			await settle(setup)
+			await setup.mockInput.typeText("server")
+			await settle(setup)
+			expect(session.panelItems.value.map((item) => item.key)).toContain("command:server-stop")
+			await setup.mockInput.typeText(" stop")
+			await settle(setup)
+			expect(session.panelItems.value.map((item) => item.key)).toEqual(["group:command", "command:server-stop"])
+			setup.mockInput.pressKey("\r")
+			await settle(setup)
+			expect(current).toBeNull()
+			expect(session.webServer.value).toBeNull()
+			expect(setup.captureCharFrame().split("\n")[0]).not.toContain("server ")
+			// With the server stopped, the entry is gone from the panel.
+			setup.mockInput.pressKey(":")
+			await settle(setup)
+			await setup.mockInput.typeText("server")
+			await settle(setup)
+			expect(session.panelItems.value.map((item) => item.key)).not.toContain("command:server-stop")
+			setup.mockInput.pressKey("\u001b")
+			await settle(setup)
 		} finally {
 			setup.renderer.destroy()
 		}
@@ -436,6 +537,12 @@ describe("tui app", () => {
 			setup.mockInput.pressKey("\r")
 			await settle(setup)
 			expect(session.viewerOpen.value).toBe(true)
+			// The bar follows the viewer: preview actions, not workspace keys.
+			const viewerBar = setup.captureCharFrame()
+			expect(viewerBar).toContain("[Scroll ↑/↓]")
+			expect(viewerBar).toContain("[Prev ←]")
+			expect(viewerBar).toContain("[Next →]")
+			expect(viewerBar).not.toContain("[Commands :]")
 			// ⇧V is swallowed by the overlay: it neither closes nor maximizes.
 			setup.mockInput.pressKey("V")
 			await settle(setup)
@@ -451,6 +558,65 @@ describe("tui app", () => {
 		}
 	})
 
+	test("a directory in the fullscreen viewer keeps its listing keys", async () => {
+		// Narrow terminal: `v` opens the viewer instead of the inline inspector.
+		const { setup, session } = await makeSetup(80, 20)
+		try {
+			expect(session.previewDirectory.value).toBe(true)
+			setup.mockInput.pressKey("v")
+			await settle(setup)
+			expect(session.viewerOpen.value).toBe(true)
+			const frame = setup.captureCharFrame()
+			expect(frame).toContain("[Row ↑/↓]")
+			expect(frame).toContain("[Open →/⏎]")
+			expect(frame).toContain("[Mark Spc]")
+			expect(frame).toContain("[Close Esc]")
+			// The listing owns the arrows: the inspector is the only listing on
+			// screen, so the cursor command resolves to it without moving the
+			// workspace focus.
+			setup.mockInput.pressArrow("down")
+			await settle(setup)
+			expect(session.focusedId.value).toBe("preview")
+			expect(session.active.value).toBe("left")
+			// The inspector's listing took the key, not the pane behind it.
+			expect(session.panes.left.cursor.value).toBe(0)
+			setup.mockInput.pressEscape()
+			await new Promise((resolve) => setTimeout(resolve, 20))
+			await setup.renderOnce()
+			expect(session.viewerOpen.value).toBe(false)
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
+	test("shift-s captures the screen through the host hook", async () => {
+		const { setup, session } = await makeSetup()
+		const calls = []
+		try {
+			// The real TUI installs `writeScreenshot` here; the spy keeps the
+			// test off the real filesystem while exercising the whole chain:
+			// keymap -> app.screenshot -> screenshot operation -> host hook.
+			session.os = {
+				...session.os,
+				screenshot: async (paths) => {
+					calls.push(paths)
+					return paths
+				},
+			}
+			setup.mockInput.pressKey("S")
+			await settle(setup)
+			await session.screenshotPending
+			await settle(setup)
+			expect(calls).toEqual([{ svgPath: "/home/screenshot.svg", ansPath: "/home/screenshot.ans" }])
+			expect(session.notice.value).toEqual({
+				kind: "tip",
+				text: "screenshot → screenshot.svg + screenshot.ans",
+			})
+		} finally {
+			setup.renderer.destroy()
+		}
+	})
+
 	test("shift-v maximizes the inspector over the pane row", async () => {
 		const { setup, session } = await makeSetup()
 		try {
@@ -460,9 +626,13 @@ describe("tui app", () => {
 			await settle(setup)
 			expect(session.previewFull.value).toBe(true)
 			const frame = setup.captureCharFrame()
-			// The identity and command bars stay; the pane row is the preview.
+			// The identity and command bars stay; the pane row is the preview,
+			// and the bar describes the previewed directory's listing.
 			expect(frame.split("\n")[0]).toContain("TinyCmd")
-			expect(frame).toContain("[Commands :]")
+			expect(frame).toContain("[Row ↑/↓]")
+			expect(frame).toContain("[Open →/⏎]")
+			expect(frame).toContain("[Restore ⇧V]")
+			expect(frame).not.toContain("[Commands :]")
 			expect(frame).toContain("notes.txt")
 			// The destination pane's listing is covered by the preview.
 			expect(frame).not.toContain("etc")

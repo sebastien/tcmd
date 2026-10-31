@@ -5,13 +5,13 @@
 
 // Module: tcmd/components/CommandBar
 // CommandBar: the bottom bar. By default it shows the keys available in the
-// current context (the command registry's `BAR_COMMANDS`, or the hints of the
+// current context (the rows composed by `core/bar`, or the hints of the
 // overlay that owns the keyboard); a pane error or a session notice takes
 // its place. Entries are bracket shorthands (see `CommandItem.js`) that stay
 // on one line: entries that do not fit are dropped and a trailing ellipsis
-// takes their place, while the active pane's marked count joins the list as a
-// dimmed, non-clickable entry. The row logic lives in `CommandItem.js`; this
-// parent maps its `items` to rows.
+// takes their place, while the focused listing's marked count joins the list
+// as a dimmed, non-clickable entry. The row logic lives in `CommandItem.js`;
+// this parent maps its `items` to rows.
 //
 // The web presentation swaps the key list for a single status line
 // (`showKeys`/`showStatus`/`status`/`statusClass`); the TUI presentation
@@ -42,8 +42,15 @@ function commandBarStatus(data) {
 }
 
 // Function: commandBarMarks
-// Count of marked entries in the active pane, for the status bar's right zone.
+// Count of marked entries in the focused listing, for the status bar's right
+// zone. `focusedMarked` carries the parent/preview mirror too; the older
+// active-pane fallback keeps hosts that do not thread it working.
 function commandBarMarks(data) {
+	const focused = unwrap(data?.focusedMarked)
+	if (focused !== undefined && focused !== null) {
+		const count = focused.size ?? 0
+		return count > 0 ? `${count} marked` : ""
+	}
 	const active = unwrap(data?.active)
 	const marked = active === "left" ? unwrap(data?.leftMarked) : unwrap(data?.rightMarked)
 	const count = marked?.size ?? 0
@@ -52,7 +59,11 @@ function commandBarMarks(data) {
 
 // Function: commandBarMarksItem
 // The marked count as a trailing, non-clickable bar entry (null when none).
+// It belongs to listing contexts only: a file card in the maximized preview or
+// the fullscreen viewer has no listing to mark.
 function commandBarMarksItem(data) {
+	const directory = Boolean(unwrap(data?.previewDirectory))
+	if (!directory && (unwrap(data?.viewerOpen) || unwrap(data?.previewFull))) return null
 	const marks = commandBarMarks(data)
 	return marks ? { id: null, title: marks, dim: true } : null
 }

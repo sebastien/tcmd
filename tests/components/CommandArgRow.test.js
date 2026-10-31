@@ -5,6 +5,8 @@ import {
 	riskFg,
 	rowName,
 	rowSummary,
+	selectStem,
+	stemEnd,
 	wantsFocus,
 } from "../../src/js/tcmd/components/CommandArgRow.js"
 import { behaviorEnv } from "../helpers/behavior-env.js"
@@ -56,6 +58,64 @@ describe("CommandArgRow", () => {
 		expect(behaviors.rowIndent(null, { row: { type: "item" } })).toBe(1)
 		expect(behaviors.listSpacer(null, {})).toBe("\u00a0")
 		expect(behaviors.rowIndent(null, { row: { type: "arg" } })).toBe(0)
+	})
+
+	test("adds a third line for a rename diff", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		const row = {
+			type: "arg",
+			diff: { unchanged: false, prefix: "notes", suffix: ".txt", fromChanged: "2", toChanged: "3" },
+		}
+		expect(behaviors.rowHeight(null, { row })).toBe(3)
+		expect(behaviors.hasDiff(null, { row })).toBe(true)
+		expect(behaviors.diffChanged(null, { row })).toBe(true)
+		expect(behaviors.diffUnchanged(null, { row })).toBe(false)
+		expect(behaviors.diffFromPrefix(null, { row })).toBe("notes")
+		expect(behaviors.diffFromChanged(null, { row })).toBe("2")
+		expect(behaviors.diffFromSuffix(null, { row })).toBe(".txt")
+		expect(behaviors.diffToPrefix(null, { row })).toBe("notes")
+		expect(behaviors.diffToChanged(null, { row })).toBe("3")
+		expect(behaviors.diffToSuffix(null, { row })).toBe(".txt")
+		expect(behaviors.diffArrow()).toBe(" → ")
+		expect(behaviors.diffDimFg()).toBe("dim")
+		expect(behaviors.diffRemovedFg()).toBe("warning")
+		expect(behaviors.diffAddedFg()).toBe("mark")
+		// An unchanged row still gets the line, but shows a single label.
+		const unchanged = {
+			type: "arg",
+			diff: { unchanged: true, prefix: "notes.txt", suffix: "", fromChanged: "", toChanged: "" },
+		}
+		expect(behaviors.rowHeight(null, { row: unchanged })).toBe(3)
+		expect(behaviors.diffChanged(null, { row: unchanged })).toBe(false)
+		expect(behaviors.diffUnchanged(null, { row: unchanged })).toBe(true)
+		expect(behaviors.diffUnchangedText()).toBe("(unchanged)")
+		// A plain argument keeps its two lines.
+		expect(behaviors.hasDiff(null, { row: { type: "arg" } })).toBe(false)
+	})
+
+	test("selects the rename stem when TO still matches FROM", () => {
+		expect(stemEnd("notes.txt")).toBe(5)
+		expect(stemEnd("archive.tar.gz")).toBe(11)
+		expect(stemEnd("README")).toBe(6)
+		// A dotfile has no extension to preserve.
+		expect(stemEnd(".gitignore")).toBe(10)
+
+		const selected = []
+		const input = { value: "notes.txt", setSelectionRange: (start, end) => selected.push([start, end]) }
+		const row = { type: "arg", selectStem: true, diff: { unchanged: true } }
+		selectStem(null, { row, value: "notes.txt" }, { target: input })
+		expect(selected).toEqual([[0, 5]])
+		// A changed name is left alone, as is a row that does not opt in.
+		selectStem(null, { row: { ...row, diff: { unchanged: false } }, value: "memo.txt" }, { target: input })
+		selectStem(null, { row: { ...row, selectStem: false } }, { target: input })
+		expect(selected).toEqual([[0, 5]])
+		// The TUI input takes its value from the row ref and uses setSelection.
+		const tui = []
+		const self = {
+			ref: { valueInput: { value: "notes.txt", setSelection: (start, end) => tui.push([start, end]) } },
+		}
+		selectStem(self, { row, value: "notes.txt" }, {})
+		expect(tui).toEqual([[0, 5]])
 	})
 
 	test("renders permission class rows with a bit cursor", () => {

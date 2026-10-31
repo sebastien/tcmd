@@ -17,7 +17,7 @@
 		<box flexDirection="row" height="1" flexGrow="1" flexShrink="1" minWidth="0" overflow="hidden">
 			<box when="editing" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" out:backgroundColor="fieldBg" overflow="hidden">
 				<text when="textual" out="fieldOpen" out:fg="fieldFg"></text>
-				<input inout="value" flexGrow="1" minWidth="6" height="1" out:focused="editing"></input>
+				<input ref="valueInput" inout="value" flexGrow="1" minWidth="6" height="1" out:focused="editing" on:focused="selectStem"></input>
 				<text when="textual" out="fieldClose" out:fg="fieldFg"></text>
 			</box>
 			<box when="!editing" flexDirection="row" flexGrow="1" flexShrink="1" minWidth="0" out:backgroundColor="fieldBg" overflow="hidden">
@@ -25,6 +25,20 @@
 				<text out="summary" flexGrow="1" flexShrink="1" minWidth="0" out:fg="summaryFg" wrapMode="none" truncate="true"></text>
 				<text when="textual" out="fieldClose" out:fg="fieldFg"></text>
 			</box>
+		</box>
+		<!-- Rename TO: the same name as FROM, then a live diff line with the
+		     changed middle of each side highlighted. -->
+		<box when="hasDiff" flexDirection="row" height="1" minWidth="0" overflow="hidden">
+			<box when="diffChanged" flexDirection="row" minWidth="0" overflow="hidden">
+				<text when="diffFromPrefix" out="diffFromPrefix" out:fg="diffDimFg" wrapMode="none"></text>
+				<text when="diffFromChanged" out="diffFromChanged" out:fg="diffRemovedFg" wrapMode="none"></text>
+				<text when="diffFromSuffix" out="diffFromSuffix" out:fg="diffDimFg" wrapMode="none"></text>
+				<text out="diffArrow" out:fg="diffDimFg" wrapMode="none"></text>
+				<text when="diffToPrefix" out="diffToPrefix" out:fg="diffDimFg" wrapMode="none"></text>
+				<text when="diffToChanged" out="diffToChanged" out:fg="diffAddedFg" wrapMode="none"></text>
+				<text when="diffToSuffix" out="diffToSuffix" out:fg="diffDimFg" wrapMode="none"></text>
+			</box>
+			<text when="diffUnchanged" out="diffUnchangedText" out:fg="diffDimFg" wrapMode="none"></text>
 		</box>
 	</box>
 	<!-- A permission class: its label and three clickable r/w/x cells. The bit

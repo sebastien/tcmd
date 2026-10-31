@@ -17,6 +17,10 @@
 // - `copy(text)`: boolean - best-effort clipboard write. The TUI sends OSC 52
 //   through the renderer; the browser and desktop webview use the Clipboard
 //   API. False when the host has no clipboard.
+// - `screenshot({ svgPath, ansPath })`: Promise<{ svgPath, ansPath, ... }> -
+//   optional. Writes the current screen to those two files. Only the terminal
+//   presentation has a grid to capture; a host without one omits the hook and
+//   the `screenshot` operation reports that it is unavailable.
 // - `canEdit`: boolean - whether `edit` can launch an editor at all. A host
 //   without one (the web's null adapter) sets it false, so Enter on a file
 //   falls back to the fullscreen inspector instead of erroring (see
@@ -37,10 +41,12 @@ function loadChildProcess() {
 // Function: createNodeOs
 // Node/Bun-backed host adapter. `suspend`/`resume` are optional hooks the TUI
 // uses to release and restore the terminal around interactive commands;
-// `copy` is the TUI's OSC 52 hook (`renderer.copyToClipboardOSC52`).
-function createNodeOs({ suspend, resume, copy } = {}) {
+// `copy` is the TUI's OSC 52 hook (`renderer.copyToClipboardOSC52`), and
+// `screenshot` writes the renderer's current grid (see `tui/screenshot`).
+function createNodeOs({ suspend, resume, copy, screenshot } = {}) {
 	return {
 		canEdit: true,
+		...(screenshot ? { screenshot } : {}),
 		copy(text) {
 			return Boolean(copy?.(`${text ?? ""}`))
 		},

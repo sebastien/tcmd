@@ -27,16 +27,20 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   restored from the trash browser
   (`⇧T`), which lists trashed entries by their original path. A double click on
   a row opens it like `Enter`.
-- Operations over the current panes: copy, move, mkdir/new, hardlink/symlink,
-  chmod/chown, delete/erase/unlink, stat, du/df, touch, selection buffers,
+- Operations over the current panes: copy, move, mkdir/new (alias `create`), hardlink/symlink,
+  chmod/chown, delete/erase/unlink, stat, file, du/df, touch, selection buffers,
   edit/view/open and shell commands; `abspath` and `realpath` show
   copy-pasteable absolute paths and copy them to the clipboard, with the latter
   following symlinks. `unlink` removes links only, never their targets.
+  `screenshot` (also `⇧S`) captures the current screen as an SVG image plus an
+  ANSI text file, written side by side into the focused column's directory —
+  see *Screenshots* below.
 - Command panel (`:`), the one entry point, a two-pane palette: the left pane
   filters (`:xxx`) over CLI operations grouped by purpose: **Command**,
   **File**, **Info**, **Create**, **Edit** (amber), and **Delete** (red). The
-  Command group also has the workspace-view toggle and Quit; File's `view`
-  previews the selected path; Info holds `stat`, `du` and `df`; amber Edit also
+  Command group also has the workspace-view toggle, the `server local`/`server
+  lan` web UI modes, Screenshot and Quit; File's `view`
+  previews the selected path; Info holds `stat`, `file`, `du` and `df`; amber Edit also
   holds `copy` and the metadata changes. Bold section
   titles head indented command names, alphabetized within each category. The right
   pane lists the selected command's arguments under its name — editable values
@@ -51,13 +55,14 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   (` PATH`, ` [value]`), and `[Run]` follows the last field after a
   blank line, aligned left in the command category's color. Amber (Edit) and
   red (Delete) actions take two steps: the first Run turns the action into
-  `[Confirm]` and prints the command below it in the risk colour, the second
-  executes. A failed run shows `[Retry]` with a framed error block below it,
-  while a
+  `[Confirm]` and prints the command below it in the risk colour — one item per
+  line, hanging under the command name — the second executes. A failed run
+  shows `[Retry]` with a framed error block below it, while a
   successful result briefly replaces the command bar at the bottom. A selection
   argument draws from the *focused* column, so in the explorer focusing the parent mirror
   selects the directory under its cursor. `Tab` cycles the filter, arguments and
-  Run button; `Enter` runs a complete command or jumps to the next missing
+  Run button; `Enter` runs a complete command, opens the picker on a
+  path/destination argument, or jumps to the next missing
   argument, and a `[Close Esc]` close button sits in the dialog's top border,
   upper right. `!` lands straight on the shell
   command. A destination/path argument browses the filesystem in a file picker
@@ -67,7 +72,10 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   asks where to. A `replace` operation replaces a literal `FIND` with `REPLACE`
   across the selection — one file replaces its whole name — previewing each
   `old → new` mapping before it runs. Exact `rename FROM TO PATH` renames one named
-  child inside `PATH`.
+  child inside `PATH`; opening it prefills `TO` from the selected name (with the
+  stem selected for typing) and shows a live `old → new` diff under `TO`, with
+  common text dimmed, the changed parts highlighted, and `(unchanged)` until
+  the names differ.
 - Keyboard and mouse navigation, inline file previews — a previewed directory
   renders as a pane (its breadcrumbs over its own listing), in both views, a
   source file highlights with tree-sitter (JavaScript, TypeScript, Markdown and
@@ -115,13 +123,20 @@ lands on the directory you left), `Esc`/`⇧Esc` history back/forward, `Tab`/`�
 open the bookmarks panel (filter, add the current path, `Enter` open,
 `⌫`/`Del` remove), `:` open the
 command panel (the one entry point for CLI operations, grouped by risk with
-editable arguments, an explicit Run button and the inline file picker on `⌃O`),
+editable arguments, an explicit Run button and the inline file picker on `⌃O`;
+its `server local` and `server lan` commands start/stop the web UI server —
+loopback only, or exposed on every interface for LAN access — whose address
+then rides the identity bar until clicked to copy (`server stop` joins the
+panel while a server is up),
 `v` preview (fullscreen viewer when
 the terminal is narrow), `⇧V` maximize the preview over the columns and back
 again (in either full view, `↑`/`↓` scroll a file preview and `←`/`→` step to
-the previous/next entry), `O`/`E` open/edit the previewed file, `/` fuzzy-filter
+the previous/next entry; a previewed directory keeps its listing keys —
+`↑`/`↓` move, `→`/`Enter` open, `←` goes up, `Space` marks), `⇧O`/`⇧E`
+open/edit the previewed file, `/` fuzzy-filter
 the active pane (`Enter` keeps it, `Esc` clears), `!` open the panel on the
-shell command, `F5`/`r`/`^R` reload, `?` key reference, `q` quit.
+shell command, `F5`/`r`/`^R` reload, `⇧S` screenshot, `?` key reference,
+`q` quit.
 
 Listings refresh themselves when the filesystem changes: the TUI and desktop
 views watch the displayed directories natively, while the web view polls them
@@ -156,12 +171,40 @@ context-aware inspector sits
 on the right when the terminal is at least 100 columns wide, and becomes a
 fullscreen viewer below that; `⇧V` expands it over the whole pane row —
 parent and current included — and brings the previous layout back on the next
-press. The status bar keeps its fixed bracket shorthands on one line
-(`[Commands :]`, `[Mark Spc]`, `[Filter /]`, `[Switch ⇥]`, `[Bookmarks b]`,
-`[Toggle Mode t]`, `[Help ?]`) and elides entries behind `…` when the width
-runs out — the marked count trails the list, and a notice or error swaps the
-keys for a one-line status. Below 64×16
+press. The status bar keeps its bracket shorthands on one line and follows the
+active panel: the workspace's focused column (`[Commands :]`, `[Open →/⏎]`,
+`[Mark Spc]`, `[Filter /]`, `[Switch ⇥]`, `[Preview v]`, `[Help ?]`), the
+fullscreen viewer (`[Scroll ↑/↓]`, `[Prev ←]`, `[Next →]`, `[Close Esc]`), the
+maximized preview (`[Restore ⇧V]`), or the modal that owns the keyboard. A
+previewed directory in either full view keeps its listing keys (`[Row ↑/↓]`,
+`[Open →/⏎]`, `[Parent ←]`, `[Mark Spc]`). Entries that do not fit are elided
+behind `…` — the focused listing's marked count trails the list, and a notice
+or error swaps the keys for a one-line status. Below 64×16
 the app shows a resize hint instead of the workspace.
+
+### Screenshots
+
+`⇧S`, or the panel's `screenshot` command, captures the current screen and
+writes two files side by side in the focused column's directory (or the `TO`
+directory the panel/prefixed argument names):
+
+- `screenshot.svg` — a standalone vector image of the exact grid, colours and
+  emphasis included, that web pages embed with
+  `<img src="screenshot.svg">` (docs, READMEs) or inline directly. It carries
+  no background, so it sits on the page it is dropped into, and it embeds no
+  font: it names a monospace stack and the reader's own font draws the text.
+  Nerd-Font icons therefore need a patched font; everything else is plain
+  monospace. Kitty/sixel image previews are drawn by the terminal, not the
+  grid, so they come out blank.
+- `screenshot.ans` — the same frame as ANSI text, for `cat`/`less -R`/`bat`,
+  terminal pastes and reviews.
+
+Later captures never overwrite an earlier one: the pair is named
+`screenshot-2.svg` / `screenshot-2.ans`, and so on. The capture waits one
+rendered frame, so running it from the command panel photographs the
+workspace rather than the panel that started it. Screenshots are a terminal
+feature; the web and desktop views report that the host has no grid to
+capture.
 
 ### View modes
 
@@ -225,14 +268,30 @@ Use `HOST=0.0.0.0 PORT=9000 tcmd --server` to change the address and port
 takes an IP address (`0.0.0.0` or `::` for every interface); a machine name
 resolves to several addresses and the server binds only one of them.
 
+From the TUI, the command panel's `server local` entry starts the same server on
+the loopback interface (`127.0.0.1`), while `server lan` listens on every
+interface and displays `$HOSTNAME` (falling back to the machine's hostname) so
+peers on the network can reach it. `PORT` overrides 8787 and `TCMD_WEB_ROOT`
+still applies. The address joins the identity bar while it runs — amber in LAN
+mode — and clicking it copies the URL including its required `?token=…`.
+The toolbar itself hides the token; select `server token` in the command panel
+to reveal it (only available while running), or run that entry to copy it.
+Running the same mode again stops it;
+choosing the other mode switches over; the `server stop` entry appears while a
+server is up; quitting the TUI stops it too.
+
 `make run-local` is the local dev entry point (it wraps `bun run web` and
 honours `TCMD_WEB_PORT`, default 8787). The Makefile bootstraps the LittleSDK
 into `deps/sdk` for the standard `make` targets.
 
-Appending `?fs=opfs` or `?fs=http` to the URL forces one backend. The HTTP
+Appending `&fs=opfs` or `&fs=http` to the token URL forces one backend. The HTTP
 backend needs the page served by `bun run web:serve` (a plain static server
 only supports OPFS); the server binds to loopback by default (`HOST`
-overrides it) and requires a per-process token injected into `index.html`.
+overrides it). Opening the page requires the per-process token in the URL;
+the terminal prints this link, and the toolbar copies it. Only an authenticated
+page receives the token for subsequent API headers. A new server gets a new token.
+Treat the link as a password: URL tokens can remain in browser history, and HTTP
+does not encrypt them. Use LAN mode only on trusted networks (or HTTPS via a proxy).
 `TCMD_WEB_ROOT=/some/dir` confines the API
 (default `/`, the same access as `bun run tcmd`), but it is not a sandbox:
 don't expose the port. Symlinks that resolve outside the root are rejected;
@@ -305,18 +364,20 @@ and controller:
 src/js/tcmd/
   core/     Model + Controller. No rendering dependencies.
     fs.js        filesystem adapter interface (Node impl; web swaps in OPFS/HTTP)
-    os.js        host adapter (open/edit/run; null impl for the web)
+    os.js        host adapter (open/edit/run/screenshot; null impl for the web)
     path.js      pure string path ops
     entries.js   filter/sort over file entries (dirs first)
     selection.js cursor/mark arithmetic
     directory.js one pane's directory: path, entries, view, cursor, marks
-    pane.js      one directory, proxying its cells + currentPane resolution
+    pane.js      one directory, proxying its cells + current/focused pane resolution
     bookmarks.js named bookmarks (path + file/dir kind) + the memory/file stores
     panel.js     grouped CLI command panel, with arguments bound from context
     session.js   two panes + parent/preview mirrors, view mode, active pane, preview, panel, dispatch
     keymap.js    key chords -> command ids
     commands.js  command registry; commands are `run(session, payload)`
+    bar.js       command bar: registry + context -> contextual key rows
     operations.js CLI operations (copy/move/delete/erase/stat/sel/…)
+    fileinfo.js  content-based format/encoding identification (the `file` op)
     script.js    scripting line parser and runner
   components/  Shared, renderer-agnostic component logic
     App.js            root controller: key + event -> dispatch
@@ -328,10 +389,11 @@ src/js/tcmd/
     Help.js           key-reference overlay behaviors + the two-column key text
     format.js         presentation helpers (sizes/counts)
   tui/      View (select.tui templates on OpenTUI)
-    app.js       binds App.js + App.xml + TUI environment; size/help cells
-    catalogue.js binds each `components/*.js` to its `.xml` and registers tags
-    index.js     TUI entry point; feeds `size` from renderer resize events
-    theme.js     TUI palette resolver (dark/light/mono, NO_COLOR)
+    app.js        binds App.js + App.xml + TUI environment; size/help cells
+    catalogue.js  binds each `components/*.js` to its `.xml` and registers tags
+    index.js      TUI entry point; feeds `size` from renderer resize events
+    screenshot.js captures the live grid as SVG + ANSI (the `screenshot` operation)
+    theme.js      TUI palette resolver (dark/light/mono, NO_COLOR)
   web/      Browser view (select.js templates on the DOM, same core)
     app.js       binds App.js + App.html + web environment
     catalogue.js binds each `components/*.js` to its `.html`
@@ -341,7 +403,7 @@ src/js/tcmd/
     bookmarks.js localStorage bookmark store, scoped by backend and API root
     opfs.js      OPFS filesystem adapter (browser storage)
     http.js      filesystem adapter over the `/api` JSON endpoints
-    server.js    dev server: `public/` + `/api/*` (used by `bun run web:serve`)
+    server.js    shared server startup + bundle build; `public/` + `/api/*` (CLI/TUI)
     seed.js      demo tree written to OPFS on first load
     header.js    web-only title bar behaviors (+ `header.html`)
     theme.js     web state classes

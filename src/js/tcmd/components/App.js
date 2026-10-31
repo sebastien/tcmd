@@ -102,6 +102,10 @@ function createInit(session) {
 		parentSetFilter: (value) => parent.setFilter(value),
 		preview: session.preview,
 		previewFull: session.previewFull,
+		// True while the inspector renders a directory column (bar hints).
+		previewDirectory: session.previewDirectory,
+		// The marked count of the focused listing, for the bar's trailing item.
+		focusedMarked: session.focusedMarked,
 		// The full previews apply body scroll requests through this cell.
 		previewScroll: session.previewScroll,
 		// The third column: the directory the inspector previews, so it reads
@@ -125,6 +129,9 @@ function createInit(session) {
 		rightMarked: right.marked,
 		rightSegments: right.segments,
 		rightSetFilter: (value) => right.setFilter(value),
+		// The running web UI server ({ mode, url, token }), shown in the TUI identity
+		// bar; null when stopped.
+		webServer: session.webServer,
 		showPreview: session.showPreview,
 		viewMode: session.viewMode,
 		// The panel's file picker: its open mode, editable path, focus region
@@ -147,21 +154,52 @@ function fieldOwnsKeys(data, focus) {
 	return focus === PANEL_FOCUS.OPS || Boolean(unwrap(data.panelTextual))
 }
 
+// Function: isDirectoryPreview
+// True when the full preview renders a directory *column* — its own listing.
+// A `stat` card pinned on a directory carries a preview payload, so it behaves
+// like any other card here. `session.previewDirectory` owns the predicate.
+function isDirectoryPreview(data) {
+	return Boolean(unwrap(data.previewDirectory))
+}
+
 // Function: isFilePreview
 // True when the inspector shows a file — a text body or a metadata card — as
 // opposed to a directory column, which keeps its listing cursor navigation.
 function isFilePreview(data) {
 	const entry = unwrap(data.appEntry)
-	return Boolean(entry) && !entry.isDir
+	return Boolean(entry) && !isDirectoryPreview(data)
 }
 
 // Function: routePreviewKeys
-// The arrows of a full preview: Up/Down scroll the body, Left/Right step to
-// the previous/next entry (the cursor movement the preview already follows).
-// Returns true when the key was handled, so the caller can stop routing.
+// The keys of a full preview. A file scrolls with Up/Down and steps through
+// its neighbours with Left/Right. A directory column keeps listing navigation:
+// Up/Down move its cursor, Right/Enter open, Left steps up and Space marks.
+// The listing commands resolve to the inspector themselves (`session.focusedId`
+// prefers it while it is the only listing on screen), so the router never has
+// to move the focus. Returns true when the key was handled, so the caller can
+// stop routing.
 function routePreviewKeys(data, key) {
-	if (!isFilePreview(data)) return false
 	const name = key?.name
+	if (isDirectoryPreview(data)) {
+		if (name === "up" || name === "down") {
+			data.dispatch(name === "up" ? "nav.up" : "nav.down")
+			return true
+		}
+		if (name === "left") {
+			data.dispatch("pane.up")
+			return true
+		}
+		if (name === "right" || name === "return" || name === "enter") {
+			data.dispatch("pane.enter")
+			return true
+		}
+		if (name === "space") {
+			data.dispatch("list.mark")
+			return true
+		}
+		return false
+	}
+	if (!isFilePreview(data)) return false
 	if (name === "up" || name === "down") {
 		data.dispatch("preview.scroll", { delta: name === "up" ? -1 : 1 })
 		return true
@@ -550,6 +588,17 @@ function createEvents() {
 		"pane:activate": (_self, data, event) => data.dispatch("pane.activate", { paneId: event.data }),
 		// Clicking the identity bar's view-mode word flips explorer/commander.
 		"view:toggleMode": (_self, data) => data.dispatch("view.toggleMode"),
+		// Clicking the identity bar's server URL copies it through the host
+		// clipboard, reusing the panel's copy command for its notice handling.
+		"server:copy": (_self, data) => {
+			const server = unwrap(data.webServer)
+			if (server?.url && server.token) {
+				data.dispatch("panel.copy", {
+					text: `${server.url}/?token=${encodeURIComponent(server.token)}`,
+					label: "server link",
+				})
+			}
+		},
 		"bookmark:select": (_self, data, event) => {
 			// Clicking a bookmark (or the add) row selects and activates it.
 			if (!unwrap(data.bookmarkOpen)) return
