@@ -225,6 +225,15 @@ function createFrameBehaviors(env) {
 			return host ? ` - ${host} ` : " "
 		},
 		topBarFg: () => env.theme.textHeadingFg,
+		// The detected repository of the current pane, right after the host.
+		// It names the VCS (`jj` / `git`) whose glyphs the listings show; the
+		// `when` gate keeps it out of the row outside a repository.
+		repoVisible: (_self, data) => Boolean(unwrap(data.repoKind)),
+		topBarRepo: (_self, data) => {
+			const kind = unwrap(data.repoKind)
+			return kind ? ` ${kind} ` : ""
+		},
+		topBarRepoFg: () => env.theme.tipFg,
 		// The web UI server, when the host runs one (`server local` / `server
 		// lan`). The mode and URL sit right after the host and are clickable
 		// (see `components/App`); the `when` gate drops the text node entirely

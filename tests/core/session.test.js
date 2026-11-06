@@ -504,6 +504,43 @@ describe("session", () => {
 		expect(session.panes.preview.entries.value.map((entry) => entry.name)).toEqual(["inside.txt"])
 	})
 
+	test("the identity bar names the current pane's repository", async () => {
+		const tree = {
+			"/": [{ name: "r", isDir: true }],
+			"/r": [
+				{ name: "a", isDir: true },
+				{ name: "b", isDir: true },
+			],
+			"/r/a": [{ name: "one.txt", text: "1\n" }],
+			"/r/b": [{ name: "two.txt", text: "2\n" }],
+		}
+		const fs = createMockFs(tree)
+		const vcs = {
+			async statusFor(path) {
+				return path.startsWith("/r")
+					? { root: "/r", kind: "git", statuses: new Map() }
+					: null
+			},
+		}
+		const left = createPane({ fs, vcs, path: "/r/a" })
+		const right = createPane({ fs, vcs, path: "/r/b" })
+		const session = createSession({ fs, vcs, left, right, viewMode: "commander" })
+		const wait = () => new Promise((resolve) => setTimeout(resolve, 10))
+		await load(session)
+		await wait()
+		expect(session.repoKind.value).toBe("git")
+		// The current pane decides: moving the destination out of the
+		// repository clears the name when it owns the current directory.
+		await right.navigate("/")
+		await wait()
+		session.active.set("right")
+		await wait()
+		expect(session.repoKind.value).toBeNull()
+		session.active.set("left")
+		await wait()
+		expect(session.repoKind.value).toBe("git")
+	})
+
 	test("pane identity: labels are SRC/DST and buffers A/B", () => {
 		expect(PANE_LABELS).toEqual({ left: "SRC", right: "DST" })
 		expect(PANE_BUFFERS).toEqual({ left: "A", right: "B" })

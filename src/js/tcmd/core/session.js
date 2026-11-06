@@ -46,7 +46,7 @@ const BOOKMARK_ADD_KEY = "+ add current path"
 // await session.load()
 // session.dispatch("pane.toggle")
 // ```
-function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explorer", server = false } = {}) {
+function createSession({ fs, os, vcs, left, right, host, bookmarks, viewMode = "explorer", server = false } = {}) {
 	const session = {}
 	session.fs = fs
 	session.os = os ?? createNullOs()
@@ -54,13 +54,13 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// Auxiliary panes: the explorer's parent column and the inspector's
 	// directory column. Both start on a valid path so a refresh before their
 	// first sync can never read a blank one.
-	session.panes.parent = createPane({ fs, path: parentPath(left.path.value) ?? left.path.value })
-	session.panes.preview = createPane({ fs, path: left.path.value })
+	session.panes.parent = createPane({ fs, vcs, path: parentPath(left.path.value) ?? left.path.value })
+	session.panes.preview = createPane({ fs, vcs, path: left.path.value })
 	// File picker: a private pane the command panel browses while a path
 	// argument is being picked. Kept out of `session.panes` so `load`, the
 	// pane refresh loop and pane navigation leave it alone; it is (re)read
 	// when the picker opens (see `core/commands#openPicker`).
-	session.pickerPane = createPane({ fs, path: left.path.value })
+	session.pickerPane = createPane({ fs, vcs, path: left.path.value })
 	// Shown in the header title; empty when the environment has no hostname.
 	session.host = host ?? ""
 	// The running web UI server, or null when stopped: `{ mode, url, token }` where
@@ -107,6 +107,14 @@ function createSession({ fs, os, left, right, host, bookmarks, viewMode = "explo
 	// focused pane.
 	session.currentId = derived([session.active, session.anchor], ([active, anchor]) =>
 		active === "left" || active === "right" ? active : anchor,
+	)
+	// The repository the identity bar names: the current pane's detected VCS
+	// (`"jj"` or `"git"`), null outside one. The two source/destination panes
+	// own the current directory; the preview column may be pinned elsewhere,
+	// so it is not read here.
+	session.repoKind = derived(
+		[session.currentId, left.repo, right.repo],
+		([current, leftRepo, rightRepo]) => (current === "right" ? rightRepo : leftRepo)?.kind ?? null,
 	)
 	// The current pane's directory, tracked by the header title and by the
 	// parent column's mirror.
@@ -792,6 +800,8 @@ function entrySummary(entry) {
 		// The symlink's raw target, so the preview and the header can name
 		// where the link goes.
 		target: entry.target ?? null,
+		// Repository status (see `core/vcs`), shown by the detail line.
+		vcsStatus: entry.vcsStatus ?? null,
 	}
 }
 

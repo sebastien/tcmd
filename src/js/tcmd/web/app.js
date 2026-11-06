@@ -65,7 +65,13 @@ function webViewBehaviors() {
 			`is-${unwrap(data.viewMode) === "explorer" ? "explorer" : "commander"}`,
 			unwrap(data.desktopMode) ? "is-desktop" : null,
 		].filter(Boolean).join(" "),
-		headerView: (_self, data) => ({ host: data.appHost, path: data.appPath, mode: data.viewMode }),
+		headerView: (_self, data) => ({ host: data.appHost, path: data.appPath, mode: data.viewMode, repoKind: data.repoKind }),
+		// Desktop mode hides the identity header; keep the repository name in
+		// the toolbar so the VCS is still visible next to its status glyphs.
+		desktopRepo: (_self, data) => {
+			const kind = unwrap(data.repoKind)
+			return kind ? kind : ""
+		},
 		desktopViewLabel: (_self, data) => unwrap(data.viewMode) === "explorer" ? "Explorer" : "Commander",
 		desktopPreviewLabel: (_self, data) => unwrap(data.showPreview) ? "Hide preview" : "Show preview",
 		bookmarkView: (_self, data) => ({

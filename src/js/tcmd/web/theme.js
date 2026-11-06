@@ -10,13 +10,16 @@
 
 const webTheme = {
 	activeClass: "is-active",
+	addedClass: "is-added",
 	childClass: "is-child",
 	currentClass: "is-current",
 	dirClass: "is-dir",
 	errorClass: "is-error",
 	execClass: "is-exec",
 	focusedClass: "is-focused",
+	ignoredClass: "is-ignored",
 	lucideIcons: true,
+	modifiedClass: "is-modified",
 	readonlyClass: "is-readonly",
 	rootClass: "is-root",
 	selectedClass: "is-selected",

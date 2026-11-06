@@ -46,10 +46,10 @@ beforeAll(async () => {
 
 async function mountApp(options = {}) {
 	const fs = options.fs ?? createMockFs(TREE)
-	const left = createPane({ fs, path: "/home" })
-	const right = createPane({ fs, path: "/" })
+	const left = createPane({ fs, vcs: options.vcs, path: "/home" })
+	const right = createPane({ fs, vcs: options.vcs, path: "/" })
 	// The session opens in explorer; commander-specific tests pass the mode.
-	const session = createSession({ fs, left, right, viewMode: options.viewMode })
+	const session = createSession({ fs, vcs: options.vcs, left, right, viewMode: options.viewMode })
 	await load(session)
 	const host = document.createElement("div")
 	document.body.appendChild(host)
@@ -80,6 +80,36 @@ describe("web app", () => {
 			// The parent and current columns show; the destination does not.
 			expect(host.querySelector(".pane-parent")).not.toBeNull()
 			expect(host.querySelector(".pane-right")).toBeNull()
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("the header names the current pane's repository", async () => {
+		const vcs = {
+			async statusFor() {
+				return { root: "/home", kind: "git", statuses: new Map() }
+			},
+		}
+		const { host, instance } = await mountApp({ vcs })
+		try {
+			await settle()
+			expect(host.querySelector(".app-header-repo").textContent).toBe(" git")
+		} finally {
+			instance?.unmount?.()
+		}
+	})
+
+	test("desktop mode keeps the repository name in the toolbar", async () => {
+		const vcs = {
+			async statusFor() {
+				return { root: "/home", kind: "jj", statuses: new Map() }
+			},
+		}
+		const { host, instance } = await mountApp({ desktopMode: true, vcs })
+		try {
+			await settle()
+			expect(host.querySelector(".desktop-toolbar-repo").textContent).toBe("jj")
 		} finally {
 			instance?.unmount?.()
 		}
@@ -857,7 +887,7 @@ describe("web app", () => {
 			// Marks are cells too: the row marker follows the session Set.
 			session.panes.left.toggleMark()
 			await new Promise((resolve) => setTimeout(resolve, 0))
-			expect(rows()[1].querySelector(".marker").textContent).toBe("* ")
+			expect(rows()[1].querySelector(".marker").textContent).toBe("*")
 		} finally {
 			instance?.unmount?.()
 		}

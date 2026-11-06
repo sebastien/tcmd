@@ -29,6 +29,12 @@ function createBehaviors(env) {
 			return host ? ` - ${host}` : ""
 		},
 		titleFg: () => env.textHeadingFg,
+		// The detected repository of the current pane (`jj` / `git`), shown
+		// after the host tail; empty outside a repository.
+		repo: (_self, data) => {
+			const kind = unwrap(data.repoKind)
+			return kind ? ` ${kind}` : ""
+		},
 		// The mode word picks the brand gradient it shimmers along: explorer
 		// the Tiny blues, commander the Cmd oranges (see `.app-header-mode`).
 		mode: (_self, data) => modeWord(unwrap(data.mode)),

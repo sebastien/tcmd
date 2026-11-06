@@ -13,6 +13,7 @@ const theme = {
 	textHeadingFg: "title",
 	textSecondaryFg: "dim",
 	linkFg: "link",
+	tipFg: "tip",
 	warningFg: "warning",
 	brandTinyFrom: "#7aa2f7",
 	brandTinyTo: "#7dcfff",
@@ -48,6 +49,15 @@ describe("components Frame", () => {
 		// Mono (no brand colours): every letter falls back to the default.
 		const mono = createFrameBehaviors({ theme: { textHeadingFg: undefined } })
 		for (const letter of ["T", "C"]) expect(mono[`brand${letter}Fg`]()).toBeUndefined()
+	})
+
+	test("the identity bar names the current pane's repository", () => {
+		const behaviors = createFrameBehaviors({ theme })
+		expect(behaviors.repoVisible(null, {})).toBe(false)
+		expect(behaviors.repoVisible(null, { repoKind: "git" })).toBe(true)
+		expect(behaviors.topBarRepo(null, {})).toBe("")
+		expect(behaviors.topBarRepo(null, { repoKind: "jj" })).toBe(" jj ")
+		expect(behaviors.topBarRepoFg()).toBe("tip")
 	})
 
 	test("the identity bar shows the running web server, mode and address", () => {

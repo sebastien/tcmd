@@ -29,6 +29,8 @@ import { createPathWatcher } from "./watch.js"
 // - `watch`: true (default) auto-refreshes when the displayed directory
 //   changes; false disables it; an object forwards `{ delay, interval }` to
 //   `core/watch` (tests use a short delay).
+// - `vcs`: an optional VCS adapter (see `core/vcs`); its per-directory status
+//   is attached to the listing in the background.
 //
 // Example:
 // ```javascript
@@ -36,7 +38,7 @@ import { createPathWatcher } from "./watch.js"
 // await dir.refresh()
 // dir.entries.value // sorted, filtered FileEntry[]
 // ```
-function createDirectory({ fs, path: initialPath, context: initialContext, watch = true }) {
+function createDirectory({ fs, path: initialPath, context: initialContext, watch = true, vcs = null }) {
 	const dir = { fs }
 	dir.path = cell(initialPath)
 	dir.rawEntries = cell([])
@@ -44,8 +46,14 @@ function createDirectory({ fs, path: initialPath, context: initialContext, watch
 	dir.error = cell(null)
 	dir.filter = cell("")
 	dir.sort = cell({ key: "name", dir: 1 })
-	dir.entries = derived([dir.rawEntries, dir.filter, dir.sort], ([raw, filter, sort]) =>
-		viewEntries(raw, filter, sort),
+	// The detected repository of the displayed directory (`{ root, kind }`),
+	// or null outside one; the identity bar names it.
+	dir.repo = cell(null)
+	// Per-entry VCS status, keyed by absolute path and filled asynchronously
+	// by the adapter (see `read`).
+	dir.vcsStatus = cell(new Map())
+	dir.entries = derived([dir.rawEntries, dir.filter, dir.sort, dir.vcsStatus], ([raw, filter, sort, statuses]) =>
+		viewEntries(withVcsStatus(raw, statuses), filter, sort),
 	)
 	dir.cursor = cell(0)
 	dir.disk = cell(null)
@@ -181,10 +189,32 @@ function createDirectory({ fs, path: initialPath, context: initialContext, watch
 					dir.marked.set(new Set())
 					dir.disk.set(null)
 				}
+				// A move leaves the previous repository behind; the new status
+				// arrives asynchronously below. A same-path refresh keeps the
+				// current status until the replacement lands.
+				if (isMove) {
+					dir.repo.set(null)
+					dir.vcsStatus.set(new Map())
+				}
 				dir.rawEntries.set(raw)
 				dir.cursor.set(cursor)
 				dir.loading.set(false)
 			})
+			// VCS status is supplementary: the listing is already visible, and
+			// the letters arrive when the (cached) status command returns. A
+			// later navigation invalidates the result through the read token.
+			if (vcs) {
+				void vcs.statusFor(path, raw).then(
+					(info) => {
+						if (token !== readToken) return
+						batch(() => {
+							dir.repo.set(info ? { root: info.root, kind: info.kind } : null)
+							dir.vcsStatus.set(info?.statuses ?? new Map())
+						})
+					},
+					() => {},
+				)
+			}
 			watchCurrentPath()
 			if (record) {
 				const entry = { path, filter: "", cursor, marks: new Set(), context: contextGet() }
@@ -315,6 +345,18 @@ function createDirectory({ fs, path: initialPath, context: initialContext, watch
 	watchCurrentPath()
 
 	return dir
+}
+
+// Function: withVcsStatus
+// A copy of `entries` carrying the VCS status from `statuses` as
+// `entry.vcsStatus`. Raw listing objects are never mutated, so a status
+// refresh can recompute the view without re-reading the directory.
+function withVcsStatus(entries, statuses) {
+	if (!statuses?.size) return entries
+	return entries.map((entry) => {
+		const status = statuses.get(entry.path) ?? null
+		return status === entry.vcsStatus ? entry : { ...entry, vcsStatus: status }
+	})
 }
 
 export { createDirectory }

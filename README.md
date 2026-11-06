@@ -90,6 +90,19 @@ TinyCommand `tcmd` is a midnight-commander-like CLI and desktop tool:
   directory (it sorts, opens and previews as one), and the preview reads
   through it — the header reads `notes.md -> notes.txt  <TXT>` and the kind
   comes from the target's extension, not the link's name
+- Repository awareness (`.jj` or `.git`, found by walking up from the displayed
+  directory): changed and ignored entries carry a one-column status glyph —
+  `✚` added (untracked, new or copied), `✎` modified (renames included) and
+  `⊘` ignored — tinted green, amber and dim respectively, and the identity bar
+  names the detected VCS (`jj` / `git`). Git's untracked and ignored
+  directories carry the glyph too; jj reports file-level status, so directory
+  rows stay unmarked. The selected entry's detail line spells the status out
+  (`file · added`). jj repositories status through `jj diff`, using
+  `git check-ignore` for ignored paths when colocated; git repositories use
+  porcelain status. In a pure jj repository ignored *directories* stay
+  unmarked, since jj exposes no ignore listing (ignored files are still
+  detected). The TUI and desktop views have this; the browser view cannot spawn
+  `git`/`jj`, so it shows no repository state
 - Bookmarks and quick find (later milestones)
 
 References: [Marta.sh](https://marta.sh) for the UI, [fman.io](https://fman.io)
@@ -146,7 +159,10 @@ programs appear without moving the cursor. The keys above (and the web toolbar
 button) remain for a forced re-read.
 
 The workspace opens in explorer mode with a slim identity bar (`TinyCmd -
-HOST`) — the view mode and version trailing at its right, the mode word drawn
+HOST`, followed by the detected repository name — `jj` or `git` — when the
+current pane sits inside one (TUI and desktop, whose hosts can spawn the VCS
+commands) — the view mode and version trailing at its
+right, the mode word drawn
 letter by letter along the logo's own gradients (`explorer` in the Tiny blues,
 `commander` in the Cmd oranges, clicking it toggles the view) and the version
 dim after it — over an

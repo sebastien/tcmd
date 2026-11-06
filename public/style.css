@@ -188,6 +188,16 @@ body {
 	text-overflow: ellipsis;
 }
 
+/* Detected repository of the current pane (the listings show its glyphs). */
+.app-header-repo {
+	color: var(--tip);
+	font-weight: 400;
+}
+
+.app-header-repo:empty {
+	display: none;
+}
+
 /* Brand: "Tiny" shimmers along a blue gradient, "Cmd" along a brighter
    orange than the mark accent. */
 .app-header .brand-tiny {
@@ -229,6 +239,18 @@ body {
 .desktop-toolbar-spacer {
 	flex: 1;
 	min-width: 0.5rem;
+}
+
+/* Detected repository in desktop mode, where the identity header is hidden. */
+.desktop-toolbar-repo {
+	flex: none;
+	color: var(--tip);
+	font-size: 0.85rem;
+	padding: 0 0.35rem;
+}
+
+.desktop-toolbar-repo:empty {
+	display: none;
 }
 
 .desktop-toolbar-separator {
@@ -421,7 +443,7 @@ body {
 
 .file-row {
 	display: grid;
-	grid-template-columns: 1.1rem 1rem minmax(0, 1fr) auto;
+	grid-template-columns: 1.1rem 1rem 1rem minmax(0, 1fr) auto;
 	gap: 0.4rem;
 	align-items: center;
 	padding: 0 0.35rem;
@@ -452,6 +474,24 @@ body {
 
 .file-row[data-marked="true"] .marker {
 	color: var(--mark);
+}
+
+/* Repository status glyph (core/vcs): added, modified, ignored. */
+.status {
+	color: var(--text-dim);
+	white-space: pre;
+}
+
+.status.is-added {
+	color: var(--exec);
+}
+
+.status.is-modified {
+	color: var(--warning);
+}
+
+.status.is-ignored {
+	color: var(--readonly);
 }
 
 .file-row-icon {
@@ -560,6 +600,19 @@ body {
 
 .entry-detail-mode {
 	color: var(--accent);
+}
+
+/* Repository status word: same colors as the listing glyph. */
+.entry-detail-vcs.is-added {
+	color: var(--exec);
+}
+
+.entry-detail-vcs.is-modified {
+	color: var(--warning);
+}
+
+.entry-detail-vcs.is-ignored {
+	color: var(--readonly);
 }
 
 .entry-detail-marked {

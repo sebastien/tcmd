@@ -10,6 +10,7 @@ import { createBookmarks } from "../core/bookmarks.js"
 import { parent } from "../core/path.js"
 import { createPane } from "../core/pane.js"
 import { createSession, load } from "../core/session.js"
+import { createVcs } from "../core/vcs.js"
 import { main as mount } from "../web/index.js"
 import { createDesktopBookmarkStore } from "./bookmarks.js"
 import { createDesktopFs } from "./fs.js"
@@ -104,14 +105,19 @@ async function startApp({ host, doc, tiny }) {
 		const leftPath = (await validDirectory(saved?.left)) ?? home
 		const rightPath = (await validDirectory(saved?.right)) ?? home
 		const viewMode = saved?.viewMode === "commander" ? "commander" : "explorer"
-		const left = createPane({ fs, path: leftPath })
-		const right = createPane({ fs, path: rightPath })
+		const os = createDesktopOs({ call, tiny })
+		// Per-entry `.jj`/`.git` status, through the backend's captured command
+		// runner (`hostCapture`).
+		const vcs = createVcs({ fs, os })
+		const left = createPane({ fs, vcs, path: leftPath })
+		const right = createPane({ fs, vcs, path: rightPath })
 		const bookmarks = createBookmarks({
 			store: createDesktopBookmarkStore({ store: tiny.store }),
 		})
 		session = createSession({
 			fs,
-			os: createDesktopOs({ call, tiny }),
+			os,
+			vcs,
 			left,
 			right,
 			host: fs.host(),

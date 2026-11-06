@@ -132,6 +132,9 @@ function createInit(session) {
 		// The running web UI server ({ mode, url, token }), shown in the TUI identity
 		// bar; null when stopped.
 		webServer: session.webServer,
+		// The detected repository of the current pane ("jj" | "git" | null),
+		// named in the identity bar.
+		repoKind: session.repoKind,
 		showPreview: session.showPreview,
 		viewMode: session.viewMode,
 		// The panel's file picker: its open mode, editable path, focus region

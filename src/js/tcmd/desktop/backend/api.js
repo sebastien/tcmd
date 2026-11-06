@@ -8,7 +8,12 @@ import { encodeBase64 } from "../../core/base64.js"
 import { createDesktopFs, normalizePath } from "./fs.js"
 
 const OUTPUT_LIMIT = 32 * 1024
+// Captured commands (VCS status) need more headroom than the alert preview:
+// a large working copy can list thousands of paths. Beyond this the command is
+// treated as failed rather than parsed from a truncated listing.
+const CAPTURE_LIMIT = 4 * 1024 * 1024
 const decoder = new TextDecoder()
+const encoder = new TextEncoder()
 
 function requirePath(value, base) {
 	return normalizePath(value, base)
@@ -43,6 +48,18 @@ async function readLimited(stream, limit = OUTPUT_LIMIT) {
 		offset += chunk.length
 	}
 	return { text: decoder.decode(bytes), truncated }
+}
+
+async function writeInput(stream, input) {
+	if (!stream) return
+	try {
+		const writer = stream.getWriter()
+		// txiki.js only delivers the first write; send the whole input at once.
+		await writer.write(encoder.encode(`${input}`))
+		await writer.close()
+	} catch (error) {
+		// The child may exit before reading stdin; its output still counts.
+	}
 }
 
 function createDesktopBackend({ runtime } = {}) {
@@ -142,6 +159,60 @@ function createDesktopBackend({ runtime } = {}) {
 				exitCode: status.exit_status,
 				signal: status.term_signal,
 				truncated: stdout.truncated || stderr.truncated,
+			}
+		},
+		// Non-interactive command with captured output, for the VCS adapter
+		// (`core/vcs`). Unlike `hostRun`, it takes an argv array, can feed
+		// stdin, and enforces a timeout. Returns null when the command cannot
+		// start, times out or overflows `CAPTURE_LIMIT`, so callers treat it as
+		// "status unavailable" instead of parsing a partial listing.
+		hostCapture: async ({ command, args, cwd, input, timeout = 5000 }) => {
+			if (typeof command !== "string" || !command) throw new TypeError("command must be non-empty text")
+			const argv = [command, ...(Array.isArray(args) ? args.map((arg) => `${arg}`) : [])]
+			if (argv.some((arg) => arg.includes("\0"))) throw new Error("command arguments must not contain NUL")
+			const directory = requirePath(cwd || fs().cwd(), runtime.cwd)
+			const stats = await fs().stat(directory)
+			if (!stats?.isDir) throw new Error(`not a directory: ${directory}`)
+			let child
+			try {
+				child = runtime.spawn(argv, {
+					cwd: directory,
+					stdin: input === undefined || input === null ? "ignore" : "pipe",
+					stdout: "pipe",
+					stderr: "pipe",
+				})
+			} catch (error) {
+				return null
+			}
+			let timedOut = false
+			const timer = timeout > 0
+				? setTimeout(() => {
+						timedOut = true
+						try {
+							child.kill("SIGKILL")
+						} catch (error) {
+							// Already gone.
+						}
+					}, timeout)
+				: null
+			const tasks = [
+				readLimited(child.stdout, CAPTURE_LIMIT),
+				readLimited(child.stderr, CAPTURE_LIMIT),
+				child.wait(),
+			]
+			if (input !== undefined && input !== null) tasks.push(writeInput(child.stdin, input))
+			try {
+				const [stdout, stderr, status] = await Promise.all(tasks)
+				if (timedOut || stdout.truncated || stderr.truncated) return null
+				return {
+					code: status.exit_status ?? (status.term_signal ? 1 : 0),
+					stdout: stdout.text,
+					stderr: stderr.text,
+				}
+			} catch (error) {
+				return null
+			} finally {
+				if (timer) clearTimeout(timer)
 			}
 		},
 	}

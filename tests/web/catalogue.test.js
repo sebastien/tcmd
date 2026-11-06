@@ -55,7 +55,7 @@ describe("web components", () => {
 			.mount(host)
 		expect(host.textContent).toContain("a.txt")
 		expect(host.textContent).toContain("sub/")
-		expect(host.textContent).toContain("* ")
+		expect(host.querySelector(".marker").textContent).toBe("*")
 		expect(host.querySelector('.file-row-icon use[href="#lucide-file-text"]')).not.toBeNull()
 		expect(host.querySelector('.file-row-icon use[href="#lucide-folder"]')).not.toBeNull()
 	})

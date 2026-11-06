@@ -67,11 +67,11 @@ describe("FileRow", () => {
 		expect(behaviors.rowMarkerFg(null, { item: FILE, marked: new Set(["/a.txt"]) })).toBe("mark")
 		expect(behaviors.rowMarkerFg(null, { item: FILE, marked: new Set() })).toBe("accent")
 		expect(behaviors.rowSizeFg()).toBe("dim")
-		expect(behaviors.rowMarker(null, { item: FILE, index: 0, cursor: 0, marked: new Set() })).toBe("> ")
+		expect(behaviors.rowMarker(null, { item: FILE, index: 0, cursor: 0, marked: new Set() })).toBe(">")
 		// The marker reads flags first, marks winning over the cursor.
-		expect(behaviors.rowMarker(null, { item: FILE, currentRow: true, markedRow: false })).toBe("> ")
-		expect(behaviors.rowMarker(null, { item: FILE, currentRow: false, markedRow: false })).toBe("  ")
-		expect(behaviors.rowMarker(null, { item: FILE, currentRow: true, markedRow: true })).toBe("* ")
+		expect(behaviors.rowMarker(null, { item: FILE, currentRow: true, markedRow: false })).toBe(">")
+		expect(behaviors.rowMarker(null, { item: FILE, currentRow: false, markedRow: false })).toBe(" ")
+		expect(behaviors.rowMarker(null, { item: FILE, currentRow: true, markedRow: true })).toBe("*")
 	})
 
 	test("plain flags win over the shared cursor and marked sources", () => {
@@ -173,12 +173,31 @@ describe("FileRow", () => {
 		const marked = cell(new Set())
 		const data = { item: FILE, index: 1, cursor, marked }
 		expect(behaviors.rowClass(null, data)).toBeNull()
-		expect(behaviors.rowMarker(null, data)).toBe("  ")
+		expect(behaviors.rowMarker(null, data)).toBe(" ")
 		cursor.set(1)
 		expect(behaviors.rowClass(null, data)).toBe("is-current")
-		expect(behaviors.rowMarker(null, data)).toBe("> ")
+		expect(behaviors.rowMarker(null, data)).toBe(">")
 		marked.set(new Set(["/a.txt"]))
-		expect(behaviors.rowMarker(null, data)).toBe("* ")
+		expect(behaviors.rowMarker(null, data)).toBe("*")
 		expect(behaviors.rowMarkerFg(null, data)).toBe("mark")
+	})
+
+	test("repository status glyphs and colors", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		const added = { ...FILE, vcsStatus: "added" }
+		const modified = { ...FILE, vcsStatus: "modified" }
+		const ignored = { ...FILE, vcsStatus: "ignored" }
+		expect(behaviors.rowStatus(null, { item: added })).toBe("✚")
+		expect(behaviors.rowStatus(null, { item: modified })).toBe("✎")
+		expect(behaviors.rowStatus(null, { item: ignored })).toBe("⊘")
+		expect(behaviors.rowStatus(null, { item: FILE })).toBe("")
+		expect(behaviors.rowStatusFg(null, { item: added })).toBe("exec")
+		expect(behaviors.rowStatusFg(null, { item: modified })).toBe("warning")
+		expect(behaviors.rowStatusFg(null, { item: ignored })).toBe("readonly")
+		expect(behaviors.rowStatusFg(null, { item: FILE })).toBeUndefined()
+		expect(behaviors.rowStatusClass(null, { item: added })).toBe("is-added")
+		expect(behaviors.rowStatusClass(null, { item: modified })).toBe("is-modified")
+		expect(behaviors.rowStatusClass(null, { item: ignored })).toBe("is-ignored")
+		expect(behaviors.rowStatusClass(null, { item: FILE })).toBeNull()
 	})
 })

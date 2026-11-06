@@ -14,9 +14,11 @@
 // Environment: `cursorBg`, `cursorInactiveBg`, `currentClass`,
 // `accentSecondaryFg`, `accentFg`, `linkFg`, `dirFg`, `devFg`, `execFg`,
 // `readonlyFg`, `fileFg`, `textSecondaryFg`, `dirClass`, `execClass`,
-// `readonlyClass`, `icons` (show Nerd Font icons).
+// `readonlyClass`, `addedClass`, `modifiedClass`, `ignoredClass`, `icons`
+// (show Nerd Font icons).
 
 import { unwrap } from "select/state/cells"
+import { ADDED, IGNORED, MODIFIED } from "../core/vcs.js"
 import { formatSize } from "./format.js"
 import { iconFor, lucideIconFor } from "./icons.js"
 
@@ -61,10 +63,43 @@ function isMarked(entry, marked) {
 }
 
 // Function: rowMarker
-// The 2-char row marker: "*" for a marked row, ">" for the cursor row — marks
-// win, so a marked-and-current row still reads as marked.
+// The 1-char cursor/mark slot: "*" for a marked row, ">" for the cursor row —
+// marks win, so a marked-and-current row still reads as marked. The status
+// glyph occupies the second slot (see `rowStatus`).
 function rowMarker(data) {
-	return rowIsMarked(data) ? "* " : rowCurrent(data) ? "> " : "  "
+	return rowIsMarked(data) ? "*" : rowCurrent(data) ? ">" : " "
+}
+
+// Constant: VCS_GLYPHS
+// One-column glyphs for a repository status. They stay out of the name, so the
+// listing keeps an aligned status strip in both renderers.
+const VCS_GLYPHS = { [ADDED]: "✚", [MODIFIED]: "✎", [IGNORED]: "⊘" }
+
+// Function: rowStatus
+// The repository status glyph for an entry ("✚" added, "✎" modified, "⊘"
+// ignored), or "" outside a repository. The VCS adapter attaches
+// `entry.vcsStatus` (see `core/vcs`).
+function rowStatus(entry) {
+	return VCS_GLYPHS[entry?.vcsStatus] ?? ""
+}
+
+// Function: rowStatusFg
+// The glyph color: added takes the executable green, modified the warning
+// amber, ignored the read-only dim.
+function rowStatusFg(entry, env) {
+	if (entry?.vcsStatus === ADDED) return env.execFg
+	if (entry?.vcsStatus === MODIFIED) return env.warningFg
+	if (entry?.vcsStatus === IGNORED) return env.readonlyFg
+	return undefined
+}
+
+// Function: rowStatusClass
+// The web state class for the glyph, mirroring `rowStatusFg`.
+function rowStatusClass(entry, env) {
+	if (entry?.vcsStatus === ADDED) return env.addedClass ?? null
+	if (entry?.vcsStatus === MODIFIED) return env.modifiedClass ?? null
+	if (entry?.vcsStatus === IGNORED) return env.ignoredClass ?? null
+	return null
 }
 
 // Function: rowCurrent
@@ -180,6 +215,9 @@ function createBehaviors(env) {
 		rowIconFg: () => env.textSecondaryFg,
 		rowMarker: (_self, data) => rowMarker(data),
 		rowMarkerFg: (_self, data) => (rowIsMarked(data) ? env.accentSecondaryFg : env.accentFg),
+		rowStatus: (_self, data) => rowStatus(data.item),
+		rowStatusFg: (_self, data) => rowStatusFg(data.item, env),
+		rowStatusClass: (_self, data) => rowStatusClass(data.item, env),
 		rowName: (_self, data) => rowName(data.item),
 		rowNameClass: (_self, data) => nameClass(data.item, env),
 		rowNameFg: (_self, data) => rowNameFg(data, env),
@@ -188,6 +226,6 @@ function createBehaviors(env) {
 	}
 }
 
-export { createBehaviors, isExecutable, isMarked, isReadonly, nameClass, nameFg, rowIcon, rowIconHref, rowName, rowNameFg, rowSize }
+export { createBehaviors, isExecutable, isMarked, isReadonly, nameClass, nameFg, rowIcon, rowIconHref, rowName, rowNameFg, rowSize, rowStatus, rowStatusClass, rowStatusFg }
 
 // EOF

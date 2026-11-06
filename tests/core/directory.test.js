@@ -469,4 +469,64 @@ describe("directory", () => {
 		expect(dir.error.value).toBeNull()
 		dir.dispose()
 	})
+
+	test("vcs status is attached after the listing commits", async () => {
+		const fs = createMockFs(TREE)
+		const seen = []
+		const vcs = {
+			async statusFor(path, entries) {
+				// The listing is already visible when the status command runs.
+				seen.push({ path, names: entries.map((entry) => entry.name) })
+				return {
+					root: "/home",
+					kind: "git",
+					statuses: new Map([["/home/tester/notes.txt", "modified"]]),
+				}
+			},
+		}
+		const dir = createDirectory({ fs, path: "/home/tester", vcs })
+		await dir.refresh()
+		expect(dir.error.value).toBeNull()
+		await tick()
+		expect(seen[0].path).toBe("/home/tester")
+		expect(seen[0].names).toContain("notes.txt")
+		expect(dir.repo.value).toEqual({ root: "/home", kind: "git" })
+		expect(dir.entries.value[0].vcsStatus).toBe("modified")
+		dir.dispose()
+	})
+
+	test("a move clears the previous repository until the new status lands", async () => {
+		const fs = createMockFs(TREE)
+		const pending = deferred()
+		let calls = 0
+		const vcs = {
+			async statusFor() {
+				calls += 1
+				if (calls === 1) return { root: "/home", kind: "git", statuses: new Map() }
+				return pending.promise
+			},
+		}
+		const dir = createDirectory({ fs, path: "/home", vcs, watch: false })
+		await dir.refresh()
+		await tick()
+		expect(dir.repo.value).toEqual({ root: "/home", kind: "git" })
+		await dir.navigate("/")
+		// The commit drops the old repository; the new status is still pending.
+		expect(dir.repo.value).toBeNull()
+		pending.resolve({ root: "/", kind: "jj", statuses: new Map() })
+		await tick()
+		expect(dir.repo.value).toEqual({ root: "/", kind: "jj" })
+		dir.dispose()
+	})
+
+	test("a directory without a repository keeps entries status-free", async () => {
+		const fs = createMockFs(TREE)
+		const vcs = { async statusFor() { return null } }
+		const dir = createDirectory({ fs, path: "/home/tester", vcs, watch: false })
+		await dir.refresh()
+		await tick()
+		expect(dir.repo.value).toBeNull()
+		expect(dir.entries.value.every((entry) => entry.vcsStatus === undefined)).toBe(true)
+		dir.dispose()
+	})
 })

@@ -72,10 +72,13 @@ function pane(session) {
 // await pane.refresh()
 // pane.entries.value // sorted, filtered FileEntry[]
 // ```
-function createPane({ fs, path: initialPath, context, watch } = {}) {
+function createPane({ fs, path: initialPath, context, watch, vcs } = {}) {
 	const pane = {}
 	pane.fs = fs
-	pane.directory = createDirectory({ fs, path: initialPath, context, watch })
+	pane.directory = createDirectory({ fs, path: initialPath, context, watch, vcs })
+	// The detected repository of this pane's directory (`{ root, kind }`) or
+	// null; the identity bar reads the current pane's value.
+	pane.repo = pane.directory.repo
 
 	// Proxy cells mirror the directory, so views address the pane uniformly.
 	const dir = pane.directory

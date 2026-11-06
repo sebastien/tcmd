@@ -60,6 +60,9 @@ async function start() {
 	const host = document.querySelector("#app")
 	try {
 		const { mode, fs } = await createBackend()
+		// No VCS adapter: the browser cannot spawn `git`/`jj`, so `createVcs`
+		// would return null (see core/vcs) and the header's repository slot
+		// stays empty.
 		const left = createPane({ fs, path: fs.cwd() })
 		const right = createPane({
 			fs,

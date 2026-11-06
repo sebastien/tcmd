@@ -12,6 +12,7 @@
 
 export { createNodeFs } from "./fs.js"
 export { createNullOs, createNodeOs } from "./os.js"
+export { createVcs } from "./vcs.js"
 export { filterEntries, rankEntries, sortEntries, viewEntries } from "./entries.js"
 export { clampCursor, currentEntry, moveCursor, toggleMark } from "./selection.js"
 export { createHistory } from "./history.js"

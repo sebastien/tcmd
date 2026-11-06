@@ -160,4 +160,32 @@ describe("EntryDetail", () => {
 		expect(behaviors.detailHasSize(null, data)).toBe(false)
 		expect(behaviors.detailType(null, data)).toContain("…")
 	})
+
+	test("a repository status adds its word after the type", () => {
+		const file = { isDir: false, size: 26, mtimeMs: STAMP, mode: 0o100644, vcsStatus: "modified" }
+		expect(detailBlocks(file).map((block) => block.key)).toEqual(["time", "type", "vcs", "size", "mode"])
+		expect(detailLine(file)).toBe("  2026-10-06 07:55 · file · modified · 26B · -rw-r--r--")
+		expect(detailBlocks({ isDir: false, size: 4, vcsStatus: "ignored" }).map((block) => block.key)).toEqual([
+			"type",
+			"vcs",
+			"size",
+		])
+	})
+
+	test("the status word is gated, coloured and classed like the glyph", () => {
+		const behaviors = createBehaviors(behaviorEnv)
+		const entry = cell({ isDir: false, size: 26, mtimeMs: STAMP, mode: 0o100644, vcsStatus: "added" })
+		const data = { entry }
+		expect(behaviors.detailHasVcs(null, data)).toBe(true)
+		expect(behaviors.detailVcs(null, data)).toBe("added")
+		expect(behaviors.detailVcsFg(null, data)).toBe(behaviorEnv.execFg)
+		expect(behaviors.detailVcsClass(null, data)).toBe("is-added")
+		expect(behaviors.detailSepVcs(null, data)).toBe(true)
+		expect(behaviors.detailSepSize(null, data)).toBe(true)
+		entry.set({ isDir: false, size: 26, mtimeMs: STAMP, mode: 0o100644, vcsStatus: "ignored" })
+		expect(behaviors.detailVcsFg(null, data)).toBe(behaviorEnv.readonlyFg)
+		expect(behaviors.detailVcsClass(null, data)).toBe("is-ignored")
+		entry.set({ isDir: false, size: 26, mtimeMs: STAMP, mode: 0o100644 })
+		expect(behaviors.detailHasVcs(null, data)).toBe(false)
+	})
 })

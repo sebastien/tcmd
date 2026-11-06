@@ -16,7 +16,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { cell } from "select/state/cells"
 import { render } from "select.tui"
 import { createBookmarks, createFileBookmarkStore } from "../core/bookmarks.js"
-import { createNodeFs, createNodeOs, createPane, createSession, load } from "../core/index.js"
+import { createNodeFs, createNodeOs, createPane, createSession, createVcs, load } from "../core/index.js"
 import { createAppComponent } from "./app.js"
 import { createServerToggle } from "./server.js"
 import { writeScreenshot } from "./screenshot.js"
@@ -59,8 +59,6 @@ function startupPath(value, fallback) {
 // Runs the TUI. `paths` are optional initial directories [left, right].
 async function main(paths = []) {
 	const fs = createNodeFs()
-	const left = createPane({ fs, path: startupPath(paths[0], fs.cwd()) })
-	const right = createPane({ fs, path: startupPath(paths[1], fs.home()) })
 	let instance = null
 	const os = createNodeOs({
 		suspend: () => instance?._ownedRenderer?.suspend?.(),
@@ -73,6 +71,11 @@ async function main(paths = []) {
 		screenshot: ({ svgPath, ansPath }) =>
 			writeScreenshot({ renderer: instance?._ownedRenderer, svgPath, ansPath }),
 	})
+	// Per-entry `.jj`/`.git` status, through the host adapter's captured
+	// command runner.
+	const vcs = createVcs({ fs, os })
+	const left = createPane({ fs, vcs, path: startupPath(paths[0], fs.cwd()) })
+	const right = createPane({ fs, vcs, path: startupPath(paths[1], fs.home()) })
 	const bookmarks = createBookmarks({
 		store: createFileBookmarkStore({
 			file: bookmarkFile(),
@@ -82,7 +85,7 @@ async function main(paths = []) {
 		}),
 	})
 	const server = createServerToggle()
-	const session = createSession({ fs, os, left, right, host: nodeOs.hostname(), bookmarks, server: true })
+	const session = createSession({ fs, os, vcs, left, right, host: nodeOs.hostname(), bookmarks, server: true })
 	session.toggleServer = (mode) => server.toggle(mode)
 	await load(session)
 	const size = cell({ width: 0, height: 0 })

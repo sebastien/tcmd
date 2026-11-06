@@ -19,6 +19,9 @@
 			<text out="brandM" out:fg="brandMFg" wrapMode="none"></text>
 			<text out="brandD" out:fg="brandDFg" wrapMode="none"></text>
 			<text out="topBar" out:fg="topBarFg" wrapMode="none"></text>
+			<!-- Detected repository of the current pane (`jj` / `git`); the
+			     listings use its status glyphs. -->
+			<text when="repoVisible" out="topBarRepo" out:fg="topBarRepoFg" wrapMode="none"></text>
 			<!-- Web UI server (`:server`): while running, its address rides
 			     after the host and clicking it copies the URL. -->
 			<box when="serverRunning" flexShrink="0" height="1" overflow="hidden" on:click="!server:copy">

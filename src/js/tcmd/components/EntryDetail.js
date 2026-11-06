@@ -22,7 +22,7 @@
 // out.
 
 import { unwrap } from "select/state/cells"
-import { isExecutable, isReadonly, nameFg } from "./FileRow.js"
+import { isExecutable, isReadonly, nameFg, rowStatusClass, rowStatusFg } from "./FileRow.js"
 import { formatMode, formatSize, formatTime } from "./format.js"
 
 // Constant: KIND_LABELS
@@ -73,8 +73,8 @@ function typeClass(entry, env) {
 
 // Function: detailBlocks
 // The ordered `{ key, text }` blocks for an entry: the marked count (when more
-// than one item is selected), date, type, size (files only) and rights,
-// skipping any empty one.
+// than one item is selected), date, type, repository status, size (files only)
+// and rights, skipping any empty one.
 function detailBlocks(entry, markedCount = 0) {
 	const blocks = []
 	if (markedCount > 1) blocks.push({ key: "marked", text: `${markedCount} selected` })
@@ -82,6 +82,7 @@ function detailBlocks(entry, markedCount = 0) {
 	const time = formatTime(entry.mtimeMs)
 	if (time) blocks.push({ key: "time", text: time })
 	blocks.push({ key: "type", text: KIND_LABELS[entryKind(entry)] })
+	if (entry.vcsStatus) blocks.push({ key: "vcs", text: entry.vcsStatus })
 	if (!entry.isDir) blocks.push({ key: "size", text: formatSize(entry.size) })
 	const mode = formatMode(entry.mode)
 	if (mode) blocks.push({ key: "mode", text: mode })
@@ -159,7 +160,7 @@ function createBehaviors(env = {}) {
 	const text = (self, data, key) => layout(self, data).texts[key] ?? ""
 	const before = (self, data, key) => {
 		const keys = layout(self, data).keys
-		const order = ["marked", "time", "type", "size", "mode"]
+		const order = ["marked", "time", "type", "vcs", "size", "mode"]
 		const index = order.indexOf(key)
 		return order.slice(0, index).some((earlier) => keys.has(earlier))
 	}
@@ -183,6 +184,10 @@ function createBehaviors(env = {}) {
 		detailType: (self, data) => text(self, data, "type"),
 		detailTypeClass: (_self, data) => typeClass(unwrap(data.entry), env),
 		detailTypeFg: (_self, data) => typeColor(unwrap(data.entry), env),
+		detailHasVcs: (self, data) => has(self, data, "vcs"),
+		detailVcs: (self, data) => text(self, data, "vcs"),
+		detailVcsFg: (_self, data) => rowStatusFg(unwrap(data.entry), env),
+		detailVcsClass: (_self, data) => rowStatusClass(unwrap(data.entry), env),
 		detailHasSize: (self, data) => has(self, data, "size"),
 		detailSize: (self, data) => text(self, data, "size"),
 		detailHasMode: (self, data) => has(self, data, "mode"),
@@ -190,6 +195,7 @@ function createBehaviors(env = {}) {
 		detailModeFg: () => env.accentFg,
 		detailSepTime: (self, data) => has(self, data, "time") && before(self, data, "time"),
 		detailSepType: (self, data) => has(self, data, "type") && before(self, data, "type"),
+		detailSepVcs: (self, data) => has(self, data, "vcs") && before(self, data, "vcs"),
 		detailSepSize: (self, data) => has(self, data, "size") && before(self, data, "size"),
 		detailSepMode: (self, data) => has(self, data, "mode") && before(self, data, "mode"),
 		detailSep: () => SEP,

@@ -1,5 +1,8 @@
 <box flexDirection="row" height="1" columnGap="1" out:backgroundColor="rowBg" on:click="paneId:paneId,index:index!list:select">
-	<text out="rowMarker" width="2" out:fg="rowMarkerFg"></text>
+	<box width="2" flexDirection="row" flexShrink="0">
+		<text out="rowMarker" width="1" out:fg="rowMarkerFg"></text>
+		<text out="rowStatus" width="1" out:fg="rowStatusFg"></text>
+	</box>
 	<box flexGrow="1" minWidth="0" overflow="hidden" flexDirection="row" columnGap="1">
 		<text out="rowIcon" out:fg="rowIconFg" wrapMode="none" when="hasIcon"></text>
 		<text out="rowName" out:fg="rowNameFg" wrapMode="none" truncate="true"></text>
